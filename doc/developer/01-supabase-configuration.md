@@ -88,6 +88,10 @@ Supabase requires additional configuration to enable Atomic CRM's email features
 
 Warning: Free quota for email features is very low. If you encounter problems when creating a user or reseting a password, you can increase the sending limit via a custom STMP server setup. Please refer to the [supabase documentation](https://supabase.com/docs/guides/auth/auth-smtp) if this is your case.
 
+## Password Reset And Invitations
+
+An user can be invited to the CRM by an administrator. The user will receive an email with a link to set their password. The password reset feature is also available. You don't have to worry about these processes, Atomic CRM handles them for you, using Supabase.
+
 ## Fequently Asked Questions
 
 - I have a **Security Definer View** error in **Security Advisor**
