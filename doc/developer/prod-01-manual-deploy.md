@@ -2,7 +2,7 @@
 
 ## Supabase Configuration
 
-To configure Supabase, please have a look at [dedicated configuration guide](./supabase-configuration.md).
+This guide assumes you have already configured your Supabase instance. Id you did not, please have a look at the [dedicated configuration guide](./dev-01-supabase-configuration.md).
 
 ## Testing Production Mode
 

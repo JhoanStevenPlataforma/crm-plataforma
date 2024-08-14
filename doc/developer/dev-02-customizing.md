@@ -92,7 +92,7 @@ To add a new sale to the CRM, you need to use an administrator account. By defau
 
 When logged in as an admin, an 'Account Manager' tab will be available. From this page, you can create sales and transfer the administrator role.
 
-![Adding sales](./public/img/adding-sales.png "Adding sales")
+![Adding sales](../../public/img/adding-sales.png "Adding sales")
 
 
 ## Customizing the Homepage
