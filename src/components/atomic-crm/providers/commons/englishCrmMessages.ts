@@ -406,6 +406,9 @@ export const englishCrmMessages = {
       me: "Me",
       task_count: "%{smart_count} task |||| %{smart_count} tasks",
     },
+    changelog: {
+      title: "Changelog",
+    },
     activity: {
       added_company: "%{name} added company",
       you_added_company: "You added company",

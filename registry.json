@@ -470,6 +470,10 @@
           "type": "registry:component"
         },
         {
+          "path": "src/components/atomic-crm/misc/ChangelogPage.tsx",
+          "type": "registry:component"
+        },
+        {
           "path": "src/components/atomic-crm/misc/AsideSection.tsx",
           "type": "registry:component"
         },

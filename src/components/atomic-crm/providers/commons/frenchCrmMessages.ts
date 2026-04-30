@@ -412,6 +412,9 @@ export const frenchCrmMessages = {
       loading: "Chargement...",
       me: "Moi",
     },
+    changelog: {
+      title: "Notes de version",
+    },
     activity: {
       added_company: "%{name} a ajouté l'entreprise",
       you_added_company: "Vous avez ajouté l'entreprise",
