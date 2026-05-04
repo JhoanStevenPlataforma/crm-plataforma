@@ -502,7 +502,7 @@ const AboutSection = () => {
   return (
     <div>
       <SectionLabel>
-        {translate("crm.settings.about", { _: "About" })}
+        {translate("crm.settings.about")}
       </SectionLabel>
       <ItemGroup className="rounded-lg border overflow-hidden">
         <Item asChild size="sm" className="cursor-pointer">

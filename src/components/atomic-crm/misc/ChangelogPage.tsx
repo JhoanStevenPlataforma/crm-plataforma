@@ -1,6 +1,6 @@
 import { useTranslate } from "ra-core";
-import { Card, CardContent } from "@/components/ui/card";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileContent } from "../layout/MobileContent";
 import MobileHeader from "../layout/MobileHeader";
 import { Markdown } from "./Markdown";
@@ -30,8 +30,11 @@ export const ChangelogPage = () => {
   }
 
   return (
-    <div className="max-w-3xl mx-auto mt-8">
+    <div className="max-w-3xl mx-auto my-8">
       <Card>
+        <CardHeader>
+          <CardTitle>{translate("crm.changelog.title")}</CardTitle>
+        </CardHeader>
         <CardContent>
           <Markdown>{changelogContent}</Markdown>
         </CardContent>

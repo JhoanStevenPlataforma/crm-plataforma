@@ -483,6 +483,7 @@ export const frenchCrmMessages = {
       title: "Importer des données",
     },
     settings: {
+      about: "About",
       companies: {
         sectors: "Secteurs",
       },

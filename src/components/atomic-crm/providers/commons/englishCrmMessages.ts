@@ -476,6 +476,7 @@ export const englishCrmMessages = {
       title: "Import Data",
     },
     settings: {
+      about: "About",
       companies: {
         sectors: "Sectors",
       },
