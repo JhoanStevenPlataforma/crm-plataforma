@@ -1,1 +1,1 @@
-make registry-gen update-changelog
+make registry-gen
