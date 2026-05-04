@@ -22,7 +22,8 @@
     "supabase:remote:init": "node ./scripts/supabase-remote-init.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "prepare": "husky"
+    "prepare": "husky",
+    "update-changelog": "gh api 'repos/{owner}/{repo}/releases' --paginate -q '.[] | \"## \\(.tag_name) - \\(.published_at[:10])\\n\\n\\(.body)\\n\"' > CHANGELOG.md"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

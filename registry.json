@@ -470,6 +470,10 @@
           "type": "registry:component"
         },
         {
+          "path": "src/components/atomic-crm/misc/ChangelogPage.tsx",
+          "type": "registry:component"
+        },
+        {
           "path": "src/components/atomic-crm/misc/AsideSection.tsx",
           "type": "registry:component"
         },
@@ -860,6 +864,11 @@
         {
           "path": "src/lib/toSlug.ts",
           "type": "registry:lib"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "type": "registry:file",
+          "target": "~/CHANGELOG.md"
         }
       ]
     }

@@ -149,5 +149,9 @@ registry-gen: ## Generate the shadcn registry (ran automatically by a pre-commit
 	npm run registry:gen
 	npx prettier --config ./.prettierrc.json --write "registry.json"
 
+update-changelog: ## Update the changelog with the unreleased changes (ran automatically by a pre-commit hook)
+	npm run update-changelog
+	npx prettier --config ./.prettierrc.json --write "CHANGELOG.md"
+
 storybook: ## start storybook
 	npm run storybook

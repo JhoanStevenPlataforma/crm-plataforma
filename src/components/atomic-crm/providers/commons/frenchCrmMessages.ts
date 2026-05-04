@@ -412,6 +412,9 @@ export const frenchCrmMessages = {
       loading: "Chargement...",
       me: "Moi",
     },
+    changelog: {
+      title: "Notes de version",
+    },
     activity: {
       added_company: "%{name} a ajouté l'entreprise",
       you_added_company: "Vous avez ajouté l'entreprise",
@@ -480,6 +483,7 @@ export const frenchCrmMessages = {
       title: "Importer des données",
     },
     settings: {
+      about: "À propos",
       companies: {
         sectors: "Secteurs",
       },
