@@ -866,7 +866,7 @@
           "type": "registry:lib"
         },
         {
-          "path": "src/CHANGELOG.md",
+          "path": "CHANGELOG.md",
           "type": "registry:file",
           "target": "~/CHANGELOG.md"
         }

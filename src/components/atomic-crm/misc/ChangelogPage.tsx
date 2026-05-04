@@ -4,7 +4,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileContent } from "../layout/MobileContent";
 import MobileHeader from "../layout/MobileHeader";
 import { Markdown } from "./Markdown";
-import changelogContent from "../../../CHANGELOG.md?raw";
+import changelogContent from "../../../../CHANGELOG.md?raw";
 import { MobileBackButton } from "./MobileBackButton";
 
 export const ChangelogPage = () => {
@@ -17,9 +17,9 @@ export const ChangelogPage = () => {
         <MobileHeader>
           <MobileBackButton to="/settings" />
           <div className="flex flex-1 min-w-0">
-              <h1 className="text-xl font-semibold">
+            <h1 className="text-xl font-semibold">
               {translate("crm.changelog.title")}
-              </h1>
+            </h1>
           </div>
         </MobileHeader>
         <MobileContent>
