@@ -1,6 +1,6 @@
 import { useTranslate } from "ra-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-  import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileContent } from "../layout/MobileContent";
 import MobileHeader from "../layout/MobileHeader";
 import { Markdown } from "./Markdown";
