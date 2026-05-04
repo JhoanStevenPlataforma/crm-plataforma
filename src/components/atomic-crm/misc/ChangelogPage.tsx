@@ -4,7 +4,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileContent } from "../layout/MobileContent";
 import MobileHeader from "../layout/MobileHeader";
 import { Markdown } from "./Markdown";
-import changelogContent from "../../../../CHANGELOG.md?raw";
+import changelogContent from "../../../CHANGELOG.md?raw";
 
 export const ChangelogPage = () => {
   const translate = useTranslate();

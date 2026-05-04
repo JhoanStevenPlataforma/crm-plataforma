@@ -864,6 +864,11 @@
         {
           "path": "src/lib/toSlug.ts",
           "type": "registry:lib"
+        },
+        {
+          "path": "src/CHANGELOG.md",
+          "type": "registry:file",
+          "target": "~/CHANGELOG.md"
         }
       ]
     }
