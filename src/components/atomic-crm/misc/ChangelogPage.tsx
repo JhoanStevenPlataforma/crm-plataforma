@@ -5,6 +5,7 @@ import { MobileContent } from "../layout/MobileContent";
 import MobileHeader from "../layout/MobileHeader";
 import { Markdown } from "./Markdown";
 import changelogContent from "../../../CHANGELOG.md?raw";
+import { MobileBackButton } from "./MobileBackButton";
 
 export const ChangelogPage = () => {
   const translate = useTranslate();
@@ -14,9 +15,12 @@ export const ChangelogPage = () => {
     return (
       <>
         <MobileHeader>
-          <h1 className="text-xl font-semibold">
-            {translate("crm.changelog.title")}
-          </h1>
+          <MobileBackButton to="/settings" />
+          <div className="flex flex-1 min-w-0">
+              <h1 className="text-xl font-semibold">
+              {translate("crm.changelog.title")}
+              </h1>
+          </div>
         </MobileHeader>
         <MobileContent>
           <Markdown>{changelogContent}</Markdown>
