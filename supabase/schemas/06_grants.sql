@@ -14,6 +14,22 @@ grant all on function public.cleanup_note_attachments() to anon;
 grant all on function public.cleanup_note_attachments() to authenticated;
 grant all on function public.cleanup_note_attachments() to service_role;
 
+grant all on function public.can_manage_all() to anon;
+grant all on function public.can_manage_all() to authenticated;
+grant all on function public.can_manage_all() to service_role;
+
+grant all on function public.current_sale_id() to anon;
+grant all on function public.current_sale_id() to authenticated;
+grant all on function public.current_sale_id() to service_role;
+
+grant all on function public.current_sales_role() to anon;
+grant all on function public.current_sales_role() to authenticated;
+grant all on function public.current_sales_role() to service_role;
+
+grant all on function public.convert_lead(bigint, boolean, text, bigint) to anon;
+grant all on function public.convert_lead(bigint, boolean, text, bigint) to authenticated;
+grant all on function public.convert_lead(bigint, boolean, text, bigint) to service_role;
+
 grant all on function public.get_avatar_for_email(text) to anon;
 grant all on function public.get_avatar_for_email(text) to authenticated;
 grant all on function public.get_avatar_for_email(text) to service_role;
@@ -65,6 +81,10 @@ grant all on function public.set_sales_id_default() to anon;
 grant all on function public.set_sales_id_default() to authenticated;
 grant all on function public.set_sales_id_default() to service_role;
 
+grant all on function public.set_updated_at() to anon;
+grant all on function public.set_updated_at() to authenticated;
+grant all on function public.set_updated_at() to service_role;
+
 -- Table grants
 grant all on table public.companies to anon;
 grant all on table public.companies to authenticated;
@@ -89,6 +109,10 @@ grant all on table public.deal_notes to service_role;
 grant all on table public.sales to anon;
 grant all on table public.sales to authenticated;
 grant all on table public.sales to service_role;
+
+grant all on table public.leads to anon;
+grant all on table public.leads to authenticated;
+grant all on table public.leads to service_role;
 
 grant all on table public.tags to anon;
 grant all on table public.tags to authenticated;
@@ -147,6 +171,10 @@ grant all on sequence public.deals_id_seq to service_role;
 grant all on sequence public.favicons_excluded_domains_id_seq to anon;
 grant all on sequence public.favicons_excluded_domains_id_seq to authenticated;
 grant all on sequence public.favicons_excluded_domains_id_seq to service_role;
+
+grant all on sequence public.leads_id_seq to anon;
+grant all on sequence public.leads_id_seq to authenticated;
+grant all on sequence public.leads_id_seq to service_role;
 
 grant all on sequence public.sales_id_seq to anon;
 grant all on sequence public.sales_id_seq to authenticated;

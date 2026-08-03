@@ -1,51 +1,75 @@
 --
--- Row Level Security
--- This file declares RLS policies for all tables.
+-- Ownership row level security.
 --
--- Ownership model
--- ---------------
--- Every CRM record carries a `sales_id` owner. A sales rep only sees and edits
--- the records they own; admins and sales managers (`public.can_manage_all()`)
--- see and edit everything.
+-- Replaces the blanket `using (true)` policies with owner scoping: a sales rep
+-- only reaches the records they own, while admins and sales managers reach
+-- everything. Reassignment is restricted to managers by repeating the
+-- predicate in the UPDATE ... WITH CHECK clauses.
 --
--- Two details matter:
+-- Records with a NULL `sales_id` become an unassigned pool: managers see them,
+-- reps do not. Audit before deploying:
 --
--- 1. The UPDATE policies repeat the predicate in WITH CHECK. That is what stops
---    a rep from handing a record to somebody else: they may edit their own row,
---    but the row must still belong to them afterwards. Reassignment is
---    therefore a manager-only operation, enforced by Postgres rather than by
---    the UI.
+--   select count(*) filter (where sales_id is null) from public.contacts;
 --
--- 2. Notes and tasks derive their visibility from their parent record instead
---    of their own `sales_id`. A note written by a manager on a rep's contact
---    stays visible to that rep, and reassigning a contact carries its whole
---    history along with it.
---
--- The helper functions are wrapped in scalar subqueries — `(select f())` — so
--- the planner hoists them into an InitPlan and evaluates them once per
--- statement instead of once per row.
+-- and hand them out from the Contacts list once the migration is in.
 --
 
--- Enable RLS on all tables
-alter table public.companies enable row level security;
-alter table public.contacts enable row level security;
-alter table public.contact_notes enable row level security;
-alter table public.leads enable row level security;
-alter table public.deals enable row level security;
-alter table public.deal_notes enable row level security;
-alter table public.sales enable row level security;
-alter table public.tags enable row level security;
-alter table public.tasks enable row level security;
-alter table public.configuration enable row level security;
-alter table public.favicons_excluded_domains enable row level security;
+--
+-- Indexes first: creating them after the policies would leave a window where
+-- every owner-scoped query sequentially scans the table.
+--
+-- `if not exists` is deliberate. On a large installation, build these ahead of
+-- the deploy without locking writes:
+--
+--   create index concurrently companies_sales_id_idx on public.companies (sales_id);
+--
+-- and this migration will then skip them.
+--
+create index if not exists companies_sales_id_idx on public.companies using btree (sales_id);
+create index if not exists contacts_sales_id_idx on public.contacts using btree (sales_id);
+create index if not exists deals_sales_id_idx on public.deals using btree (sales_id);
+create index if not exists contact_notes_sales_id_idx on public.contact_notes using btree (sales_id);
+create index if not exists deal_notes_sales_id_idx on public.deal_notes using btree (sales_id);
+create index if not exists tasks_contact_id_idx on public.tasks using btree (contact_id);
+create index if not exists tasks_sales_id_due_date_idx on public.tasks using btree (sales_id, due_date);
 
 --
--- Companies
+-- Drop the open policies.
 --
--- Deliberately readable by everyone: `contacts_summary` left-joins companies
--- for the company name, the company autocomplete needs the full list to keep
--- reps from creating duplicates, and a company is shared reference data rather
--- than a private record. Writing one is still restricted to its owner.
+drop policy if exists "Enable read access for authenticated users" on public.companies;
+drop policy if exists "Enable insert for authenticated users only" on public.companies;
+drop policy if exists "Enable update for authenticated users only" on public.companies;
+drop policy if exists "Company Delete Policy" on public.companies;
+
+drop policy if exists "Enable read access for authenticated users" on public.contacts;
+drop policy if exists "Enable insert for authenticated users only" on public.contacts;
+drop policy if exists "Enable update for authenticated users only" on public.contacts;
+drop policy if exists "Contact Delete Policy" on public.contacts;
+
+drop policy if exists "Enable read access for authenticated users" on public.contact_notes;
+drop policy if exists "Enable insert for authenticated users only" on public.contact_notes;
+drop policy if exists "Contact Notes Update policy" on public.contact_notes;
+drop policy if exists "Contact Notes Delete Policy" on public.contact_notes;
+
+drop policy if exists "Enable read access for authenticated users" on public.deals;
+drop policy if exists "Enable insert for authenticated users only" on public.deals;
+drop policy if exists "Enable update for authenticated users only" on public.deals;
+drop policy if exists "Deals Delete Policy" on public.deals;
+
+drop policy if exists "Enable read access for authenticated users" on public.deal_notes;
+drop policy if exists "Enable insert for authenticated users only" on public.deal_notes;
+drop policy if exists "Deal Notes Update Policy" on public.deal_notes;
+drop policy if exists "Deal Notes Delete Policy" on public.deal_notes;
+
+drop policy if exists "Enable read access for authenticated users" on public.tasks;
+drop policy if exists "Enable insert for authenticated users only" on public.tasks;
+drop policy if exists "Task Update Policy" on public.tasks;
+drop policy if exists "Task Delete Policy" on public.tasks;
+
+--
+-- Companies: shared reference data, so reads stay open. `contacts_summary`
+-- left-joins companies for the company name and the autocomplete needs the
+-- full list to prevent duplicate records.
 --
 create policy "Companies are readable by every authenticated user"
     on public.companies for select to authenticated
@@ -112,42 +136,8 @@ create policy "Contacts are deleted by their owner or a manager"
     );
 
 --
--- Leads
---
-create policy "Leads are visible to their owner or a manager"
-    on public.leads for select to authenticated
-    using (
-        (select public.can_manage_all())
-        or sales_id = (select public.current_sale_id())
-    );
-
-create policy "Leads are created for their own owner"
-    on public.leads for insert to authenticated
-    with check (
-        (select public.can_manage_all())
-        or sales_id = (select public.current_sale_id())
-    );
-
-create policy "Leads are updated by their owner or a manager"
-    on public.leads for update to authenticated
-    using (
-        (select public.can_manage_all())
-        or sales_id = (select public.current_sale_id())
-    )
-    with check (
-        (select public.can_manage_all())
-        or sales_id = (select public.current_sale_id())
-    );
-
-create policy "Leads are deleted by their owner or a manager"
-    on public.leads for delete to authenticated
-    using (
-        (select public.can_manage_all())
-        or sales_id = (select public.current_sale_id())
-    );
-
---
--- Contact Notes (visibility follows the contact)
+-- Contact notes: visibility follows the contact, so a reassigned contact
+-- carries its history and a manager's note stays readable by the rep.
 --
 create policy "Contact notes follow their contact for reads"
     on public.contact_notes for select to authenticated
@@ -229,7 +219,7 @@ create policy "Deals are deleted by their owner or a manager"
     );
 
 --
--- Deal Notes (visibility follows the deal)
+-- Deal notes: visibility follows the deal.
 --
 create policy "Deal notes follow their deal for reads"
     on public.deal_notes for select to authenticated
@@ -276,7 +266,7 @@ create policy "Deal notes follow their deal for deletes"
     );
 
 --
--- Tasks (visibility follows the contact)
+-- Tasks: visibility follows the contact.
 --
 create policy "Tasks follow their contact for reads"
     on public.tasks for select to authenticated
@@ -321,20 +311,3 @@ create policy "Tasks follow their contact for deletes"
               and c.sales_id = (select public.current_sale_id())
         )
     );
-
--- Sales
-create policy "Enable read access for authenticated users" on public.sales for select to authenticated using (true);
-
--- Tags (shared vocabulary, not owned by anyone)
-create policy "Enable read access for authenticated users" on public.tags for select to authenticated using (true);
-create policy "Enable insert for authenticated users only" on public.tags for insert to authenticated with check (true);
-create policy "Enable update for authenticated users only" on public.tags for update to authenticated using (true);
-create policy "Enable delete for authenticated users only" on public.tags for delete to authenticated using (true);
-
--- Configuration (admin-only for writes)
-create policy "Enable read for authenticated" on public.configuration for select to authenticated using (true);
-create policy "Enable insert for admins" on public.configuration for insert to authenticated with check (public.is_admin());
-create policy "Enable update for admins" on public.configuration for update to authenticated using (public.is_admin()) with check (public.is_admin());
-
--- Favicons excluded domains
-create policy "Enable access for authenticated users only" on public.favicons_excluded_domains to authenticated using (true) with check (true);

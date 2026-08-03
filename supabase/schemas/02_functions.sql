@@ -53,6 +53,51 @@ CREATE OR REPLACE FUNCTION "public"."cleanup_note_attachments"() RETURNS "trigge
     END;
     $$;
 
+-- Access helpers used by the RLS policies.
+--
+-- All three are SQL (inlinable by the planner), STABLE (evaluated once per
+-- statement when wrapped in a scalar subquery inside a policy) and SECURITY
+-- DEFINER (they read public.sales, which is itself protected by RLS, so a
+-- plain invoker function would recurse).
+--
+-- Disabled users resolve to NULL / false: a banned account whose access token
+-- has not expired yet still loses every row.
+
+CREATE OR REPLACE FUNCTION "public"."current_sale_id"() RETURNS bigint
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select id
+  from public.sales
+  where user_id = auth.uid()
+    and disabled = false;
+$$;
+
+CREATE OR REPLACE FUNCTION "public"."current_sales_role"() RETURNS "public"."sales_role"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select role
+  from public.sales
+  where user_id = auth.uid()
+    and disabled = false;
+$$;
+
+-- True for admins and sales managers: the users allowed to see every record
+-- and to reassign ownership.
+CREATE OR REPLACE FUNCTION "public"."can_manage_all"() RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select exists (
+    select 1
+    from public.sales
+    where user_id = auth.uid()
+      and disabled = false
+      and role in ('admin'::public.sales_role, 'manager'::public.sales_role)
+  );
+$$;
+
 CREATE OR REPLACE FUNCTION "public"."get_avatar_for_email"("email" "text") RETURNS "text"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
@@ -234,13 +279,13 @@ begin
   select count(id) into sales_count
   from public.sales;
 
-  insert into public.sales (first_name, last_name, email, user_id, administrator)
+  insert into public.sales (first_name, last_name, email, user_id, role)
   values (
     coalesce(new.raw_user_meta_data ->> 'first_name', new.raw_user_meta_data -> 'custom_claims' ->> 'first_name', 'Pending'),
     coalesce(new.raw_user_meta_data ->> 'last_name', new.raw_user_meta_data -> 'custom_claims' ->> 'last_name', 'Pending'),
     new.email,
     new.id,
-    case when sales_count > 0 then FALSE else TRUE end
+    case when sales_count > 0 then 'rep'::public.sales_role else 'admin'::public.sales_role end
   );
   return new;
 end;
@@ -263,14 +308,16 @@ end;
 $$;
 
 CREATE OR REPLACE FUNCTION "public"."is_admin"() RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
+    LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-begin
-  return exists (
-    select 1 from public.sales where user_id = auth.uid() and administrator = true
+  select exists (
+    select 1
+    from public.sales
+    where user_id = auth.uid()
+      and disabled = false
+      and role = 'admin'::public.sales_role
   );
-end;
 $$;
 
 CREATE OR REPLACE FUNCTION "public"."merge_contacts"("loser_id" bigint, "winner_id" bigint) RETURNS bigint
@@ -425,6 +472,103 @@ BEGIN
 END;
 $$;
 
+-- Turns a qualified lead into a company + contact, and optionally a deal.
+--
+-- SECURITY INVOKER on purpose: the caller must already be allowed to read the
+-- lead and to create the records, so row level security decides who may
+-- convert what. Runs as one statement, so a failure half-way leaves nothing
+-- behind, and takes a row lock on the lead so two people clicking "convert"
+-- at once cannot produce two contacts.
+CREATE OR REPLACE FUNCTION "public"."convert_lead"("lead_id" bigint, "create_deal" boolean DEFAULT false, "deal_name" "text" DEFAULT NULL::"text", "deal_amount" bigint DEFAULT 0) RETURNS bigint
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+declare
+  l public.leads%rowtype;
+  v_company_id bigint;
+  v_contact_id bigint;
+  v_deal_id bigint;
+begin
+  select * into l from public.leads where id = lead_id for update;
+
+  if not found then
+    raise exception 'Lead % not found', lead_id using errcode = 'no_data_found';
+  end if;
+
+  if l.converted_at is not null then
+    raise exception 'Lead % has already been converted', lead_id using errcode = 'unique_violation';
+  end if;
+
+  -- An explicit link wins: somebody already decided which company this is.
+  v_company_id := l.company_id;
+
+  -- Otherwise reuse an existing company with the same name before creating a
+  -- new one: lead forms are the main source of duplicate company records.
+  if v_company_id is null
+     and nullif(btrim(coalesce(l.company_name, '')), '') is not null then
+    select id into v_company_id
+    from public.companies
+    where lower(name) = lower(btrim(l.company_name))
+    limit 1;
+
+    if v_company_id is null then
+      insert into public.companies (name, sales_id)
+      values (btrim(l.company_name), l.sales_id)
+      returning id into v_company_id;
+    end if;
+  end if;
+
+  insert into public.contacts (
+    first_name, last_name, title, company_id, sales_id, status, tags,
+    email_jsonb, phone_jsonb, first_seen, last_seen, background
+  )
+  values (
+    l.first_name,
+    l.last_name,
+    l.title,
+    v_company_id,
+    l.sales_id,
+    'warm',
+    coalesce(l.tags, '{}'::bigint[]),
+    case when l.email is null then '[]'::jsonb
+         else jsonb_build_array(jsonb_build_object('email', l.email::text, 'type', 'Work')) end,
+    case when l.phone is null then '[]'::jsonb
+         else jsonb_build_array(jsonb_build_object('number', l.phone, 'type', 'Work')) end,
+    coalesce(l.created_at, now()),
+    now(),
+    l.notes
+  )
+  returning id into v_contact_id;
+
+  if create_deal then
+    insert into public.deals (name, company_id, contact_ids, stage, amount, sales_id, index)
+    values (
+      coalesce(
+        nullif(btrim(coalesce(deal_name, '')), ''),
+        btrim(coalesce(l.first_name, '') || ' ' || coalesce(l.last_name, ''))
+      ),
+      v_company_id,
+      array[v_contact_id],
+      'opportunity',
+      coalesce(deal_amount, 0),
+      l.sales_id,
+      0
+    )
+    returning id into v_deal_id;
+  end if;
+
+  update public.leads
+  set converted_at = now(),
+      status = 'converted',
+      converted_contact_id = v_contact_id,
+      converted_company_id = v_company_id,
+      converted_deal_id = v_deal_id
+  where id = lead_id;
+
+  return v_contact_id;
+end;
+$$;
+
 CREATE OR REPLACE FUNCTION "public"."lowercase_email_jsonb"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
@@ -442,13 +586,23 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION "public"."set_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION "public"."set_sales_id_default"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
     AS $$
 BEGIN
   IF NEW.sales_id IS NULL THEN
-    SELECT id INTO NEW.sales_id FROM sales WHERE user_id = auth.uid();
+    NEW.sales_id := public.current_sale_id();
   END IF;
   RETURN NEW;
 END;

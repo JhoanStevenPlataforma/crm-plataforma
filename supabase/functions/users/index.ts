@@ -12,13 +12,27 @@ async function updateSaleDisabled(user_id: string, disabled: boolean) {
     .eq("user_id", user_id);
 }
 
-async function updateSaleAdministrator(
-  user_id: string,
-  administrator: boolean,
-) {
+const CRM_ROLES = ["admin", "manager", "rep"] as const;
+type CrmRole = (typeof CRM_ROLES)[number];
+
+/**
+ * Never trust the role coming from the request body: an unknown value would
+ * either blow up on the enum cast or, worse, silently widen access.
+ */
+function parseRole(value: unknown): CrmRole {
+  if (
+    typeof value === "string" &&
+    (CRM_ROLES as readonly string[]).includes(value)
+  ) {
+    return value as CrmRole;
+  }
+  return "rep";
+}
+
+async function updateSaleRole(user_id: string, role: CrmRole) {
   const { data: sales, error: salesError } = await supabaseAdmin
     .from("sales")
-    .update({ administrator })
+    .update({ role })
     .eq("user_id", user_id)
     .select("*");
 
@@ -37,7 +51,7 @@ async function createSale(
     first_name: string;
     last_name: string;
     disabled: boolean;
-    administrator: boolean;
+    role: CrmRole;
   },
 ) {
   const { data: sales, error: salesError } = await supabaseAdmin
@@ -67,10 +81,11 @@ async function updateSaleAvatar(user_id: string, avatar: string) {
 }
 
 async function inviteUser(req: Request, currentUserSale: any) {
-  const { email, password, first_name, last_name, disabled, administrator } =
-    await req.json();
+  const body = await req.json();
+  const { email, password, first_name, last_name, disabled } = body;
+  const role = parseRole(body.role);
 
-  if (!currentUserSale.administrator) {
+  if (currentUserSale.role !== "admin") {
     return createErrorResponse(401, "Not Authorized");
   }
 
@@ -120,7 +135,7 @@ async function inviteUser(req: Request, currentUserSale: any) {
         first_name,
         last_name,
         disabled,
-        administrator,
+        role,
       });
 
       return new Response(
@@ -162,7 +177,7 @@ async function inviteUser(req: Request, currentUserSale: any) {
 
   try {
     await updateSaleDisabled(user.id, disabled);
-    const sale = await updateSaleAdministrator(user.id, administrator);
+    const sale = await updateSaleRole(user.id, role);
 
     return new Response(
       JSON.stringify({
@@ -179,15 +194,9 @@ async function inviteUser(req: Request, currentUserSale: any) {
 }
 
 async function patchUser(req: Request, currentUserSale: any) {
-  const {
-    sales_id,
-    email,
-    first_name,
-    last_name,
-    avatar,
-    administrator,
-    disabled,
-  } = await req.json();
+  const body = await req.json();
+  const { sales_id, email, first_name, last_name, avatar, disabled } = body;
+  const role = parseRole(body.role);
   const { data: sale } = await supabaseAdmin
     .from("sales")
     .select("*")
@@ -198,9 +207,17 @@ async function patchUser(req: Request, currentUserSale: any) {
     return createErrorResponse(404, "Not Found");
   }
 
+  const isAdmin = currentUserSale.role === "admin";
+
   // Users can only update their own profile unless they are an administrator
-  if (!currentUserSale.administrator && currentUserSale.id !== sale.id) {
+  if (!isAdmin && currentUserSale.id !== sale.id) {
     return createErrorResponse(401, "Not Authorized");
+  }
+
+  // Nobody changes their own role, not even an admin: it is the one edit that
+  // can leave an installation with no administrator at all.
+  if (currentUserSale.id === sale.id && role !== sale.role) {
+    return createErrorResponse(400, "You cannot change your own role");
   }
 
   const { data, error: userError } =
@@ -219,8 +236,8 @@ async function patchUser(req: Request, currentUserSale: any) {
     await updateSaleAvatar(data.user.id, avatar);
   }
 
-  // Only administrators can update the administrator and disabled status
-  if (!currentUserSale.administrator) {
+  // Only administrators can update the role and disabled status
+  if (!isAdmin) {
     const { data: new_sale } = await supabaseAdmin
       .from("sales")
       .select("*")
@@ -241,7 +258,7 @@ async function patchUser(req: Request, currentUserSale: any) {
 
   try {
     await updateSaleDisabled(data.user.id, disabled);
-    const sale = await updateSaleAdministrator(data.user.id, administrator);
+    const sale = await updateSaleRole(data.user.id, role);
     return new Response(
       JSON.stringify({
         data: sale,

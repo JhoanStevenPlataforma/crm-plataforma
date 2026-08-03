@@ -28,6 +28,15 @@ create or replace trigger set_task_sales_id_trigger
     before insert on public.tasks
     for each row execute function public.set_sales_id_default();
 
+create or replace trigger set_lead_sales_id_trigger
+    before insert on public.leads
+    for each row execute function public.set_sales_id_default();
+
+-- Leads are worked over time, so the list can sort by "last touched".
+create or replace trigger set_lead_updated_at_trigger
+    before update on public.leads
+    for each row execute function public.set_updated_at();
+
 -- Auto-fetch company logo from website favicon on save
 create or replace trigger company_saved
     before insert or update on public.companies
