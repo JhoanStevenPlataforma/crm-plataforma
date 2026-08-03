@@ -4,6 +4,7 @@ import { ToggleFilterButton } from "@/components/admin/toggle-filter-button";
 import { SearchInput } from "@/components/admin/search-input";
 
 import { FilterCategory } from "../filters/FilterCategory";
+import { SalesFilterInput } from "../misc/SalesFilterInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { getTranslatedCompanySizeLabel } from "./getTranslatedCompanySizeLabel";
 import { sizes } from "./sizes";
@@ -59,6 +60,8 @@ export const CompanyListFilter = () => {
           label={translate("crm.common.me")}
           value={{ sales_id: identity?.id }}
         />
+        {/* Renders itself only for users who see the whole team. */}
+        <SalesFilterInput />
       </FilterCategory>
     </div>
   );

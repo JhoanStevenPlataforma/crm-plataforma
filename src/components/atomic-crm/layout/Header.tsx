@@ -18,6 +18,8 @@ const Header = () => {
   let currentPath: string | boolean = "/";
   if (matchPath("/", location.pathname)) {
     currentPath = "/";
+  } else if (matchPath("/leads/*", location.pathname)) {
+    currentPath = "/leads";
   } else if (matchPath("/contacts/*", location.pathname)) {
     currentPath = "/contacts";
   } else if (matchPath("/companies/*", location.pathname)) {
@@ -56,6 +58,15 @@ const Header = () => {
                     label={translate("ra.page.dashboard")}
                     to="/"
                     isActive={currentPath === "/"}
+                  />
+                  {/* Leads sit before contacts: they are the top of the
+                      funnel, and convert into a contact. */}
+                  <NavigationTab
+                    label={translate("resources.leads.name", {
+                      smart_count: 2,
+                    })}
+                    to="/leads"
+                    isActive={currentPath === "/leads"}
                   />
                   <NavigationTab
                     label={translate("resources.contacts.name", {

@@ -283,14 +283,66 @@ export const englishCrmMessages = {
         note_or_attachment_required: "A note or an attachment is required",
       },
     },
+    leads: {
+      name: "Lead |||| Leads",
+      unnamed: "(no name)",
+      company_name_helper:
+        "Use this when the company is not in the CRM yet. Converting the lead creates it.",
+      fields: {
+        name: "Name",
+        first_name: "First name",
+        last_name: "Last name",
+        email: "Email",
+        phone: "Phone",
+        company: "Company",
+        company_id: "Company",
+        company_name: "Company name (not in the CRM yet)",
+        title: "Job title",
+        source: "Source",
+        status: "Status",
+        score: "Score",
+        notes: "Notes",
+        sales_id: "Account manager",
+        created_at: "Created",
+      },
+      field_categories: {
+        identity: "Identity",
+        qualification: "Qualification",
+      },
+      statuses: {
+        converted: "Converted",
+      },
+      create: {
+        title: "New lead",
+      },
+      convert: {
+        action: "Convert",
+        title: "Convert this lead",
+        description:
+          "Creates a company and a contact from this lead. An existing company with the same name is reused.",
+        create_deal: "Also create a deal",
+        confirm: "Convert",
+        success: "Lead converted",
+        error: "The lead could not be converted.",
+        converted_title: "This lead has been converted",
+        see_contact: "See the contact",
+        see_company: "See the company",
+        see_deal: "See the deal",
+      },
+    },
     sales: {
       name: "User |||| Users",
       fields: {
         first_name: "First name",
         last_name: "Last name",
         email: "Email",
-        administrator: "Admin",
+        role: "Role",
         disabled: "Disabled",
+      },
+      roles: {
+        admin: "Admin",
+        manager: "Sales manager",
+        rep: "Sales rep",
       },
       create: {
         error: "An error occurred while creating the user.",
@@ -369,6 +421,19 @@ export const englishCrmMessages = {
   crm: {
     action: {
       reset_password: "Reset Password",
+    },
+    assign: {
+      action: "Assign to",
+      title: "Assign to a sales rep",
+      description:
+        "Hand over %{smart_count} record |||| Hand over %{smart_count} records",
+      search: "Search a sales rep...",
+      empty: "No sales rep found",
+      success:
+        "%{smart_count} record assigned to %{name} |||| %{smart_count} records assigned to %{name}",
+      error: "The records could not be assigned.",
+      filter_placeholder: "Any sales rep",
+      clear_filter: "Clear the sales rep filter",
     },
     auth: {
       first_name: "First name",

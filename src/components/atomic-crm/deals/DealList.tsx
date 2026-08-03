@@ -20,6 +20,7 @@ import { DealEmpty } from "./DealEmpty";
 import { DealListContent } from "./DealListContent";
 import { DealShow } from "./DealShow";
 import { OnlyMineInput } from "./OnlyMineInput";
+import { SalesFilterInput } from "../misc/SalesFilterInput";
 
 const DealList = () => {
   const { identity } = useGetIdentity();
@@ -47,6 +48,9 @@ const DealList = () => {
       />
     </WrapperField>,
     <OnlyMineInput source="sales_id" alwaysOn />,
+    // Lets a sales manager pivot the whole pipeline onto one rep. Renders
+    // nothing for a rep, whose board is already scoped by row level security.
+    <SalesFilterInput source="sales_id" alwaysOn />,
   ];
 
   return (

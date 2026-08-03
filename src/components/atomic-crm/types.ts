@@ -16,20 +16,31 @@ export type SignUpData = {
   last_name: string;
 };
 
+/**
+ * Access level of a CRM user.
+ *
+ * - `admin`: full access, manages users and application configuration
+ * - `manager`: sales manager — sees and reassigns every record, no user admin
+ * - `rep`: sales representative — only sees and edits the records they own
+ */
+export type CrmRole = "admin" | "manager" | "rep";
+
+export const CRM_ROLES: CrmRole[] = ["admin", "manager", "rep"];
+
 export type SalesFormData = {
   avatar?: string;
   email: string;
   password?: string;
   first_name: string;
   last_name: string;
-  administrator: boolean;
+  role: CrmRole;
   disabled: boolean;
 };
 
 export type Sale = {
   first_name: string;
   last_name: string;
-  administrator: boolean;
+  role: CrmRole;
   avatar?: RAFile;
   disabled?: boolean;
   user_id: string;
@@ -136,6 +147,37 @@ export type DealNote = {
 
   // This is defined for compatibility with `ContactNote`
   status?: undefined;
+} & Pick<RaRecord, "id">;
+
+/**
+ * An unqualified prospect, before it becomes a company + contact.
+ *
+ * `company_name` is free text rather than a `company_id`: a lead typically
+ * arrives from a web form naming a company the CRM has never heard of. The
+ * `converted_*` fields record what `convert_lead()` produced.
+ */
+export type Lead = {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  /** Free text, as typed into a web form: the company may not exist yet. */
+  company_name?: string;
+  /** Set once the lead is recognised as belonging to a known company. */
+  company_id?: Identifier | null;
+  title?: string;
+  source?: string;
+  status: string;
+  score?: number;
+  notes?: string;
+  tags?: number[];
+  sales_id?: Identifier;
+  created_at: string;
+  updated_at: string;
+  converted_at?: string | null;
+  converted_contact_id?: Identifier | null;
+  converted_company_id?: Identifier | null;
+  converted_deal_id?: Identifier | null;
 } & Pick<RaRecord, "id">;
 
 export type Tag = {

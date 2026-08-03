@@ -1,5 +1,4 @@
 import { required, useRecordContext, useTranslate } from "ra-core";
-import { ReferenceInput } from "@/components/admin/reference-input";
 import { TextInput } from "@/components/admin/text-input";
 import { SelectInput } from "@/components/admin/select-input";
 import { ArrayInput } from "@/components/admin/array-input";
@@ -9,8 +8,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 import ImageEditorField from "../misc/ImageEditorField";
 import { isLinkedinUrl } from "../misc/isLinkedInUrl";
+import { SaleInput } from "../misc/SaleInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
-import type { Company, Sale } from "../types";
+import type { Company } from "../types";
 import { getTranslatedCompanySizeLabel } from "./getTranslatedCompanySizeLabel";
 import { sizes } from "./sizes";
 
@@ -160,18 +160,7 @@ const CompanyAdditionalInformationInputs = () => {
           />
         </SimpleFormIterator>
       </ArrayInput>
-      <ReferenceInput
-        source="sales_id"
-        reference="sales"
-        filter={{
-          "disabled@neq": true,
-        }}
-      >
-        <SelectInput helperText={false} optionText={saleOptionRenderer} />
-      </ReferenceInput>
+      <SaleInput />
     </div>
   );
 };
-
-const saleOptionRenderer = (choice: Sale) =>
-  `${choice.first_name} ${choice.last_name}`;

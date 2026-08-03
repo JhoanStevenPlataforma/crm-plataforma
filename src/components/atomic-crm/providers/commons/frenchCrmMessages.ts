@@ -288,14 +288,66 @@ export const frenchCrmMessages = {
         note_or_attachment_required: "Une note ou une pièce jointe est requise",
       },
     },
+    leads: {
+      name: "Prospect |||| Prospects",
+      unnamed: "(sans nom)",
+      company_name_helper:
+        "À utiliser quand l'entreprise n'est pas encore dans le CRM. La conversion la créera.",
+      fields: {
+        name: "Nom",
+        first_name: "Prénom",
+        last_name: "Nom",
+        email: "E-mail",
+        phone: "Téléphone",
+        company: "Entreprise",
+        company_id: "Entreprise",
+        company_name: "Nom de l'entreprise (absente du CRM)",
+        title: "Fonction",
+        source: "Source",
+        status: "Statut",
+        score: "Score",
+        notes: "Notes",
+        sales_id: "Responsable de compte",
+        created_at: "Créé le",
+      },
+      field_categories: {
+        identity: "Identité",
+        qualification: "Qualification",
+      },
+      statuses: {
+        converted: "Converti",
+      },
+      create: {
+        title: "Nouveau prospect",
+      },
+      convert: {
+        action: "Convertir",
+        title: "Convertir ce prospect",
+        description:
+          "Crée une entreprise et un contact à partir de ce prospect. Une entreprise existante portant le même nom est réutilisée.",
+        create_deal: "Créer aussi une opportunité",
+        confirm: "Convertir",
+        success: "Prospect converti",
+        error: "Le prospect n'a pas pu être converti.",
+        converted_title: "Ce prospect a été converti",
+        see_contact: "Voir le contact",
+        see_company: "Voir l'entreprise",
+        see_deal: "Voir l'opportunité",
+      },
+    },
     sales: {
       name: "Utilisateur |||| Utilisateurs",
       fields: {
         first_name: "Prénom",
         last_name: "Nom",
         email: "E-mail",
-        administrator: "Admin",
+        role: "Rôle",
         disabled: "Désactivé",
+      },
+      roles: {
+        admin: "Admin",
+        manager: "Directeur commercial",
+        rep: "Commercial",
       },
       create: {
         error:
@@ -375,6 +427,19 @@ export const frenchCrmMessages = {
   crm: {
     action: {
       reset_password: "Réinitialiser le mot de passe",
+    },
+    assign: {
+      action: "Attribuer à",
+      title: "Attribuer à un commercial",
+      description:
+        "Transférer %{smart_count} enregistrement |||| Transférer %{smart_count} enregistrements",
+      search: "Rechercher un commercial...",
+      empty: "Aucun commercial trouvé",
+      success:
+        "%{smart_count} enregistrement attribué à %{name} |||| %{smart_count} enregistrements attribués à %{name}",
+      error: "Les enregistrements n'ont pas pu être attribués.",
+      filter_placeholder: "Tous les commerciaux",
+      clear_filter: "Effacer le filtre commercial",
     },
     auth: {
       first_name: "Prénom",

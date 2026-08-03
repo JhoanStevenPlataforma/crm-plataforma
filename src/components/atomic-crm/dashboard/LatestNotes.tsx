@@ -5,17 +5,19 @@ import { ReferenceField } from "@/components/admin/reference-field";
 import { TextField } from "@/components/admin/text-field";
 import { Card, CardContent } from "@/components/ui/card";
 
+import { useTeamScopeFilter } from "../misc/useTeamScopeFilter";
 import type { Contact, ContactNote } from "../types";
 
 export const LatestNotes = () => {
   const { identity } = useGetIdentity();
+  const teamScope = useTeamScopeFilter();
   const translate = useTranslate();
   const { data: contactNotesData, isPending: contactNotesLoading } = useGetList(
     "contact_notes",
     {
       pagination: { page: 1, perPage: 5 },
       sort: { field: "date", order: "DESC" },
-      filter: { sales_id: identity?.id },
+      filter: teamScope,
     },
     { enabled: Number.isInteger(identity?.id) },
   );
@@ -24,7 +26,7 @@ export const LatestNotes = () => {
     {
       pagination: { page: 1, perPage: 5 },
       sort: { field: "date", order: "DESC" },
-      filter: { sales_id: identity?.id },
+      filter: teamScope,
     },
     { enabled: Number.isInteger(identity?.id) },
   );

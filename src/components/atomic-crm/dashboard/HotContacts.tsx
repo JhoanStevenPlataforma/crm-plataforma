@@ -3,6 +3,7 @@ import { useGetIdentity, useGetList, useTranslate } from "ra-core";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useTeamScopeFilter } from "../misc/useTeamScopeFilter";
 import {
   Tooltip,
   TooltipContent,
@@ -16,6 +17,7 @@ import type { Contact } from "../types";
 
 export const HotContacts = () => {
   const { identity } = useGetIdentity();
+  const teamScope = useTeamScopeFilter();
   const translate = useTranslate();
   const {
     data: contactData,
@@ -26,7 +28,7 @@ export const HotContacts = () => {
     {
       pagination: { page: 1, perPage: 10 },
       sort: { field: "last_seen", order: "DESC" },
-      filter: { status: "hot", sales_id: identity?.id },
+      filter: { status: "hot", ...teamScope },
     },
     { enabled: Number.isInteger(identity?.id) },
   );

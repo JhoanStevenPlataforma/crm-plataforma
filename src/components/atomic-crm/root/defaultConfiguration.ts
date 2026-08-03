@@ -45,6 +45,23 @@ export const defaultDealCategories = [
   { value: "website-design", label: "Website design" },
 ];
 
+export const defaultLeadSources = [
+  { value: "web", label: "Website" },
+  { value: "referral", label: "Referral" },
+  { value: "event", label: "Event" },
+  { value: "outbound", label: "Outbound" },
+  { value: "partner", label: "Partner" },
+  { value: "other", label: "Other" },
+];
+
+// `converted` is set by convert_lead() and is not offered in the form.
+export const defaultLeadStatuses = [
+  { value: "new", label: "New" },
+  { value: "contacted", label: "Contacted" },
+  { value: "qualified", label: "Qualified" },
+  { value: "unqualified", label: "Unqualified" },
+];
+
 export const defaultNoteStatuses = [
   { value: "cold", label: "Cold", color: "#7dbde8" },
   { value: "warm", label: "Warm", color: "#e8cb7d" },
@@ -70,6 +87,8 @@ export const defaultConfiguration: ConfigurationContextValue = {
   dealCategories: defaultDealCategories,
   dealPipelineStatuses: defaultDealPipelineStatuses,
   dealStages: defaultDealStages,
+  leadSources: defaultLeadSources,
+  leadStatuses: defaultLeadStatuses,
   noteStatuses: defaultNoteStatuses,
   taskTypes: defaultTaskTypes,
   title: defaultTitle,

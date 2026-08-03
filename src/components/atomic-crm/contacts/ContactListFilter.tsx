@@ -1,5 +1,12 @@
 import { endOfYesterday, startOfMonth, startOfWeek, subMonths } from "date-fns";
-import { CheckSquare, Clock, Tag, TrendingUp, Users } from "lucide-react";
+import {
+  CheckSquare,
+  Clock,
+  Tag,
+  TrendingUp,
+  UserRound,
+  Users,
+} from "lucide-react";
 import {
   useGetIdentity,
   useGetList,
@@ -10,6 +17,7 @@ import { ToggleFilterButton } from "@/components/admin/toggle-filter-button";
 import { Badge } from "@/components/ui/badge";
 
 import { FilterCategory } from "../filters/FilterCategory";
+import { SalesFilterInput } from "../misc/SalesFilterInput";
 import { Status } from "../misc/Status";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { ResponsiveFilters } from "../misc/ResponsiveFilters";
@@ -32,6 +40,15 @@ export const ContactListFilter = () => {
         placeholder: translate("resources.contacts.filters.search"),
       }}
     >
+      {/* Owner filter: renders itself only for users who see the whole team,
+          so a sales rep never sees a control that cannot change their list. */}
+      <FilterCategory
+        label="resources.contacts.fields.sales_id"
+        icon={<UserRound />}
+      >
+        <SalesFilterInput />
+      </FilterCategory>
+
       <FilterCategory
         label="resources.contacts.fields.last_seen"
         icon={<Clock />}

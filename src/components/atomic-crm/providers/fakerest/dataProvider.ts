@@ -23,6 +23,7 @@ import type { ConfigurationContextValue } from "../../root/ConfigurationContext"
 import { getActivityLog } from "../commons/activity";
 import { getCompanyAvatar } from "../commons/getCompanyAvatar";
 import { getContactAvatar } from "../commons/getContactAvatar";
+import { convertLead, type ConvertLeadOptions } from "../commons/convertLead";
 import { mergeContacts } from "../commons/mergeContacts";
 import type { CrmDataProvider } from "../types";
 import {
@@ -297,6 +298,12 @@ export const createDataProvider = ({
     mergeContacts: async (sourceId: Identifier, targetId: Identifier) => {
       return mergeContacts(sourceId, targetId, baseDataProvider);
     },
+    convertLead: async (
+      leadId: Identifier,
+      options: ConvertLeadOptions = {},
+    ) => {
+      return convertLead(leadId, options, baseDataProvider);
+    },
     getConfiguration: async (): Promise<ConfigurationContextValue> => {
       const { data } = await baseDataProvider.getOne("configuration", {
         id: 1,
@@ -338,9 +345,9 @@ export const createDataProvider = ({
         resource: "sales",
         beforeCreate: async (params) => {
           const { data } = params;
-          // If administrator role is not set, we simply set it to false
-          if (data.administrator == null) {
-            data.administrator = false;
+          // Default new users to the least privileged role
+          if (data.role == null) {
+            data.role = "rep";
           }
           return params;
         },

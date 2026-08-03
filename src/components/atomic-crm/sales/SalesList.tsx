@@ -7,6 +7,7 @@ import { SearchInput } from "@/components/admin/search-input";
 import { Badge } from "@/components/ui/badge";
 
 import { TopToolbar } from "../layout/TopToolbar";
+import { isPrivilegedRole } from "./roles";
 
 const SalesListActions = () => (
   <TopToolbar>
@@ -23,12 +24,12 @@ const OptionsField = (_props: { label?: string | boolean }) => {
   if (!record) return null;
   return (
     <div className="flex flex-row gap-1">
-      {record.administrator && (
+      {isPrivilegedRole(record.role) && (
         <Badge
           variant="outline"
           className="border-blue-300 dark:border-blue-700"
         >
-          {translate("resources.sales.fields.administrator")}
+          {translate(`resources.sales.roles.${record.role}`)}
         </Badge>
       )}
       {record.disabled && (

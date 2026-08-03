@@ -139,8 +139,7 @@ const getDataProviderWithCustomMethods = () => {
       id: Identifier,
       data: Partial<Omit<SalesFormData, "password">>,
     ) {
-      const { email, first_name, last_name, administrator, avatar, disabled } =
-        data;
+      const { email, first_name, last_name, role, avatar, disabled } = data;
 
       const { data: updatedData, error } =
         await getSupabaseClient().functions.invoke<{
@@ -152,7 +151,7 @@ const getDataProviderWithCustomMethods = () => {
             email,
             first_name,
             last_name,
-            administrator,
+            role,
             disabled,
             avatar,
           },
@@ -224,6 +223,37 @@ const getDataProviderWithCustomMethods = () => {
       }
 
       return data;
+    },
+    /**
+     * Turns a lead into a company + contact (+ optional deal) in a single
+     * database call, and returns the new contact id.
+     *
+     * Deliberately not three client-side writes: a failure half-way would
+     * leave an orphan company, and two people converting the same lead at
+     * once would produce two contacts. `convert_lead()` runs under the
+     * caller's own permissions, so row level security still applies.
+     */
+    async convertLead(
+      leadId: Identifier,
+      options: {
+        createDeal?: boolean;
+        dealName?: string;
+        dealAmount?: number;
+      } = {},
+    ): Promise<Identifier> {
+      const { data, error } = await getSupabaseClient().rpc("convert_lead", {
+        lead_id: leadId,
+        create_deal: options.createDeal ?? false,
+        deal_name: options.dealName ?? null,
+        deal_amount: options.dealAmount ?? 0,
+      });
+
+      if (error) {
+        console.error("convert_lead.error", error);
+        throw new Error(error.message || "Failed to convert the lead");
+      }
+
+      return data as Identifier;
     },
     async getConfiguration(): Promise<ConfigurationContextValue> {
       const { data } = await baseDataProvider.getOne("configuration", {
@@ -353,6 +383,15 @@ const lifeCycleCallbacks: ResourceCallbacks[] = [
       return applyFullTextSearch(["name", "category", "description"])(params);
     },
   },
+  {
+    resource: "leads",
+    beforeGetList: async (params) => {
+      return applyFullTextSearch(
+        ["first_name", "last_name", "email", "company_name", "title", "notes"],
+        {},
+      )(params);
+    },
+  },
 ];
 
 export const getDataProvider = () => {
@@ -370,35 +409,38 @@ export const getDataProvider = () => {
   ) as CrmDataProvider;
 };
 
-const applyFullTextSearch = (columns: string[]) => (params: GetListParams) => {
-  if (!params.filter?.q) {
-    return params;
-  }
-  const { q, ...filter } = params.filter;
-  return {
-    ...params,
-    filter: {
-      ...filter,
-      "@or": columns.reduce((acc, column) => {
-        if (column === "email")
-          return {
-            ...acc,
-            [`email_fts@ilike`]: q,
-          };
-        if (column === "phone")
-          return {
-            ...acc,
-            [`phone_fts@ilike`]: q,
-          };
-        else
-          return {
-            ...acc,
-            [`${column}@ilike`]: q,
-          };
-      }, {}),
-    },
-  };
+/**
+ * Contacts keep their emails and phones in jsonb, so `contacts_summary`
+ * flattens them into `email_fts` / `phone_fts` for searching. Resources that
+ * store those as plain columns (leads) pass an empty alias map and are
+ * searched on the real column.
+ */
+const CONTACT_FTS_ALIASES: Record<string, string> = {
+  email: "email_fts",
+  phone: "phone_fts",
 };
+
+const applyFullTextSearch =
+  (columns: string[], aliases: Record<string, string> = CONTACT_FTS_ALIASES) =>
+  (params: GetListParams) => {
+    if (!params.filter?.q) {
+      return params;
+    }
+    const { q, ...filter } = params.filter;
+    return {
+      ...params,
+      filter: {
+        ...filter,
+        "@or": columns.reduce(
+          (acc, column) => ({
+            ...acc,
+            [`${aliases[column] ?? column}@ilike`]: q,
+          }),
+          {},
+        ),
+      },
+    };
+  };
 
 const uploadToBucket = async (fi: RAFile) => {
   if (!fi.src.startsWith("blob:") && !fi.src.startsWith("data:")) {

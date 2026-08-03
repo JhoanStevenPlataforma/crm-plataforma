@@ -20,6 +20,7 @@ import contacts from "../contacts";
 import { Dashboard } from "../dashboard/Dashboard";
 import { MobileDashboard } from "../dashboard/MobileDashboard";
 import deals from "../deals";
+import leads from "../leads";
 import { Layout } from "../layout/Layout";
 import { MobileLayout } from "../layout/MobileLayout";
 import { SignupPage } from "../login/SignupPage";
@@ -46,6 +47,8 @@ import {
   defaultDealCategories,
   defaultDealPipelineStatuses,
   defaultDealStages,
+  defaultLeadSources,
+  defaultLeadStatuses,
   defaultLightModeLogo,
   defaultNoteStatuses,
   defaultTaskTypes,
@@ -120,6 +123,8 @@ export const CRM = ({
   dealCategories = defaultDealCategories,
   dealPipelineStatuses = defaultDealPipelineStatuses,
   dealStages = defaultDealStages,
+  leadSources = defaultLeadSources,
+  leadStatuses = defaultLeadStatuses,
   darkModeLogo = defaultDarkModeLogo,
   lightModeLogo = defaultLightModeLogo,
   noteStatuses = defaultNoteStatuses,
@@ -156,6 +161,8 @@ export const CRM = ({
         dealCategories,
         dealPipelineStatuses,
         dealStages,
+        leadSources,
+        leadStatuses,
         noteStatuses,
         taskTypes,
         title,
@@ -262,6 +269,7 @@ const DesktopAdmin = (
         <Route path={ImportPage.path} element={<ImportPage />} />
         <Route path={ChangelogPage.path} element={<ChangelogPage />} />
       </CustomRoutes>
+      <Resource name="leads" {...leads} />
       <Resource name="deals" {...deals} />
       <Resource name="contacts" {...contacts} />
       <Resource name="companies" {...companies} />

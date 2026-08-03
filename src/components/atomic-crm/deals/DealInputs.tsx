@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 import { contactOptionText } from "../misc/ContactOption";
+import { SaleInput } from "../misc/SaleInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { AutocompleteCompanyInput } from "../companies/AutocompleteCompanyInput.tsx";
 
@@ -100,6 +101,9 @@ const DealMiscInputs = () => {
         helperText={false}
         validate={required()}
       />
+      {/* Deals had no owner input at all, so a sales manager had no way to
+          hand a deal to another rep from the UI. */}
+      <SaleInput />
     </div>
   );
 };

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { SimpleList } from "../simple-list/SimpleList";
 import { CompanyAvatar } from "../companies/CompanyAvatar";
 import { findDealLabel } from "../deals/dealUtils";
+import { useTeamScopeFilter } from "../misc/useTeamScopeFilter";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 
@@ -17,6 +18,7 @@ import type { Deal } from "../types";
 export const DealsPipeline = () => {
   const translate = useTranslate();
   const { identity } = useGetIdentity();
+  const teamScope = useTeamScopeFilter();
   const { dealStages, dealPipelineStatuses, currency } =
     useConfigurationContext();
   const { data, total, isPending } = useGetList<Deal>(
@@ -24,7 +26,7 @@ export const DealsPipeline = () => {
     {
       pagination: { page: 1, perPage: 10 },
       sort: { field: "last_seen", order: "DESC" },
-      filter: { "stage@neq": "lost", sales_id: identity?.id },
+      filter: { "stage@neq": "lost", ...teamScope },
     },
     { enabled: Number.isInteger(identity?.id) },
   );
