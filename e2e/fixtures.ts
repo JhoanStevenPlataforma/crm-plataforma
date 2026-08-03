@@ -12,6 +12,8 @@ const TABLES = [
   "tasks",
   "contact_notes",
   "deal_notes",
+  // Before contacts/companies/deals: leads point at all three.
+  "leads",
   "deals",
   "contacts",
   "companies",
@@ -54,16 +56,24 @@ async function createUser({
   return data.user;
 }
 
+export type CrmRole = "admin" | "manager" | "rep";
+
 async function createSales({
   first_name,
   last_name,
   email,
   password,
+  role = "rep",
 }: {
   first_name: string;
   last_name: string;
   email: string;
   password: string;
+  /**
+   * Access level. Defaults to `rep`, which only sees the records it owns —
+   * the case worth asserting in most tests.
+   */
+  role?: CrmRole;
 }) {
   const { data: userData, error: userError } =
     await adminSupabase.auth.admin.createUser({
@@ -78,7 +88,7 @@ async function createSales({
 
   const { data, error } = await adminSupabase
     .from("sales")
-    .update({ first_name, last_name, administrator: false })
+    .update({ first_name, last_name, role })
     .eq("user_id", userData.user?.id)
     .select()
     .single();
@@ -193,6 +203,32 @@ async function createContact({
   return data;
 }
 
+async function createLead({
+  first_name,
+  last_name,
+  company_name = "",
+  status = "new",
+  sales_id,
+}: {
+  first_name: string;
+  last_name: string;
+  company_name?: string;
+  status?: string;
+  sales_id: string | number;
+}) {
+  const { data, error } = await adminSupabase
+    .from("leads")
+    .insert({ first_name, last_name, company_name, status, sales_id })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create lead: ${error.message}`);
+  }
+
+  return data;
+}
+
 const getMenuMethod = ({ page }: { page: Page; isMobile: boolean }) => ({
   goToDashboard: async () => {
     await page.getByRole("link", { name: "Dashboard" }).click();
@@ -217,6 +253,7 @@ export const test = base.extend<{
   createSales: typeof createSales;
   createCompany: typeof createCompany;
   createContact: typeof createContact;
+  createLead: typeof createLead;
   createNotes: typeof createNotes;
   menu: ReturnType<typeof getMenuMethod>;
   dismissToast: (content: string) => Promise<void>;
@@ -246,6 +283,10 @@ export const test = base.extend<{
   // eslint-disable-next-line no-empty-pattern
   createContact: async ({}, cb) => {
     await cb(createContact);
+  },
+  // eslint-disable-next-line no-empty-pattern
+  createLead: async ({}, cb) => {
+    await cb(createLead);
   },
   // eslint-disable-next-line no-empty-pattern
   createNotes: async ({}, cb) => {

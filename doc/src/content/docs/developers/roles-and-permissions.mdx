@@ -1,0 +1,191 @@
+---
+title: Roles and Permissions
+description: How Atomic CRM scopes records to their owner, what each role may do, and how a sales manager reassigns work.
+---
+
+Every CRM record carries a `sales_id` owner. A sales rep only sees and edits the
+records they own; admins and sales managers see and reassign everything.
+
+## The three roles
+
+`public.sales.role` is an enum with three values:
+
+| Role      | Sees                      | May reassign | Manages users & configuration |
+| --------- | ------------------------- | ------------ | ----------------------------- |
+| `admin`   | everything                | yes          | yes                           |
+| `manager` | everything                | yes          | no                            |
+| `rep`     | only the records they own | no           | no                            |
+
+The first user created on a fresh installation becomes `admin`; everybody else
+starts as `rep` and is promoted from the Users screen.
+
+## Where enforcement lives
+
+**Row level security is the boundary.** The policies in
+`supabase/schemas/05_policies.sql` are evaluated by Postgres and cannot be
+bypassed from the browser, from the REST API, or by a modified client.
+
+`canAccess` in `src/components/atomic-crm/providers/commons/canAccess.ts` is a
+**usability layer only**: it decides which menu entries, buttons and inputs are
+rendered. Never rely on it to protect data.
+
+Three helper functions back the policies:
+
+```sql
+public.current_sale_id()    -- the signed-in user's sales.id
+public.current_sales_role() -- their role
+public.can_manage_all()     -- true for admin and manager
+```
+
+All three are `SECURITY DEFINER` (they read `public.sales`, which is itself
+under RLS, so an invoker-rights function would recurse) and `STABLE`. A
+disabled account resolves to `NULL` / `false`, so a banned user whose access
+token has not expired yet still loses every row.
+
+### Only managers reassign
+
+The `UPDATE` policies repeat the ownership predicate in their `WITH CHECK`
+clause:
+
+```sql
+create policy "Contacts are updated by their owner or a manager"
+    on public.contacts for update to authenticated
+    using      ((select public.can_manage_all()) or sales_id = (select public.current_sale_id()))
+    with check ((select public.can_manage_all()) or sales_id = (select public.current_sale_id()));
+```
+
+A rep may edit their own record, but the row must still belong to them
+afterwards — so handing it to somebody else is refused by the database, not
+merely hidden in the UI.
+
+### Notes and tasks follow their parent
+
+Notes and tasks derive visibility from the contact or deal they belong to,
+not from their own `sales_id`. A note written by a manager on a rep's contact
+stays readable by that rep, and reassigning a contact carries its whole history
+with it.
+
+### Companies are shared
+
+Company reads stay open to every authenticated user. They are reference data:
+`contacts_summary` left-joins companies for the company name, and the company
+autocomplete needs the full list to stop reps creating duplicates. Writing and
+reassigning a company is still restricted to its owner and to managers.
+
+## Leads
+
+Leads are their own section in the main navigation, before Contacts: they are
+the top of the funnel and convert into a contact.
+
+A lead names its company in one of two ways, and both fields coexist:
+
+| Field          | Meaning                                |
+| -------------- | -------------------------------------- |
+| `company_id`   | a link to a company already in the CRM |
+| `company_name` | free text, as typed into a web form    |
+
+A fresh lead usually only has the text — that is exactly why leads are
+decoupled from `companies`, so an unqualified prospect does not create a
+company record. Once a rep recognises the company they pick it from the
+autocomplete, which sets `company_id`.
+
+`convert_lead()` prefers the link when there is one. Otherwise it resolves the
+free text against existing companies (case-insensitively) and only creates a
+new company when nothing matches — lead forms are the main source of duplicate
+company records.
+
+Conversion runs as a single `convert_lead()` call rather than three client-side
+writes: a failure half-way would leave an orphan company, and two people
+converting the same lead at once would produce two contacts. The lead then
+becomes an audit trail, linking to the contact, company and deal it produced.
+
+## Reassigning work
+
+- **In bulk**: select rows in the Leads or Contacts list and use **Assign to**.
+  It issues a single `updateMany`, not one request per record.
+- **One record at a time**: the _Account manager_ input on the contact, company
+  and deal forms. It is read-only for a rep.
+- **Reviewing another rep's book**: the owner filter on the Contacts, Companies,
+  Leads and Deals lists. It is only rendered for managers and admins — a rep's
+  list is already narrowed by RLS, so the control would do nothing.
+
+The dashboard overview widgets (hot contacts, latest activity, pipeline) show
+the whole team for a manager and only their own records for a rep. "My tasks"
+stays personal for every role.
+
+## Performance
+
+Owner-scoped RLS makes managers the "sees everything" case, so the list
+queries were measured on a synthetic dataset of 50 users, 20k companies, 200k
+contacts, 100k deals, 400k tasks and 400k notes:
+
+| Screen               | Before  | After (manager) | After (rep) |
+| -------------------- | ------- | --------------- | ----------- |
+| Contact list, page 1 | 1076 ms | 0.31 ms         | 0.84 ms     |
+| Company list, page 1 | 582 ms  | 5.3 ms          | 5.4 ms      |
+| Deal kanban          | 43.7 ms | 0.15 ms         | 13.1 ms     |
+| Task list            | 68.6 ms | 0.12 ms         | 17.9 ms     |
+
+Two things made the difference, both in
+`supabase/migrations/20260803140000_list_query_performance.sql`:
+
+1. `contacts_summary` and `companies_summary` computed their `nb_*` counts with
+   a join plus `GROUP BY`, which grouped the entire table before
+   `ORDER BY ... LIMIT` could discard it. They now use scalar subqueries, so the
+   count is only evaluated for the rows that survive the limit.
+2. Several list screens sorted on an unindexed column, forcing a top-N heapsort
+   over the whole table on every page load.
+
+RLS itself costs roughly 15%: the helper functions are wrapped in scalar
+subqueries — `(select public.can_manage_all())` — so the planner hoists them
+into an InitPlan and evaluates them once per statement instead of once per row.
+
+## Making an input respect the role
+
+`SaleInput` marks the owner field `readOnly` when the current user may not
+reassign. That only works because `SelectInput` was fixed to honour it: it used
+to accept `readOnly` and silently ignore it, applying only `disabled`. Its reset
+("X") button also sets `pointer-events-auto`, so it stayed clickable on a
+disabled trigger and had to be hidden outright.
+
+If you add another permission-gated `SelectInput`, both guards are already in
+place. If you gate a **different** input type, check that it actually applies
+`readOnly` before trusting it — and remember that the UI is never the boundary:
+row level security rejects the write regardless, so the worst case of a missed
+guard is a confusing save error, not a data leak.
+
+## What is deliberately not implemented
+
+These were left out on purpose; they are not oversights.
+
+- **Leads on mobile.** `MobileNavigation` only registers contacts, companies and
+  tasks — deals are absent too. Adding leads needs mobile-specific views.
+- **`lead_notes`.** Leads carry a single `notes` text field. A full note thread
+  with attachments, like contacts and deals have, is a separate feature.
+- **CSV import for leads.** Contacts have one; leads do not.
+- **Leads in `activity_log`.** The view covers companies, contacts, deals and
+  their notes.
+- **A team hierarchy.** A manager sees the whole organisation, not a subset. If
+  you ever need "each manager sees only their own team", add `sales.manager_id`
+  and make `can_manage_all()` team-aware — but note that turns a flat check into
+  a recursive one over `sales`, which is why the flat model was chosen.
+- **Restricting company reads.** See "Companies are shared" above.
+
+## Deploying to an existing installation
+
+Records with a `NULL` `sales_id` become an unassigned pool: managers see them,
+reps do not. Audit before deploying and hand them out afterwards:
+
+```sql
+select count(*) filter (where sales_id is null) from public.contacts;
+select count(*) filter (where sales_id is null) from public.companies;
+select count(*) filter (where sales_id is null) from public.deals;
+```
+
+On a large installation, build the new indexes ahead of the deploy so the
+migration does not lock writes. Every index in these migrations is created with
+`if not exists`, so the migration then skips them:
+
+```sql
+create index concurrently contacts_sales_id_idx on public.contacts (sales_id);
+```

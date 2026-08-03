@@ -73,7 +73,8 @@ src/
 │   │   ├── dashboard/      # Dashboard widgets
 │   │   ├── deals/          # Deal pipeline (Kanban)
 │   │   ├── filters/        # List filters
-│   │   ├── layout/         # App layout components
+│   │   ├── layout/         # App layout components (nav tabs are hardcoded here)
+│   │   ├── leads/          # Unqualified prospects + conversion to contact
 │   │   ├── login/          # Authentication pages
 │   │   ├── misc/           # Shared utilities
 │   │   ├── notes/          # Note management
@@ -121,6 +122,12 @@ The `src/App.tsx` file renders the `<CRM>` component, which accepts props for do
 #### Database Views
 
 Complex queries are handled via database views to simplify frontend code and reduce HTTP overhead. For example, `contacts_summary` provides aggregated contact data including task counts.
+
+The `nb_*` aggregate columns in `contacts_summary` / `companies_summary` are **scalar subqueries, not a join plus `GROUP BY`**. Grouping over the join forced Postgres to aggregate the whole table before `ORDER BY ... LIMIT` could discard it, which cost ~1 s per list page at 200k contacts. Keep them as subqueries.
+
+#### Roles and Permissions
+
+Every record carries a `sales_id` owner. `public.sales.role` is an enum (`admin` / `manager` / `rep`): a rep only sees the records they own, admins and managers see everything and are the only ones who may reassign. Enforcement lives in the RLS policies (`supabase/schemas/05_policies.sql`); `canAccess` is a UI-only layer. See `doc/src/content/docs/developers/roles-and-permissions.mdx`.
 
 #### Database Triggers
 

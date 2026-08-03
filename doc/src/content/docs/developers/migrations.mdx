@@ -18,15 +18,16 @@ The `supabase/schemas/` directory contains the **source of truth** for the datab
     }
     `}
 </style>
-| File | Contents |
-|------|----------|
-| `01_tables.sql` | Tables, foreign keys, indexes, extensions |
-| `02_functions.sql` | All PL/pgSQL functions |
-| `03_views.sql` | Views (`contacts_summary`, `companies_summary`, `activity_log`, `init_state`) |
-| `04_triggers.sql` | All triggers (public tables + auth.users) |
-| `05_policies.sql` | Row Level Security policies |
-| `06_grants.sql` | Grants and default privileges |
-| `07_storage.sql` | Storage bucket policies |
+
+| File               | Contents                                                                      |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `01_tables.sql`    | Tables, foreign keys, indexes, extensions                                     |
+| `02_functions.sql` | All PL/pgSQL functions                                                        |
+| `03_views.sql`     | Views (`contacts_summary`, `companies_summary`, `activity_log`, `init_state`) |
+| `04_triggers.sql`  | All triggers (public tables + auth.users)                                     |
+| `05_policies.sql`  | Row Level Security policies                                                   |
+| `06_grants.sql`    | Grants and default privileges                                                 |
+| `07_storage.sql`   | Storage bucket policies                                                       |
 
 Files are numbered to control load order (tables must exist before functions that reference them).
 
@@ -105,6 +106,29 @@ npx supabase db dump --local --schema public
 ```
 
 Then copy the function's exact format from the dump output into `02_functions.sql`.
+
+### Two Non-Obvious Causes of Phantom Diffs
+
+PostgreSQL stores a function body as literal text, so a hand-written migration
+and the schema file must match **byte for byte**, comments and all.
+
+1. **Line endings.** This repository uses CRLF. A migration file written with LF
+   endings stores a different body than the CRLF schema file, and `db diff` will
+   re-emit the function on every run even though the code is identical. Check
+   with `file supabase/migrations/<name>.sql` and normalise to CRLF.
+2. **Column order.** PostgreSQL cannot insert a column in the middle of a table.
+   A migration that replaces a column (`add` the new one, backfill, `drop` the
+   old one) leaves the new column **at the end**, while the schema file usually
+   declares it where the old one was. Declare it last in `01_tables.sql` to
+   match, with a comment explaining why. `public.sales.role` is the example in
+   this codebase.
+
+A useful check, since the repository already carries some unrelated
+`grant ... to anon` drift: filter it out and confirm nothing else remains.
+
+```sh
+npx supabase db diff --local
+```
 
 ## Updating The Import Feature
 
