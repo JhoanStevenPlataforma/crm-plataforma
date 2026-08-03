@@ -273,12 +273,20 @@ export const SelectInput = (props: SelectInputProps) => {
           >
             <SelectTrigger
               className={cn("w-full transition-all hover:bg-accent")}
-              disabled={field.disabled}
+              // `readOnly` must block interaction, like it does in
+              // BooleanInput and DateInput. Without it the field looked
+              // read-only but stayed fully editable.
+              disabled={field.disabled || readOnly}
               aria-labelledby={labelId}
             >
               <SelectValue placeholder={renderEmptyItemOption()} />
 
-              {field.value && field.value !== emptyValue ? (
+              {/* The reset button has pointer-events-auto, so it stays
+                  clickable even on a disabled trigger: hide it outright. */}
+              {field.value &&
+              field.value !== emptyValue &&
+              !readOnly &&
+              !field.disabled ? (
                 <div
                   role="button"
                   className="p-0 ml-auto pointer-events-auto hover:bg-transparent text-muted-foreground opacity-50 hover:opacity-100"
