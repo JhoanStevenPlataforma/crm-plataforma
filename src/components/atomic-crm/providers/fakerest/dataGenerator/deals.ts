@@ -41,6 +41,10 @@ export const generateDeals = (db: Db): Deal[] => {
       expected_closing_date,
       sales_id: company.sales_id!,
       index: 0,
+      // Seeded from the owner's team, exactly like the migration's backfill.
+      team_id:
+        db.team_members.find((member) => member.sales_id === company.sales_id)
+          ?.team_id ?? null,
     };
   });
   // compute index based on stage

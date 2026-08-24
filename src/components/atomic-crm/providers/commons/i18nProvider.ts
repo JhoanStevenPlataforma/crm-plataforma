@@ -6,6 +6,13 @@ import { raSupabaseEnglishMessages } from "ra-supabase-language-english";
 import { raSupabaseFrenchMessages } from "ra-supabase-language-french";
 import { englishCrmMessages } from "./englishCrmMessages";
 import { frenchCrmMessages } from "./frenchCrmMessages";
+import { spanishCrmMessages } from "./spanishCrmMessages";
+import { spanishMessages } from "./spanishRaMessages";
+import { raSupabaseSpanishMessages } from "./spanishSupabaseMessages";
+
+const SUPPORTED_LOCALES = ["en", "fr", "es"] as const;
+
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 const raSupabaseEnglishMessagesOverride = {
   "ra-supabase": {
@@ -39,30 +46,41 @@ const frenchCatalog = mergeTranslations(
   frenchCrmMessages,
 );
 
-export const getInitialLocale = (): "en" | "fr" => {
+// Layered over the English catalog like the French one, so any key the Spanish
+// catalogs do not cover falls back to English instead of showing the raw key.
+const spanishCatalog = mergeTranslations(
+  englishCatalog,
+  spanishMessages,
+  raSupabaseSpanishMessages,
+  spanishCrmMessages,
+);
+
+const catalogs: Record<SupportedLocale, typeof englishCatalog> = {
+  en: englishCatalog,
+  fr: frenchCatalog,
+  es: spanishCatalog,
+};
+
+export const getInitialLocale = (): SupportedLocale => {
   if (typeof navigator === "undefined") {
     return "en";
   }
 
   const browserLocale = navigator.languages?.[0] ?? navigator.language;
-  if (browserLocale?.toLowerCase().startsWith("fr")) {
-    return "fr";
-  }
+  const language = browserLocale?.toLowerCase().split("-")[0];
 
-  return "en";
+  return SUPPORTED_LOCALES.includes(language as SupportedLocale)
+    ? (language as SupportedLocale)
+    : "en";
 };
 
 export const i18nProvider = polyglotI18nProvider(
-  (locale) => {
-    if (locale === "fr") {
-      return frenchCatalog;
-    }
-    return englishCatalog;
-  },
+  (locale) => catalogs[locale as SupportedLocale] ?? englishCatalog,
   getInitialLocale(),
   [
     { locale: "en", name: "English" },
     { locale: "fr", name: "Français" },
+    { locale: "es", name: "Español" },
   ],
   { allowMissing: true },
 );

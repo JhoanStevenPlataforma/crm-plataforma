@@ -7,11 +7,18 @@ const adminSupabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-// Tables in FK-safe deletion order (children before parents)
+// Tables in FK-safe deletion order (children before parents).
+//
+// `tasks` is absent on purpose: a DELETE on it is converted to a soft delete by
+// `tasks_soft_delete`, so the rows would survive the reset and then block the
+// `sales` delete through `owner_sales_id`. Tasks go through
+// `public.purge_tasks()` — the retention path, service-role only (§4.4).
 const TABLES = [
-  "tasks",
   "contact_notes",
   "deal_notes",
+  // Cascades from deals, but deleted explicitly like the notes above so the
+  // reset does not depend on cascade behaviour.
+  "deal_stage_changes",
   // Before contacts/companies/deals: leads point at all three.
   "leads",
   "deals",
@@ -20,10 +27,27 @@ const TABLES = [
   "tags",
   "favicons_excluded_domains",
   "configuration",
+  // Both cascade from sales, but deleting them explicitly keeps the reset
+  // independent of cascade behaviour if those FKs ever change.
+  "notification_preferences",
+  "team_members",
+  "teams",
   "sales",
 ];
 
 async function resetDb() {
+  // Tasks first, through the retention path: nothing else can remove them, and
+  // every remaining table below is blocked by their foreign keys.
+  // `p_purge_history` is what makes a reset possible at all: task events are
+  // append-only and reference sales, so history that outlives every task also
+  // pins every user who ever touched one. Only ever right for a throwaway DB.
+  const { error: purgeError } = await adminSupabase.rpc("purge_tasks", {
+    p_purge_history: true,
+  });
+  if (purgeError) {
+    throw new Error(`Failed to purge tasks: ${purgeError.message}`);
+  }
+
   for (const table of TABLES) {
     // Supabase client delete need a where clause to get executed, so we use one that will match on all rows (id is not null)
     await adminSupabase.from(table).delete().not("id", "is", null);
@@ -236,6 +260,10 @@ const getMenuMethod = ({ page }: { page: Page; isMobile: boolean }) => ({
   },
   goToContacts: async () => {
     await page.getByRole("link", { name: "Contacts" }).click();
+    await page.waitForLoadState("networkidle");
+  },
+  goToTasks: async () => {
+    await page.getByRole("link", { name: "Tasks", exact: true }).click();
     await page.waitForLoadState("networkidle");
   },
 });

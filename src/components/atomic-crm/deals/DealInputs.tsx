@@ -104,6 +104,16 @@ const DealMiscInputs = () => {
       {/* Deals had no owner input at all, so a sales manager had no way to
           hand a deal to another rep from the UI. */}
       <SaleInput />
+      {/* Which team the amount counts for on the budget dashboard. Its own
+          field rather than a lookup through the owner: a rep who belongs to two
+          teams would otherwise make the same amount count twice. */}
+      <ReferenceInput source="team_id" reference="teams">
+        <SelectInput
+          optionText="name"
+          helperText={false}
+          label="resources.deals.fields.team_id"
+        />
+      </ReferenceInput>
     </div>
   );
 };

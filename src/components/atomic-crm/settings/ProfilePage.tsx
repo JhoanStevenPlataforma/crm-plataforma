@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import ImageEditorField from "../misc/ImageEditorField";
+import { NotificationPreferences } from "../notifications/NotificationPreferences";
 import type { CrmDataProvider } from "../providers/types";
 import type { Sale, SalesFormData } from "../types";
 
@@ -84,10 +85,14 @@ export const ProfilePage = () => {
   };
 
   return (
-    <div className="max-w-lg mx-auto mt-8">
+    <div className="max-w-lg mx-auto mt-8 space-y-4">
       <Form onSubmit={handleOnSubmit} record={data}>
         <ProfileForm isEditMode={isEditMode} setEditMode={setEditMode} />
       </Form>
+      {/* Outside the profile form on purpose: preferences live in their own
+          table with their own owner-only RLS, and saving them must not depend
+          on the profile form being valid. */}
+      <NotificationPreferences />
     </div>
   );
 };

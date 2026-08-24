@@ -115,6 +115,9 @@ test-app:
 test-functions:
 	npm run test:unit:functions
 
+test-db: ## run the pgTAP database tests against the local supabase instance
+	@npx supabase test db --local
+
 test-e2e: start-e2e
 	npx playwright test --ui
 

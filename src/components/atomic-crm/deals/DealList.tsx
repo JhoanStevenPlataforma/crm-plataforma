@@ -51,6 +51,14 @@ const DealList = () => {
     // Lets a sales manager pivot the whole pipeline onto one rep. Renders
     // nothing for a rep, whose board is already scoped by row level security.
     <SalesFilterInput source="sales_id" alwaysOn />,
+    // The landing target of the team dashboard's drill-down.
+    <ReferenceInput source="team_id" reference="teams">
+      <SelectInput
+        label={false}
+        emptyText="resources.deals.fields.team_id"
+        optionText="name"
+      />
+    </ReferenceInput>,
   ];
 
   return (

@@ -24,6 +24,8 @@ import { Separator } from "@/components/ui/separator";
 import { CompanyAvatar } from "../companies/CompanyAvatar";
 import { NoteCreate } from "../notes/NoteCreate";
 import { NotesIterator } from "../notes/NotesIterator";
+import { EntityTasksPanel } from "../tasks/EntityTasksPanel";
+import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 import { ContactList } from "./ContactList";
@@ -165,6 +167,26 @@ const DealShowContent = () => {
               <p className="text-sm leading-6">{record.description}</p>
             </div>
           )}
+
+          <div className="m-4">
+            <Separator className="mb-4" />
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              {translate("resources.tasks.name", { smart_count: 2 })}
+            </h3>
+            <EntityTasksPanel
+              entityType="deal"
+              entityId={record.id}
+              entityLabel={record.name}
+            />
+          </div>
+
+          <div className="m-4">
+            <Separator className="mb-4" />
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              {translate("resources.tasks.timeline.title")}
+            </h3>
+            <EntityTimeline entityType="deal" entityId={record.id} />
+          </div>
 
           <div className="m-4">
             <Separator className="mb-4" />

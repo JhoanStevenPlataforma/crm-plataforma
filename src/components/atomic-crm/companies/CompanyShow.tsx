@@ -3,6 +3,8 @@ import { SortButton } from "@/components/admin/sort-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EntityTasksPanel } from "../tasks/EntityTasksPanel";
+import { EntityTimeline } from "../timeline/EntityTimeline";
 import { UserPlus } from "lucide-react";
 import {
   RecordContextProvider,
@@ -118,7 +120,9 @@ const CompanyShowContent = () => {
               <h5 className="text-xl ml-2 flex-1">{record.name}</h5>
             </div>
             <Tabs defaultValue={currentTab} onValueChange={handleTabChange}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList
+                className={`grid w-full ${record.nb_deals ? "grid-cols-4" : "grid-cols-3"}`}
+              >
                 <TabsTrigger value="activity">
                   {translate("crm.common.activity")}
                 </TabsTrigger>
@@ -136,6 +140,9 @@ const CompanyShowContent = () => {
                     })}
                   </TabsTrigger>
                 ) : null}
+                <TabsTrigger value="tasks">
+                  {translate("resources.tasks.name", { smart_count: 2 })}
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="activity" className="pt-2">
                 <ActivityLog companyId={record.id} context="company" />
@@ -177,6 +184,22 @@ const CompanyShowContent = () => {
                     <DealsIterator />
                   </ReferenceManyField>
                 ) : null}
+              </TabsContent>
+              <TabsContent value="tasks" className="pt-2">
+                <EntityTasksPanel
+                  entityType="company"
+                  entityId={record.id}
+                  entityLabel={record.name}
+                />
+                {/* The legacy `activity` tab is `activity_log`, which does not
+                    know tasks exist (W9). The unified timeline sits with the
+                    tasks it explains until that view is retired (§6.1). */}
+                <div className="border-t mt-4 pt-4">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2">
+                    {translate("resources.tasks.timeline.title")}
+                  </h3>
+                  <EntityTimeline entityType="company" entityId={record.id} />
+                </div>
               </TabsContent>
             </Tabs>
           </CardContent>

@@ -1,4 +1,12 @@
-import { FileText, Import, Settings, User, Users } from "lucide-react";
+import {
+  BarChart3,
+  FileText,
+  Import,
+  Settings,
+  User,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import { CanAccess, useTranslate, useUserMenu } from "ra-core";
 import { Link, matchPath, useLocation } from "react-router";
 import { RefreshButton } from "@/components/admin/refresh-button";
@@ -9,6 +17,8 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { ImportPage } from "../misc/ImportPage";
 import { ChangelogPage } from "../misc/ChangelogPage";
+import { NotificationsBell } from "../notifications/NotificationsBell";
+import { TeamsDashboard } from "../teams/TeamsDashboard";
 
 const Header = () => {
   const { darkModeLogo, lightModeLogo, title } = useConfigurationContext();
@@ -26,6 +36,8 @@ const Header = () => {
     currentPath = "/companies";
   } else if (matchPath("/deals/*", location.pathname)) {
     currentPath = "/deals";
+  } else if (matchPath("/tasks/*", location.pathname)) {
+    currentPath = "/tasks";
   } else {
     currentPath = false;
   }
@@ -89,15 +101,29 @@ const Header = () => {
                     to="/deals"
                     isActive={currentPath === "/deals"}
                   />
+                  {/* Tasks close the loop: every other tab is a record, this
+                      one is the work owed on them (§15.1). */}
+                  <NavigationTab
+                    label={translate("resources.tasks.name", {
+                      smart_count: 2,
+                    })}
+                    to="/tasks"
+                    isActive={currentPath === "/tasks"}
+                  />
                 </nav>
               </div>
               <div className="flex items-center">
+                <NotificationsBell />
                 <ThemeModeToggle />
                 <RefreshButton />
                 <UserMenu>
                   <ProfileMenu />
                   <CanAccess resource="sales" action="list">
                     <UsersMenu />
+                  </CanAccess>
+                  <CanAccess resource="teams" action="edit">
+                    <TeamsMenu />
+                    <TeamsDashboardMenu />
                   </CanAccess>
                   <CanAccess resource="configuration" action="edit">
                     <SettingsMenu />
@@ -146,6 +172,43 @@ const UsersMenu = () => {
       <Link to="/sales" className="flex items-center gap-2">
         <Users />
         {translate("resources.sales.name", { smart_count: 2 })}
+      </Link>
+    </DropdownMenuItem>
+  );
+};
+
+const TeamsMenu = () => {
+  const translate = useTranslate();
+  const userMenuContext = useUserMenu();
+  if (!userMenuContext) {
+    throw new Error("<TeamsMenu> must be used inside <UserMenu>");
+  }
+  return (
+    <DropdownMenuItem asChild onClick={userMenuContext.onClose}>
+      <Link to="/teams" className="flex items-center gap-2">
+        <UsersRound />
+        {translate("resources.teams.name", { smart_count: 2 })}
+      </Link>
+    </DropdownMenuItem>
+  );
+};
+
+/**
+ * Sits behind the same `teams`/`edit` gate as the teams entry above, which
+ * resolves to manager + admin. The page repeats the check — a menu that is not
+ * rendered is not an access control.
+ */
+const TeamsDashboardMenu = () => {
+  const translate = useTranslate();
+  const userMenuContext = useUserMenu();
+  if (!userMenuContext) {
+    throw new Error("<TeamsDashboardMenu> must be used inside <UserMenu>");
+  }
+  return (
+    <DropdownMenuItem asChild onClick={userMenuContext.onClose}>
+      <Link to={TeamsDashboard.path} className="flex items-center gap-2">
+        <BarChart3 />
+        {translate("crm.teams_dashboard.title")}
       </Link>
     </DropdownMenuItem>
   );

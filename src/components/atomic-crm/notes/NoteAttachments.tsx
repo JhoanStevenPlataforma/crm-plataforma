@@ -10,15 +10,34 @@ import type { AttachmentNote, ContactNote, DealNote } from "../types";
  * @param props.note - Note record containing attachments to render.
  * @returns `null` when there are no attachments, otherwise attachment previews and links.
  */
-export const NoteAttachments = ({ note }: { note: ContactNote | DealNote }) => {
-  if (!note.attachments || note.attachments.length === 0) {
+export const NoteAttachments = ({ note }: { note: ContactNote | DealNote }) => (
+  <AttachmentList attachments={note.attachments} />
+);
+
+/**
+ * Renders a list of stored attachments: images as previews, everything else as
+ * a link.
+ *
+ * Split out of `NoteAttachments` because a note is no longer the only thing
+ * that carries files — a deal stage change does too, and its timeline entry
+ * should show them exactly the way a note does.
+ *
+ * @param props.attachments - The persisted attachments, if any.
+ * @returns `null` when there is nothing to show, otherwise previews and links.
+ */
+export const AttachmentList = ({
+  attachments,
+}: {
+  attachments?: AttachmentNote[];
+}) => {
+  if (!attachments || attachments.length === 0) {
     return null;
   }
 
-  const imageAttachments = note.attachments.filter(
-    (attachment: AttachmentNote) => isImageMimeType(attachment.type),
+  const imageAttachments = attachments.filter((attachment: AttachmentNote) =>
+    isImageMimeType(attachment.type),
   );
-  const otherAttachments = note.attachments.filter(
+  const otherAttachments = attachments.filter(
     (attachment: AttachmentNote) => !isImageMimeType(attachment.type),
   );
 

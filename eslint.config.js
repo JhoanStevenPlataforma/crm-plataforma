@@ -8,7 +8,10 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  // Global ignores. `.supabase-e2e` is a generated copy of `supabase/` and
+  // `**/.temp` holds the bundles `supabase start` writes; both are gitignored,
+  // and linting them fails `make lint` for anyone with a local stack running.
+  { ignores: ["dist", ".supabase-e2e/**", "**/.temp/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx,mjs}"],

@@ -8,6 +8,21 @@ import { DateTimeInput } from "@/components/admin";
 import { contactOptionText } from "../misc/ContactOption";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 
+/**
+ * The task form (proposal §3.3, §16).
+ *
+ * Two rules from the proposal are load-bearing here:
+ *
+ *  - Title and description are separate fields. They used to be one `text`
+ *    column, which made lists unreadable as soon as somebody wrote a paragraph.
+ *  - Everything the enterprise model adds is optional with a sane default, so
+ *    creating a follow-up stays a two-field job. Status defaults to `pending`
+ *    in the database and is never asked for at creation time.
+ *
+ * `type` keeps writing the legacy string column on purpose: it is driven by the
+ * `taskTypes` prop of `<CRM>`, a documented configuration point, and a database
+ * shim resolves it to `task_type_id`.
+ */
 export const TaskFormContent = ({
   selectContact,
 }: {
@@ -18,8 +33,13 @@ export const TaskFormContent = ({
     <div className="flex flex-col gap-4">
       <TextInput
         autoFocus
-        source="text"
+        source="title"
         validate={required()}
+        className="m-0"
+        helperText={false}
+      />
+      <TextInput
+        source="description"
         multiline
         className="m-0"
         helperText={false}
@@ -52,6 +72,18 @@ export const TaskFormContent = ({
           helperText={false}
         />
       </div>
+
+      <ReferenceInput
+        source="priority_id"
+        reference="task_priorities"
+        sort={{ field: "rank", order: "ASC" }}
+      >
+        <SelectInput
+          label="resources.tasks.fields.priority"
+          optionText="label"
+          helperText={false}
+        />
+      </ReferenceInput>
     </div>
   );
 };

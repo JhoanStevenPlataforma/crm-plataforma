@@ -37,8 +37,12 @@ describe("TaskCreateSheet", () => {
               due_date: "2025-01-03T12:00:00.000Z",
               id: 1,
               sales_id: 0,
+              title: "Existing seeded task",
               text: "Existing seeded task",
               type: "email",
+              type_key: "email",
+              status_key: "pending",
+              priority_key: "normal",
             },
           ],
         }}
@@ -47,9 +51,11 @@ describe("TaskCreateSheet", () => {
       </Mobile>,
     );
 
+    await screen.getByLabelText(/^title/i).fill("Follow up about onboarding");
+
     await screen
       .getByLabelText(/description/i)
-      .fill("Follow up about onboarding");
+      .fill("Ask how the first week went");
 
     const [contactInput, typeInput] = screen.getByRole("combobox").all();
 
@@ -79,7 +85,7 @@ describe("TaskCreateSheet", () => {
           pagination: { page: 1, perPage: 10 },
           sort: { field: "id", order: "ASC" },
         });
-        return data.some((task) => task.text === "Follow up about onboarding");
+        return data.some((task) => task.title === "Follow up about onboarding");
       })
       .toBe(true);
 
@@ -89,12 +95,13 @@ describe("TaskCreateSheet", () => {
       sort: { field: "id", order: "ASC" },
     });
     const createdTask = tasks.data.find(
-      (task) => task.text === "Follow up about onboarding",
+      (task) => task.title === "Follow up about onboarding",
     );
 
     expect(createdTask).toMatchObject({
       contact_id: 2,
-      text: "Follow up about onboarding",
+      title: "Follow up about onboarding",
+      description: "Ask how the first week went",
       type: "call",
     });
     expect(tasks.data).toHaveLength(2);

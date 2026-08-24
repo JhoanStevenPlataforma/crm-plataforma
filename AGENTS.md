@@ -18,9 +18,17 @@ make start-demo       # Start full-stack with FakeRest data provider
 
 ```bash
 make test             # Run unit tests (vitest)
+make test-db          # Run the pgTAP database tests (needs local Supabase running)
 make typecheck        # Run TypeScript type checking
 make lint             # Run ESLint and Prettier checks
 ```
+
+Database behaviour that lives in SQL — RLS policies, triggers, the task state
+machine, the append-only audit trail — is tested with pgTAP under
+`supabase/tests/database/`. Enable the extension once on the local instance
+(`create extension if not exists pgtap with schema extensions;`) and run
+`make test-db`. These tests are the only place a policy regression is caught:
+`canAccess` is a UI layer and cannot prove anything about access.
 
 ### Building
 
@@ -128,6 +136,149 @@ The `nb_*` aggregate columns in `contacts_summary` / `companies_summary` are **s
 #### Roles and Permissions
 
 Every record carries a `sales_id` owner. `public.sales.role` is an enum (`admin` / `manager` / `rep`): a rep only sees the records they own, admins and managers see everything and are the only ones who may reassign. Enforcement lives in the RLS policies (`supabase/schemas/05_policies.sql`); `canAccess` is a UI-only layer. See `doc/src/content/docs/developers/roles-and-permissions.mdx`.
+
+#### Team Budgets
+
+A team's target lives in `public.team_budgets` (one row per period), not in a
+column on `teams`: overwriting a number to set the next target would destroy the
+only record of the previous one. Periods for one team may not overlap — a GiST
+exclusion constraint enforces it, because "the budget containing today" must
+resolve to exactly one row or the dashboard reports a figure that changes
+between page loads.
+
+Unlike `teams`, which is readable by everyone, **`team_budgets` is admin/manager
+only for reads as well as writes**. A rep cannot see any quota, including their
+own team's. Changing that is a product decision, not a config toggle: it needs a
+second `select` policy joined through `team_members`.
+
+Deals carry their own `team_id` rather than resolving the team through the
+owner's membership — a rep in two teams would make the same amount count twice,
+and moving a rep between teams would retroactively rewrite closed periods. The
+reporting columns are appended to `teams_summary`; `/teams-dashboard` renders
+them. That path is deliberately not `/teams/dashboard`, which would collide with
+the resource's own `/teams/:id`.
+
+`team_members_summary` is the roster the dashboard drills into. Its deal figures
+are scoped to **both** the member's ownership and the team's budget period, so
+summing a team's members reproduces that team's totals exactly — a breakdown
+that does not reconcile with the total above it discredits the total. Two
+columns are deliberately outside that scoping: `nb_contacts` / `nb_companies`
+(those records have no team and no period) and `nb_deals_all` (every live deal
+the member owns, so the gap against `nb_deals` reveals selling booked to another
+team). The roster loads only when a team row is expanded, keeping the dashboard
+at two requests rather than one per team.
+
+##### Per-member allocation
+
+A team's target is split between its members in `public.team_member_budgets`,
+keyed on **the budget row and the membership row**, never on the team and the
+person. Keyed on the budget, opening a new period starts from a blank split
+instead of silently restating the last one; keyed on the membership, removing
+somebody from the team takes their quota with them, so the roster's quotas
+always sum to `teams_summary.allocated_amount`.
+
+Both foreign keys are composite (`(budget_id, team_id)` and
+`(team_member_id, team_id)`, against unique constraints added to `team_budgets`
+and `team_members` for the purpose). Plain single-column keys would accept one
+team's budget paired with another team's member — a row that sums into one
+team's allocated total while appearing in no roster, so the first symptom is a
+total that contradicts its own breakdown.
+
+The sum is **not** capped at the team budget. Reallocating between two people is
+two writes, and a per-row invariant would reject the first one purely for being
+first; the UI reports over- and under-allocation instead, which is also the only
+layer that can say by how much. Access is admin/manager for reads as well as
+writes, exactly like `team_budgets`.
+
+##### Drill-down statistics
+
+`/teams-dashboard/team/:teamId` and `/teams-dashboard/member/:memberId` are the
+per-team and per-member detail screens. The member route is keyed on the
+`team_members` row, not on the sale: the same rep in two teams has two quotas,
+two won amounts and two attainments.
+
+Both read one view, `public.team_deal_stats` — a cube of (team, member, month,
+stage) — and fold it two ways in the browser (monthly trend, pipeline by stage).
+It is the one reporting view built on `GROUP BY` rather than scalar subqueries,
+because it *is* the aggregate: there is no `ORDER BY ... LIMIT` for a premature
+grouping to defeat, and both filters the UI applies are grouping columns, so the
+predicate reaches the deals scan. It is scoped to the team's current budget
+period (calendar year when there is none), so the charts reconcile with the
+header above them.
+
+##### Workload, and why it is its own view
+
+`pipeline_amount` counts `stage not in ('won', 'lost')`. It used to be
+`<> 'won'`, which booked every dead deal as forecast while the CRM dashboard
+excluded them — the two screens reported different pipelines for the same team.
+`lost_amount` / `nb_won` / `nb_lost` exist so the losses are reported rather
+than merely dropped, and so a win rate has a denominator.
+
+Task figures split by **stock vs flow**, and the split decides where they live:
+
+* **Stock** — open, overdue, due this week. No month, so no cube. Scalar
+  counters on `team_members_summary`, and `public.team_workload_summary` for the
+  team level.
+* **Flow** — created, completed, on time, cycle time. These have a month, so
+  they live in the `team_task_stats` cube alongside `team_deal_stats`.
+
+`team_workload_summary` is a **separate view, not four more columns on
+`teams_summary`** — measured, not stylistic. As columns there they took the
+dashboard's query from 35 ms to 330 ms (4 teams, 40 reps, 200k tasks), and
+PostgREST asks for `select=*`, so every reader paid it, including the plain
+`/teams` list that shows no task count. It computes all four counters in **one
+pass per member** (`count(*) filter (…)`); written as one `in (select sales_id
+…)` semi-join across the team the planner chose a full scan of `tasks` per team.
+The pass matches no partial index, which is why `tasks_owner_all` exists —
+without it the same query takes 1.7 s instead of 215 ms.
+
+`nb_tasks_overdue` is a **subset** of `nb_open_tasks`, never a sibling: anything
+stacking the two must subtract first or every late task is drawn twice.
+`workloadOf` in `taskWorkload.ts` does that subtraction once, for every caller.
+
+"Open" is counted on the **columns** (`completed_at`/`canceled_at`/`deleted_at`/
+`archived_at` all null), not on `task_statuses.is_open`. The two disagree on an
+archived task and on a task whose completion was recorded without its status
+following; the columns are what every partial index and every task list filter
+uses, so the counter matches the list a user lands on.
+
+Tasks hang off their **owner**, resolved through `team_members` — a task has no
+team column and no period, exactly like `nb_contacts`. A rep rostered in two
+teams counts in both, and none of these figures reconcile with the money above
+them. That is deliberate; do not "fix" it.
+
+##### Chart colours
+
+`teamChartTheme.ts` owns one palette for every team chart, and **the key order
+is part of it**. Green is the good terminal state (won, completed), blue is in
+flight (pipeline, pending, created), red is the bad one (lost, overdue), and a
+recessive gray marks a reference (a budget, a target) rather than a category.
+Green beside red is the deuteranopia collision, so blue always separates them:
+pass keys as green, blue, red. The palette this replaced was three steps of one
+teal — `won` against `pipeline` measured ΔE 7.1 for *normal* vision, below the
+15 floor, so nobody could reliably tell those two bars apart. Dark mode is a
+selected set of steps for the dark surface, not the light palette flipped.
+
+#### Deal Stage History
+
+Moving a deal to another stage on the kanban opens a dialog: the reason and any
+supporting files are written with the move by `public.move_deal_stage()`, in one
+transaction. Two client writes would be wrong here — the half that survives a
+failure is always the one that moved the card, leaving a transition nobody can
+account for.
+
+The history row itself is written by the `deals_log_stage_change` trigger, which
+fires on **every** path that changes `deals.stage` (kanban, edit form, import).
+The RPC hands it the reason through transaction-local settings
+(`app.deal_stage_*`, the same idiom `transition_task()` uses), scoped to one deal
+id so the kanban's neighbour reindexing cannot inherit somebody else's reason. A
+stage change made anywhere else is still recorded, with a null reason — that gap
+is deliberate, because a history with silent holes reads as complete when it is
+not.
+
+`public.deal_stage_changes` is append-only for users: no insert/update/delete
+policy and no grants beyond `select`. Reads follow the deal. The rows reach the
+UI through the `timeline_events` view, so the deal timeline needs no extra query.
 
 #### Database Triggers
 

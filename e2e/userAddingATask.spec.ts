@@ -60,7 +60,9 @@ test.describe("user adding a task", () => {
     } else {
       await page.getByRole("button", { name: "Add Task" }).click();
     }
-    await page.getByLabel("Description *").fill("Follow up with Jane");
+    // Title, not Description: Phase 1 split the single `text` column into a
+    // list-friendly title and an optional body (§3.3).
+    await page.getByLabel("Title *").fill("Follow up with Jane");
     await page.getByLabel("Due date").fill("2026-04-11T21:00");
     await page.getByLabel("Type").click();
     await page.getByRole("option", { name: "Call" }).click();
@@ -76,22 +78,26 @@ test.describe("user adding a task", () => {
       await expect(page.getByText("Follow up with Jane")).toBeVisible();
       await expect(page.getByText("due 4/11/2026, 9:00:00 PM")).toBeVisible();
     } else {
-      await expect(page.getByText("Tasks")).toBeVisible();
+      // The heading on the contact page, not the plain text: there is now a
+      // "Tasks" entry in the main navigation too (§15.1).
+      const tasksPanel = page.getByRole("heading", { name: "Tasks" });
+      await expect(tasksPanel).toBeVisible();
 
-      await expect(page.getByText("Tasks").locator("..")).toHaveText(
-        /Follow up with Jane/,
-      );
+      await expect(tasksPanel.locator("..")).toHaveText(/Follow up with Jane/);
       await menu.goToDashboard();
 
       await expect(page.getByText("Upcoming Tasks")).toBeVisible();
-      await expect(
-        page.getByText("Upcoming Tasks").locator("../.."),
-      ).toHaveText(/Follow up with Jane/);
-      await expect(
-        page.getByText("Follow up with Jane").locator(".."),
-      ).toHaveText(
-        "Call Follow up with Janedue 4/11/2026, 9:00:00 PM (Re: Jane Smith)",
-      );
+
+      // The four facts the widget owes the user, asserted individually rather
+      // than as one exact string: Phase 1 added badges and moved the related
+      // link out of the title row, and pinning the whole rendered line makes
+      // the test fail on layout instead of on behaviour.
+      const upcoming = page.getByText("Upcoming Tasks").locator("../..");
+      await expect(upcoming).toContainText("Follow up with Jane");
+      await expect(upcoming).toContainText("Call");
+      await expect(upcoming).toContainText("due 4/11/2026, 9:00:00 PM");
+      // Phase 1 turned the "(Re: …)" suffix into a link to the related record.
+      await expect(upcoming).toContainText("Jane Smith");
     }
   });
 });

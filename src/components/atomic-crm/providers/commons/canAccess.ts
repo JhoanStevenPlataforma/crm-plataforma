@@ -41,6 +41,13 @@ export const canAccess = <
     return false;
   }
 
+  // Teams decide who sees what through the task access rule (§7.3), so editing
+  // one is an access-control change. Reading them stays open — a rep must be
+  // able to see which team a task is assigned to.
+  if (params.resource === "teams" || params.resource === "team_members") {
+    return role === "manager" || params.action === "list";
+  }
+
   // Handing a lead, contact, company or deal over to another rep is a sales
   // manager privilege.
   if (params.action === ASSIGN_ACTION) {

@@ -33,6 +33,14 @@ export default defineConfig({
             headless: true,
             provider: playwright(),
             enabled: true,
+            // Vitest's browser server defaults to 63315, which Windows hands
+            // to Hyper-V/Docker as a reserved range on some machines — the
+            // suite then dies with EACCES before a single test runs. Set
+            // VITEST_BROWSER_PORT to move it (see
+            // `netsh interface ipv4 show excludedportrange protocol=tcp`).
+            ...(process.env.VITEST_BROWSER_PORT && {
+              api: { port: Number(process.env.VITEST_BROWSER_PORT) },
+            }),
             instances: [
               {
                 browser: "chromium",

@@ -32,6 +32,10 @@ import {
   getDataProvider as defaultDataProviderBuilder,
 } from "../providers/supabase";
 import sales from "../sales";
+import teams from "../teams";
+import { TeamMemberStatsPage } from "../teams/TeamMemberStatsPage";
+import { TeamStatsPage } from "../teams/TeamStatsPage";
+import { TeamsDashboard } from "../teams/TeamsDashboard";
 import { SettingsPageMobile } from "../settings/SettingsPageMobile";
 import { ProfilePage } from "../settings/ProfilePage";
 import { SettingsPage } from "../settings/SettingsPage";
@@ -58,6 +62,7 @@ import { i18nProvider as defaulti18nProvider } from "../providers/commons/i18nPr
 import { StartPage } from "../login/StartPage.tsx";
 import { useIsMobile } from "@/hooks/use-mobile.ts";
 import { MobileTasksList } from "../tasks/MobileTasksList.tsx";
+import { TaskList } from "../tasks/TaskList.tsx";
 import { ContactListMobile } from "../contacts/ContactList.tsx";
 import { ContactShow } from "../contacts/ContactShow.tsx";
 import { CompanyShow } from "../companies/CompanyShow.tsx";
@@ -268,6 +273,12 @@ const DesktopAdmin = (
         <Route path={SettingsPage.path} element={<SettingsPage />} />
         <Route path={ImportPage.path} element={<ImportPage />} />
         <Route path={ChangelogPage.path} element={<ChangelogPage />} />
+        <Route path={TeamsDashboard.path} element={<TeamsDashboard />} />
+        <Route path={TeamStatsPage.path} element={<TeamStatsPage />} />
+        <Route
+          path={TeamMemberStatsPage.path}
+          element={<TeamMemberStatsPage />}
+        />
       </CustomRoutes>
       <Resource name="leads" {...leads} />
       <Resource name="deals" {...deals} />
@@ -275,8 +286,14 @@ const DesktopAdmin = (
       <Resource name="companies" {...companies} />
       <Resource name="contact_notes" />
       <Resource name="deal_notes" />
-      <Resource name="tasks" />
+      <Resource name="tasks" list={TaskList} />
       <Resource name="sales" {...sales} />
+      <Resource name="teams" {...teams} />
+      <Resource name="team_members" />
+      <Resource name="team_budgets" />
+      <Resource name="team_member_budgets" />
+      {/* Read-only aggregate behind the dashboard drill-downs. */}
+      <Resource name="team_deal_stats" />
       <Resource name="tags" />
     </Admin>
   );

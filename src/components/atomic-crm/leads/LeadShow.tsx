@@ -6,6 +6,8 @@ import { ReferenceField } from "@/components/admin/reference-field";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { TopToolbar } from "../layout/TopToolbar";
+import { EntityTasksPanel } from "../tasks/EntityTasksPanel";
+import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Lead } from "../types";
 import { ConvertLeadButton } from "./ConvertLeadButton";
@@ -73,6 +75,24 @@ const LeadShowContent = () => {
           ) : null}
 
           {record.converted_at ? <ConvertedSummary record={record} /> : null}
+
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-1">
+              {translate("resources.tasks.name", { smart_count: 2 })}
+            </h3>
+            <EntityTasksPanel
+              entityType="lead"
+              entityId={record.id}
+              entityLabel={fullName}
+            />
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-1">
+              {translate("resources.tasks.timeline.title")}
+            </h3>
+            <EntityTimeline entityType="lead" entityId={record.id} />
+          </div>
         </CardContent>
       </Card>
     </div>
