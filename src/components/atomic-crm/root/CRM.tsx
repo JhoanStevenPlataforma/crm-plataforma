@@ -17,6 +17,13 @@ import { OAuthConsentPage } from "@/components/supabase/oauth-consent-page";
 
 import companies from "../companies";
 import contacts from "../contacts";
+import { AnalyticsLeads } from "../analytics/AnalyticsLeads";
+import { AnalyticsOverview } from "../analytics/AnalyticsOverview";
+import { AnalyticsPipeline } from "../analytics/AnalyticsPipeline";
+import { AnalyticsProductivity } from "../analytics/AnalyticsProductivity";
+import { ReportPage } from "../reports/ReportPage";
+import { ReportPrintPage } from "../reports/ReportPrintPage";
+import { ReportsLibrary } from "../reports/ReportsLibrary";
 import { Dashboard } from "../dashboard/Dashboard";
 import { MobileDashboard } from "../dashboard/MobileDashboard";
 import deals from "../deals";
@@ -31,7 +38,13 @@ import {
   getAuthProvider as defaultAuthProviderBuilder,
   getDataProvider as defaultDataProviderBuilder,
 } from "../providers/supabase";
+import priceLists from "../priceLists";
+import products from "../products";
+import quotes from "../quotes";
+import { QuotePortalPage } from "../quotes/portal/QuotePortalPage";
+import { QuotePrintPage } from "../quotes/QuotePrintPage";
 import sales from "../sales";
+import taxRates from "../taxRates";
 import teams from "../teams";
 import { TeamMemberStatsPage } from "../teams/TeamMemberStatsPage";
 import { TeamStatsPage } from "../teams/TeamStatsPage";
@@ -55,6 +68,8 @@ import {
   defaultLeadStatuses,
   defaultLightModeLogo,
   defaultNoteStatuses,
+  defaultProductCategories,
+  defaultProductUnits,
   defaultTaskTypes,
   defaultTitle,
 } from "./defaultConfiguration";
@@ -133,6 +148,8 @@ export const CRM = ({
   darkModeLogo = defaultDarkModeLogo,
   lightModeLogo = defaultLightModeLogo,
   noteStatuses = defaultNoteStatuses,
+  productCategories = defaultProductCategories,
+  productUnits = defaultProductUnits,
   taskTypes = defaultTaskTypes,
   title = defaultTitle,
   dataProvider = defaultDataProviderBuilder(),
@@ -169,6 +186,8 @@ export const CRM = ({
         leadSources,
         leadStatuses,
         noteStatuses,
+        productCategories,
+        productUnits,
         taskTypes,
         title,
         darkModeLogo,
@@ -266,6 +285,11 @@ const DesktopAdmin = (
           element={<ForgotPasswordPage />}
         />
         <Route path={OAuthConsentPage.path} element={<OAuthConsentPage />} />
+        {/* The customer portal (docs/proposals/quotes-cpq-module.md, Phase 7).
+            Outside the layout on purpose, unlike the print route: a customer
+            has no session, and the page takes its branding from the server's
+            payload rather than from the configuration loader. */}
+        <Route path={QuotePortalPage.path} element={<QuotePortalPage />} />
       </CustomRoutes>
 
       <CustomRoutes>
@@ -273,6 +297,27 @@ const DesktopAdmin = (
         <Route path={SettingsPage.path} element={<SettingsPage />} />
         <Route path={ImportPage.path} element={<ImportPage />} />
         <Route path={ChangelogPage.path} element={<ChangelogPage />} />
+        {/* The analytics module. Four sibling routes rather than a nested
+            layout: `CustomRoutes` renders its children inside one `Routes`,
+            and each page composes `AnalyticsLayout` itself, so there is no
+            `Outlet` to get wrong. Not registered on the mobile admin: these
+            are wide charts, and `MobileAdmin` has its own reduced route set. */}
+        <Route path={AnalyticsOverview.path} element={<AnalyticsOverview />} />
+        <Route path={AnalyticsPipeline.path} element={<AnalyticsPipeline />} />
+        <Route path={AnalyticsLeads.path} element={<AnalyticsLeads />} />
+        <Route
+          path={AnalyticsProductivity.path}
+          element={<AnalyticsProductivity />}
+        />
+        {/* The reports module. `/reports/new` is declared BEFORE
+            `/reports/:reportId` — react-router ranks static segments above
+            dynamic ones, so the order is not what makes this work, but keeping
+            them adjacent is what makes the pair readable. Both mount the same
+            page: a new report is a saved one with no id. */}
+        <Route path={ReportsLibrary.path} element={<ReportsLibrary />} />
+        <Route path={ReportPage.newPath} element={<ReportPage />} />
+        <Route path={ReportPrintPage.path} element={<ReportPrintPage />} />
+        <Route path={ReportPage.detailPath} element={<ReportPage />} />
         <Route path={TeamsDashboard.path} element={<TeamsDashboard />} />
         <Route path={TeamStatsPage.path} element={<TeamStatsPage />} />
         <Route
@@ -295,6 +340,35 @@ const DesktopAdmin = (
       {/* Read-only aggregate behind the dashboard drill-downs. */}
       <Resource name="team_deal_stats" />
       <Resource name="tags" />
+      {/* The quotes catalogue (docs/proposals/quotes-cpq-module.md, Phase 3).
+          A list's prices are edited inside the list, so `price_list_items`
+          has no screen of its own. */}
+      <Resource name="products" {...products} />
+      <Resource name="price_lists" {...priceLists} />
+      <Resource name="price_list_items" />
+      <Resource name="tax_rates" {...taxRates} />
+      {/* Quotations (docs/proposals/quotes-cpq-module.md, Phase 4). The
+          versions, the lines and the status catalogue have no screen of their
+          own: a version is edited through its quote, and `quote_statuses` is
+          read by the list filter. `price_book` is the line picker's view.
+          The print route (Phase 6) is a child of the resource: `:id/print`
+          outranks the editor's `:id/*`, because a static segment beats a splat.
+          It stays INSIDE the layout on purpose — only `Layout` runs the
+          configuration loader, so a `noLayout` route would print the default
+          letterhead instead of this installation's. */}
+      <Resource name="quotes" {...quotes}>
+        <Route path=":id/print" element={<QuotePrintPage />} />
+      </Resource>
+      <Resource name="quote_versions" />
+      <Resource name="quote_lines" />
+      <Resource name="quote_statuses" recordRepresentation="label" />
+      {/* The status machine as data (Phase 5): the quote toolbar reads the
+          legal edges from it instead of hardcoding which button a status
+          offers. `quote_access_tokens_summary` is the readable projection of a
+          table nobody may select — it omits the hash. */}
+      <Resource name="quote_transitions" />
+      <Resource name="quote_access_tokens_summary" />
+      <Resource name="price_book" />
     </Admin>
   );
 };
@@ -343,6 +417,9 @@ const MobileAdmin = (
             element={<ForgotPasswordPage />}
           />
           <Route path={OAuthConsentPage.path} element={<OAuthConsentPage />} />
+          {/* A customer opens a quotation link on a phone as often as on a
+              desk: the portal is registered on both admins. */}
+          <Route path={QuotePortalPage.path} element={<QuotePortalPage />} />
         </CustomRoutes>
         <CustomRoutes>
           <Route

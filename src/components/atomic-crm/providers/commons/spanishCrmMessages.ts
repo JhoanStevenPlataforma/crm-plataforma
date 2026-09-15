@@ -243,7 +243,24 @@ export const spanishCrmMessages = {
         remove_file: "Quitar %{name}",
         confirm: "Mover la oportunidad",
         error: "No se ha podido mover la oportunidad",
+        requirement_checking:
+          "Comprobando el trabajo hecho en esta oportunidad…",
+        requirement_blocked:
+          "%{completed} de %{required} tareas completadas desde que la oportunidad entró en %{stage}.",
+        requirement_hint:
+          "Completa una tarea de esta oportunidad para pasar de etapa.",
+        requirement_error:
+          "La oportunidad no tiene tareas completadas suficientes para cambiar de etapa",
+        override: "Motivo de la excepción (solo administradores)",
+        override_placeholder:
+          "p. ej. Contrato firmado fuera del CRM, la tarea se registra mañana",
+        override_hint:
+          "Quedará guardado en el historial de la oportunidad, junto al cambio de etapa.",
         no_reason: "Sin motivo registrado",
+        overridden:
+          "Movida sin la tarea completada que exige la etapa. Motivo de la excepción: %{reason}",
+        attachment_error:
+          "No se pudo abrir el archivo. Puede que ya no tengas acceso a esta oportunidad.",
       },
       empty: {
         before_create: "antes de crear una oportunidad.",
@@ -305,6 +322,15 @@ export const spanishCrmMessages = {
     leads: {
       name: "Lead |||| Leads",
       unnamed: "(sin nombre)",
+      action: {
+        new: "Nuevo lead",
+        call: "Llamar",
+        email: "Enviar correo",
+      },
+      filters: {
+        any_status: "Todos los estados",
+        any_source: "Todos los orígenes",
+      },
       company_name_helper:
         "Úsalo cuando la empresa aún no esté en el CRM. Al convertir el lead se creará.",
       fields: {
@@ -323,6 +349,7 @@ export const spanishCrmMessages = {
         notes: "Notas",
         sales_id: "Responsable de cuenta",
         created_at: "Creado",
+        actions: "Acciones",
       },
       field_categories: {
         identity: "Identidad",
@@ -425,6 +452,420 @@ export const spanishCrmMessages = {
         save: "Guardar el reparto",
         saved: "Reparto guardado",
         error: "No se ha podido guardar el reparto",
+      },
+    },
+    products: {
+      name: "Producto |||| Productos",
+      forcedCaseName: "Producto",
+      fields: {
+        sku: "SKU",
+        name: "Nombre",
+        description: "Descripción",
+        internal_notes: "Notas internas",
+        kind: "Tipo",
+        category: "Categoría",
+        unit: "Unidad",
+        list_price: "Precio de lista",
+        currency: "Moneda",
+        tax_rate_id: "Impuesto",
+        is_active: "Activo",
+      },
+      kinds: {
+        product: "Producto",
+        service: "Servicio",
+        plan: "Plan",
+        subscription: "Suscripción",
+        concept: "Concepto",
+      },
+      action: {
+        new: "Nuevo producto",
+      },
+      filters: {
+        any_kind: "Cualquier tipo",
+        any_category: "Cualquier categoría",
+      },
+      helpers: {
+        internal_notes:
+          "Solo para el equipo comercial. Nunca se muestran al cliente.",
+        is_active:
+          "Un producto inactivo sigue en las cotizaciones que lo usaron, pero ya no se ofrece.",
+      },
+      validation: {
+        currency: "Usa un código ISO de tres letras en mayúsculas, p. ej. COP",
+      },
+      errors: {
+        duplicate_sku: "Otro producto ya usa este SKU",
+      },
+    },
+    price_lists: {
+      name: "Lista de precios |||| Listas de precios",
+      forcedCaseName: "Lista de precios",
+      fields: {
+        code: "Código",
+        name: "Nombre",
+        currency: "Moneda",
+        is_default: "Predeterminada para su moneda",
+        is_active: "Activa",
+        valid_from: "Vigente desde",
+        valid_to: "Vigente hasta",
+        notes: "Notas",
+      },
+      action: {
+        new: "Nueva lista de precios",
+      },
+      helpers: {
+        validity:
+          "Solo como referencia: las cotizaciones usan todas las listas activas, digan lo que digan estas fechas.",
+      },
+      validation: {
+        period: "La fecha final no puede ser anterior a la inicial",
+      },
+      errors: {
+        conflict:
+          "Otra lista de precios ya usa este código, o ya es la predeterminada activa de esta moneda",
+      },
+      items: {
+        title: "Precios",
+        empty:
+          "Aún no hay precios. Los productos en la moneda de esta lista se cotizan a su propio precio de lista hasta que se fije uno aquí.",
+        add: "Añadir precio",
+        product: "Producto",
+        unit_price: "Precio unitario",
+        min_quantity: "Cantidad mínima",
+        tax_rate_id: "Impuesto",
+        no_override: "El impuesto del producto",
+        remove: "Quitar el precio de %{name}",
+        error: "No se pudo guardar el precio",
+        duplicate: "Este producto ya tiene un precio para esa cantidad mínima",
+        load_error:
+          "No se pudieron cargar los precios de esta lista, así que añadir uno está desactivado. Recarga la página.",
+      },
+    },
+    quotes: {
+      name: "Cotización |||| Cotizaciones",
+      forcedCaseName: "Cotización",
+      fields: {
+        quote_number: "Número",
+        title: "Título",
+        company_id: "Empresa",
+        contact_id: "Contacto",
+        deal_id: "Oportunidad",
+        company_name: "Empresa",
+        sales_id: "Responsable",
+        owner_name: "Responsable",
+        price_list_id: "Lista de precios",
+        currency: "Moneda",
+        status_key: "Estado",
+        valid_until: "Válida hasta",
+        terms: "Condiciones",
+        internal_notes: "Notas internas",
+        current_version_number: "Versión",
+        total: "Total",
+      },
+      version_short: "v%{number}",
+      action: {
+        new: "Nueva cotización",
+      },
+      filters: {
+        any_status: "Cualquier estado",
+      },
+      helpers: {
+        price_list_id:
+          "Define la moneda de la cotización y los precios que se ofrecen",
+        valid_until:
+          "Pasada esta fecha la oferta, y cualquier enlace a ella, queda sin efecto",
+        terms: "Se imprimen en el documento, debajo de las líneas",
+        internal_notes:
+          "Solo para el equipo comercial. Nunca se muestran al cliente.",
+        frozen_document:
+          "Esta cotización ya fue emitida: sus fechas, condiciones y líneas son el documento que vio un cliente y quedan como estaban.",
+      },
+      validation: {
+        valid_until_past: "Una oferta no puede vencer antes de hoy",
+      },
+      totals: {
+        subtotal: "Subtotal",
+        discount: "Descuento",
+        discount_with_percent: "Descuento (%{percent}%)",
+        tax: "Impuesto",
+        total: "Total",
+      },
+      lines: {
+        title: "Líneas",
+        empty: "Todavía no hay líneas. Una cotización sin líneas no se emite.",
+        add: "Agregar línea",
+        product: "Producto",
+        quantity: "Cantidad",
+        quantity_of: "Cantidad de %{name}",
+        unit_price: "Precio unitario",
+        unit_price_of: "Precio unitario de %{name}",
+        discount_percent: "Descuento %",
+        discount_of: "Descuento de %{name}",
+        tax_rate_percent: "Impuesto",
+        line_total: "Total",
+        remove: "Quitar %{name} de la cotización",
+        error: "No se pudo guardar la línea",
+        load_error:
+          "No se pudieron cargar las líneas de esta cotización, así que la edición está desactivada. Recarga la página.",
+        frozen:
+          "Las líneas solo se editan mientras la cotización es un borrador. Crea una revisión para cambiarlas.",
+        no_price_list:
+          "Elige arriba una lista de precios para agregar líneas: decide qué productos se ofrecen y a qué precio.",
+        invalid: {
+          quantity: "La cantidad tiene que ser mayor que cero",
+          unit_price: "Un precio no puede ser negativo",
+          discount_percent: "El descuento va de 0 a 100",
+        },
+      },
+      panel: {
+        empty: "Esta oportunidad todavía no tiene cotizaciones",
+        load_error:
+          "No se pudieron cargar las cotizaciones de esta oportunidad",
+      },
+      actions: {
+        terminal: "Esta cotización está cerrada: no queda ningún movimiento.",
+      },
+      transitions: {
+        issue: "Enviar",
+        revise: "Revisar",
+        pending_approval: "Pedir aprobación",
+        approved: "Aprobar",
+        draft: "Devolver",
+        negotiating: "Negociar",
+        canceled: "Anular cotización",
+      },
+      dialog: {
+        reason: "Motivo",
+        reason_placeholder: "¿Qué hay detrás de este movimiento?",
+        confirm: "Confirmar",
+        transition_description:
+          "Cotización %{number}. El motivo queda registrado con el movimiento y después no se puede editar.",
+        revise_description:
+          "Cotización %{number}. El documento emitido queda tal como lo vio el cliente; esto abre una versión nueva para trabajar, y los enlaces a la anterior dejan de funcionar.",
+      },
+      issue: {
+        title: "Enviar la cotización %{number}",
+        description:
+          "La versión %{version} se congela tal como está y se crea un enlace para el cliente. Un documento emitido ya no se puede editar: cambiarlo después significa una versión nueva.",
+        gate_checking: "Consultando la regla de descuento…",
+        gate_no_rule:
+          "Este documento otorga %{percent}% de descuento. No hay ningún tope vigente.",
+        gate_blocked:
+          "Este documento otorga %{percent}% de descuento, por encima del %{max}% que usted tiene permitido (%{lines} línea(s) por encima del tope).",
+        gate_blocked_hint:
+          "Pida aprobación: una aprobación sube el tope al de quien aprueba.",
+        gate_blocked_admin:
+          "Como administrador puede enviarla igual, por escrito. El motivo queda guardado con el movimiento.",
+        reason: "Por qué este descuento",
+        reason_placeholder: "¿Qué justifica el descuento otorgado?",
+        reason_hint:
+          "Obligatorio por encima del %{above}%. Queda guardado con el movimiento, y una aprobación escrita lo sustituye.",
+        override: "Pasar por encima del tope",
+        override_placeholder:
+          "¿Por qué se envía esta cotización por encima del límite?",
+        override_hint:
+          "Solo administradores. Queda registrado para siempre y únicamente cuando el tope se superó de verdad.",
+        token_days: "Enlace válido (días)",
+        token_label: "Para quién",
+        token_label_placeholder: "Compras, Sra. López…",
+        token_clamped:
+          "Un enlace nunca dura más que la oferta: se cortará después del %{date}.",
+        confirm: "Enviar",
+      },
+      link: {
+        title: "Enlace a la versión %{version}",
+        description:
+          "Este enlace se muestra una sola vez y no se guarda en ninguna parte: solo queda su huella. Cópielo ahora — después la única salida es crear uno nuevo. Si lo abre usted mismo, cuenta como una visita del cliente.",
+        url: "Enlace para el cliente",
+        copy: "Copiar el enlace",
+        expires: "Deja de funcionar el %{date}",
+        done: "Listo",
+      },
+      portal: {
+        loading: "Cargando la cotización…",
+        demo_unavailable:
+          "Los enlaces para clientes no se abren en la demo: no hay un servidor detrás que guarde la oferta y registre la respuesta.",
+        print: "Imprimir / PDF",
+        accept: "Aceptar",
+        reject: "Rechazar",
+        retry: "Reintentar",
+        accepted_notice:
+          "Gracias. Su aceptación quedó registrada y la cotización de abajo ya la refleja.",
+        rejected_notice:
+          "Gracias por avisarnos. Su respuesta quedó registrada.",
+        closed:
+          "Esta cotización ya no se puede responder en línea. Comuníquese con %{name}.",
+        closed_anonymous:
+          "Esta cotización ya no se puede responder en línea. Comuníquese con quien se la envió.",
+        accept_dialog: {
+          title: "Aceptar la cotización %{number}",
+          description:
+            "Versión %{version}, por un total de %{total}. Su nombre, su correo electrónico y la hora quedan registrados con el documento.",
+          name: "Nombre completo",
+          email: "Correo electrónico",
+          confirm: "Acepto esta cotización tal como fue emitida",
+          submit: "Aceptar la cotización",
+        },
+        reject_dialog: {
+          title: "Rechazar la cotización %{number}",
+          description:
+            "Contarnos el motivo nos ayuda a volver con una mejor oferta.",
+          reason_code: "Motivo principal",
+          reasons: {
+            price: "Precio",
+            terms: "Condiciones",
+            delivery_time: "Tiempo de entrega",
+            product: "Producto o alcance",
+            other: "Otro",
+          },
+          reason: "¿Algo más que agregar? (opcional)",
+          name: "Su nombre (opcional)",
+          email: "Correo electrónico (opcional)",
+          submit: "Rechazar la cotización",
+        },
+        errors: {
+          quote_link_invalid:
+            "Este enlace no es válido o ya no está activo. Pida uno nuevo a quien se lo envió.",
+          quote_portal_throttled:
+            "Demasiadas solicitudes desde este enlace. Espere un minuto e inténtelo de nuevo.",
+          quote_portal_unavailable:
+            "No se puede acceder a la cotización en este momento. Inténtelo de nuevo en un momento.",
+          quote_version_superseded:
+            "Se emitió una versión más reciente de esta cotización, así que esta ya no se puede responder. Pida el enlace a la nueva versión.",
+          quote_version_answered: "Esta versión ya fue respondida.",
+          quote_validity_elapsed:
+            "Esta oferta venció y ya no se puede aceptar.",
+          quote_transition_illegal:
+            "Esta cotización ya no se puede responder en línea.",
+          quote_status_unchanged: "Esta versión ya fue respondida.",
+          quote_transition_actor_not_allowed:
+            "Esta cotización ya no se puede responder en línea.",
+          quote_portal_name_required: "Escriba su nombre completo.",
+          quote_portal_email_invalid: "Escriba un correo electrónico válido.",
+          quote_portal_reason_code_invalid: "Elija el motivo principal.",
+          quote_portal_input_too_long: "Uno de los campos es demasiado largo.",
+        },
+      },
+      document: {
+        label: "Cotización %{number}",
+        heading: "Cotización",
+        version: "Versión %{number}",
+        issued_on: "Emitida el %{date}",
+        valid_until: "Válida hasta el %{date}",
+        draft_banner:
+          "Borrador — no es una oferta. Esta versión no se ha emitido y todavía puede cambiar.",
+        superseded_banner:
+          "Reemplazada — se emitió una versión más reciente de esta cotización, y esta ya no es la oferta.",
+        prepared_for: "Preparada para",
+        prepared_by: "Preparada por",
+        tax_identifier: "Id. tributaria %{value}",
+        attention: "Atención: %{name}",
+        line_number: "#",
+        description: "Descripción",
+        quantity: "Cantidad",
+        unit_price: "Precio unitario",
+        discount: "Descuento",
+        tax: "Impuesto",
+        amount: "Importe",
+        no_lines: "Esta versión no tiene líneas.",
+        terms: "Términos y condiciones",
+        accepted: "Aceptada el %{date} por %{name}",
+        accepted_anonymous: "Aceptada el %{date}",
+        rejected: "Rechazada el %{date}",
+      },
+      versions: {
+        title: "Versiones",
+        view: "Versión %{number}",
+        current: "vigente",
+        draft: "Borrador, sin emitir",
+        issued: "Emitida el %{date}",
+        superseded: "reemplazada",
+        accepted: "aceptada",
+        rejected: "rechazada",
+        load_error: "No se pudieron cargar las versiones de esta cotización",
+      },
+      show: {
+        edit: "Editar",
+        print: "Imprimir / PDF",
+        view_document: "Ver documento",
+        load_error: "No se pudo cargar esta versión de la cotización.",
+      },
+      print: {
+        preparing: "Preparando el documento…",
+        ready: "En el cuadro de impresión, elija «Guardar como PDF».",
+        back: "Volver a la cotización",
+        again: "Imprimir de nuevo",
+        version_missing:
+          "Esa versión no pertenece a esta cotización, así que no hay nada que imprimir.",
+      },
+      links: {
+        title: "Enlaces para el cliente",
+        new: "Enlace nuevo",
+        revision_open:
+          "Hay una revisión abierta: envíela antes de compartir un enlace nuevo.",
+        empty: "Todavía no se ha creado ningún enlace para esta cotización",
+        load_error: "No se pudieron cargar los enlaces de esta cotización",
+        unlabelled: "Enlace a la versión %{version}",
+        active: "Activo",
+        inactive: "Inactivo",
+        expires: "hasta el %{date}",
+        views: "%{count} vista(s)",
+        revoke: "Revocar",
+      },
+      errors: {
+        generic: "No se pudo actualizar la cotización",
+        quote_version_frozen:
+          "Esta versión fue emitida: es el documento que vio el cliente y no se puede modificar. Revise la cotización para abrir una nueva.",
+        quote_version_column_protected:
+          "Aquí solo se pueden cambiar la vigencia, las condiciones y el descuento de un borrador.",
+        quote_not_draft:
+          "Las líneas solo se pueden cambiar mientras la cotización es un borrador. Devuélvala o revísela primero.",
+        quote_transition_illegal:
+          "Ese movimiento no está permitido desde este estado.",
+        quote_status_unchanged: "La cotización ya está en ese estado.",
+        quote_reason_required: "Este movimiento necesita un motivo escrito.",
+        quote_not_issued:
+          "Todavía no se ha emitido nada, así que no hay documento del que partir.",
+        quote_discount_exceeds_limit:
+          "El descuento otorgado supera su límite. Pida aprobación o pida a un administrador que lo autorice.",
+        quote_discount_reason_required:
+          "Un descuento de este tamaño necesita un motivo escrito antes de enviarse.",
+        quote_draft_exists:
+          "Esta cotización ya tiene un borrador abierto: envíelo en lugar de empezar otro.",
+        quote_validity_elapsed:
+          "La oferta ya venció, así que cualquier enlace nacería muerto. Amplíe primero la vigencia.",
+        quote_header_derived:
+          "La vigencia y las condiciones pertenecen a la versión en la que se está trabajando.",
+        quote_empty: "Una cotización sin líneas no se puede enviar.",
+        quote_no_draft: "No hay ningún borrador que enviar.",
+        quote_transition_actor_not_allowed:
+          "Ese movimiento le corresponde al cliente o al sistema, no a usted.",
+        quote_approval_requires_manager:
+          "Solo un gerente puede aprobar una cotización — aprobar la propia sería fijarse el límite uno mismo.",
+      },
+    },
+    tax_rates: {
+      name: "Impuesto |||| Impuestos",
+      forcedCaseName: "Impuesto",
+      fields: {
+        code: "Código",
+        label: "Nombre",
+        rate: "Tarifa (%)",
+        is_default: "Predeterminado",
+        active: "Activo",
+        rank: "Orden",
+      },
+      action: {
+        new: "Nuevo impuesto",
+      },
+      helpers: {
+        system_code:
+          "Tarifa sembrada: su código es fijo; el nombre y la tarifa pueden seguir a la ley.",
+        rate: "Un porcentaje: 19 para IVA 19%.",
+      },
+      errors: {
+        conflict:
+          "Otro impuesto ya usa este código, o ya es el predeterminado activo",
       },
     },
     tasks: {
@@ -764,6 +1205,12 @@ export const spanishCrmMessages = {
       recovery_email_sent:
         "Si eres un usuario registrado, en breve recibirás un correo para recuperar la contraseña.",
       sign_in_failed: "No se ha podido iniciar sesión.",
+      subtitle: "Introduce tus credenciales para acceder a tu workspace.",
+      email_placeholder: "nombre@empresa.com",
+      or_email: "O mediante tu correo",
+      powered_by: "Con la tecnología de",
+      show_password: "Mostrar los caracteres",
+      hide_password: "Ocultar los caracteres",
       sign_in_google_workspace: "Iniciar sesión con Google Workplace",
       signup: {
         create_account: "Crear cuenta",
@@ -808,6 +1255,439 @@ export const spanishCrmMessages = {
       at_company: "en",
       to: "a",
       load_more: "Cargar más actividad",
+    },
+    analytics: {
+      title: "Analítica",
+      see_teams_dashboard: "Objetivos por equipo →",
+      load_error:
+        "No se pudieron cargar estas cifras. Vuelve a intentarlo en un momento.",
+      no_data: "Nada que reportar en este periodo",
+      tabs: {
+        overview: "Resumen",
+        pipeline: "Pipeline",
+        leads: "Leads",
+        productivity: "Productividad",
+      },
+      presets: {
+        this_month: "Este mes",
+        last_3_months: "3 meses",
+        last_6_months: "6 meses",
+        last_12_months: "12 meses",
+        this_year: "Este año",
+      },
+      filters: {
+        period: "Periodo",
+        from: "Desde",
+        to: "Hasta",
+        owner: "Responsable",
+        all_owners: "Todos",
+        team: "Equipo",
+        all_teams: "Todos los equipos",
+      },
+      basis: {
+        now: "A día de hoy",
+        expected_close: "Por fecha de cierre prevista",
+        lead_created: "Por fecha de llegada",
+        cohort: "Cohorte de leads llegados en el periodo",
+        cohort_month:
+          "Por mes de llegada; los meses recientes aún se están completando",
+        deal_flow:
+          "Creadas por fecha de apertura; ganadas y perdidas por cierre previsto",
+        deal_created: "Por fecha de apertura",
+        forecast: "Previsto, no real",
+        mixed: "Pipeline a día de hoy; ganado y perdido dentro del periodo",
+        task_flow: "Creadas por mes de creación; completadas por mes de cierre",
+        completed: "Completadas dentro del periodo",
+        unfiltered:
+          "Últimos registros creados; no se aplica el filtro de arriba",
+        attribution:
+          "El %{share} de los leads convertidos produjo una oportunidad valorable",
+        attribution_none:
+          "Ningún lead convertido en este periodo produjo una oportunidad",
+      },
+      series: {
+        won: "Ganado",
+        created: "Creado",
+        lost: "Perdido",
+        amount: "Importe",
+        pipeline: "Pipeline",
+        deals: "Oportunidades",
+        converted: "Convertidos",
+        leads: "Leads",
+        rate: "Conversión",
+        completed: "Completadas",
+        open: "Abiertas",
+        overdue: "Vencidas",
+      },
+      kpi: {
+        open_pipeline: "Pipeline abierto",
+        won: "Ganado",
+        win_rate: "Tasa de ganado",
+        decided: "%{won} ganadas / %{lost} perdidas",
+        new_deals: "Oportunidades nuevas",
+        new_leads: "Leads nuevos",
+        lead_conversion: "Conversión de leads",
+        overdue_tasks: "Tareas vencidas",
+        due_soon: "%{count} vencen en 7 días",
+        overdue_of_open: "%{count} vencidas",
+        open_deals: "%{count} oportunidades",
+        average_deal: "Ticket medio",
+        forecast_cycle: "Ciclo previsto",
+        days: "%{count} d",
+        hours: "%{count} h",
+        converted: "Convertidos",
+        time_to_convert: "Tiempo de conversión",
+        open_tasks: "Tareas abiertas",
+        subset_of_open: "Incluidas en las abiertas",
+        due_next_7d: "Vencen en 7 días",
+        on_time: "Completadas en plazo",
+        completed_count: "%{count} completadas",
+        cycle_time: "Ciclo medio",
+        weighted_pipeline: "Pipeline ponderado",
+        unweighted: "%{amount} en etapas sin ponderación configurada",
+      },
+      chart: {
+        deal_flow: "Creado, ganado y perdido",
+        pipeline_by_stage: "Pipeline por etapa",
+        deals_by_stage: "Oportunidades por etapa",
+        won_vs_lost: "Ganadas frente a perdidas",
+        deals_created: "Oportunidades creadas",
+        by_owner: "Rendimiento por responsable",
+        owners_hidden: "Top 10 — %{count} más sin mostrar",
+        lead_flow: "Leads y conversiones",
+        leads_by_status: "Leads por estado",
+        leads_by_source: "Leads por fuente",
+        conversion_by_source: "Tasa de conversión por fuente",
+        revenue_by_source: "Ingresos atribuidos por fuente",
+        leads_by_owner: "Leads por responsable",
+        task_flow: "Creadas frente a completadas",
+        activity_mix: "Distribución por tipo",
+        workload_by_owner: "Carga por responsable",
+        recent_activity: "Actividad reciente",
+      },
+      past_due: {
+        title: "Oportunidades abiertas con el cierre pasado",
+        subtitle: "Cada una invalida la previsión de arriba: re-fecha o cierra",
+        see_all: "Ver las %{total}",
+        empty: "Ninguna oportunidad tiene el cierre pasado",
+        deal: "Oportunidad",
+        stage: "Etapa",
+        expected: "Cierre previsto",
+        amount: "Importe",
+      },
+      untouched: {
+        title: "Leads que nadie ha contactado",
+        subtitle: "Siguen en nuevo tras %{days} días",
+        empty: "Todos los leads han sido atendidos",
+        lead: "Lead",
+        company: "Empresa",
+        source: "Fuente",
+        arrived: "Llegó",
+        unnamed: "(sin nombre)",
+      },
+    },
+    reports: {
+      title: "Informes",
+      subtitle: "Construye la pregunta que necesitas responder",
+      new: "Nuevo informe",
+      untitled: "Informe sin nombre",
+      name: "Nombre del informe",
+      back: "Volver a los informes",
+      builtin: "Predefinido",
+      shared: "Compartido",
+      unsaved: "Cambios sin guardar",
+      configure: "Configurar",
+      duplicate: "Duplicar",
+      save_as_copy: "Guardar como copia",
+      saved: "Informe guardado",
+      save_error: "No se pudo guardar el informe",
+      delete_error: "No se pudo eliminar el informe",
+      list_error: "No se pudieron cargar los informes",
+      catalog_error: "No se pudo cargar el catálogo de informes",
+      run_error:
+        "No se pudo ejecutar este informe. Revisa los filtros y vuelve a intentarlo.",
+      not_found: "Este informe no existe o no tienes acceso",
+      empty: "Todavía no hay informes",
+      demo_unavailable:
+        "Los informes necesitan la base de datos real; no están disponibles en el modo demo.",
+      copy_of: "Copia de %{name}",
+      unassigned: "Sin asignar",
+      result_title: "%{dataset}",
+      basis: "Por %{field}",
+      see_analytics: "Ver resumen",
+      truncated:
+        "Mostrando las primeras %{count} filas. Acota el periodo o los filtros para ver el resto.",
+      sort_by: "Ordenar por %{field}",
+      shared_scope_note:
+        "Un informe compartido comparte la pregunta, no los datos: cada persona ve las filas que le permiten sus permisos.",
+      builtin_hint:
+        "Duplica cualquiera de estos para partir de un ejemplo que ya funciona.",
+      print_scope_note: "Cifras acotadas a los permisos de quien lo genera",
+      donut_negative_dropped:
+        "Se omitió %{smart_count} valor negativo |||| Se omitieron %{smart_count} valores negativos",
+      dataset: {
+        deals: "Oportunidades",
+        leads: "Leads",
+        tasks: "Tareas",
+        contacts: "Contactos",
+        companies: "Empresas",
+      },
+      field: {
+        companies: {
+          sector: "Sector",
+          country: "País",
+          city: "Ciudad",
+          owner: "Responsable",
+          created_month: "Mes de creación",
+          created_at: "Fecha de creación",
+          company_count: "Número de empresas",
+          avg_size: "Plantilla media",
+        },
+        contacts: {
+          status: "Estado",
+          owner: "Responsable",
+          company: "Empresa",
+          sector: "Sector de la empresa",
+          country: "País de la empresa",
+          title: "Cargo",
+          first_seen_month: "Mes del primer contacto",
+          first_seen: "Primer contacto",
+          last_seen: "Último contacto",
+          contact_count: "Número de contactos",
+          company_count: "Empresas distintas",
+          newsletter_count: "Suscritos al boletín",
+        },
+        deals: {
+          stage: "Etapa",
+          category: "Categoría",
+          owner: "Responsable",
+          team: "Equipo",
+          company: "Empresa",
+          sector: "Sector de la empresa",
+          country: "País de la empresa",
+          created_month: "Mes de creación",
+          closing_month: "Mes de cierre previsto",
+          created_at: "Fecha de creación",
+          expected_closing_date: "Fecha de cierre prevista",
+          deal_count: "Número de oportunidades",
+          amount_sum: "Valor total",
+          amount_avg: "Valor medio",
+          pipeline_amount: "Pipeline abierto",
+          won_amount: "Valor ganado",
+          lost_amount: "Valor perdido",
+          won_count: "Ganadas",
+          lost_count: "Perdidas",
+          win_rate: "Tasa de éxito",
+          cycle_days: "Días medios hasta cierre previsto",
+        },
+        leads: {
+          source: "Fuente",
+          status: "Estado",
+          owner: "Responsable",
+          company_name: "Empresa",
+          created_month: "Mes de creación",
+          created_at: "Fecha de creación",
+          converted_at: "Fecha de conversión",
+          lead_count: "Número de leads",
+          converted_count: "Convertidos",
+          conversion_rate: "Tasa de conversión",
+          conversion_days: "Días medios hasta convertir",
+          won_deal_count: "Oportunidades ganadas",
+          won_amount: "Valor ganado atribuido",
+          pipeline_amount: "Pipeline atribuido",
+          avg_score: "Puntuación media",
+        },
+        tasks: {
+          owner: "Responsable",
+          task_type: "Tipo",
+          priority: "Prioridad",
+          status: "Estado",
+          source: "Origen",
+          created_month: "Mes de creación",
+          completed_month: "Mes de finalización",
+          created_at: "Fecha de creación",
+          completed_at: "Fecha de finalización",
+          due_date: "Fecha de vencimiento",
+          task_count: "Número de tareas",
+          open_count: "Abiertas",
+          overdue_count: "Vencidas",
+          completed_count: "Completadas",
+          on_time_count: "Completadas en plazo",
+          on_time_rate: "Cumplimiento en plazo",
+          cycle_hours: "Horas medias hasta completar",
+        },
+      },
+      builtin_report: {
+        "1": {
+          name: "Pipeline por etapa",
+          description: "Dónde está parado el pipeline abierto ahora mismo.",
+        },
+        "10": {
+          name: "Desglose por estado",
+          description: "Dónde se atascan los prospectos antes de convertir.",
+        },
+        "11": {
+          name: "Productividad del equipo",
+          description:
+            "Trabajo creado frente a trabajo cerrado, y cuánto llegó en plazo.",
+        },
+        "12": {
+          name: "Carga vencida",
+          description:
+            "Quién arrastra trabajo tarde ahora mismo. Sin periodo: llegar tarde no tiene mes.",
+        },
+        "13": {
+          name: "Mix de actividad",
+          description:
+            "Qué tipo de trabajo se hizo de verdad, contado al completarse.",
+        },
+        "14": {
+          name: "Flujo de tareas",
+          description:
+            "Creadas frente a completadas, mes a mes. La diferencia es el atasco formándose.",
+        },
+        "15": {
+          name: "Crecimiento de clientes",
+          description: "Cuentas nuevas por mes.",
+        },
+        "16": {
+          name: "Cartera por sector",
+          description: "Cómo se reparte la base de clientes entre industrias.",
+        },
+        "17": {
+          name: "Crecimiento de contactos",
+          description:
+            "Contactos nuevos por mes. Fechados por primer contacto, que es un proxy de la creación.",
+        },
+        "2": {
+          name: "Rendimiento por comercial",
+          description:
+            "Ganado, perdido y pipeline abierto de cada miembro del equipo.",
+        },
+        "3": {
+          name: "Evolución de ventas",
+          description: "Valor ganado frente a perdido, mes a mes.",
+        },
+        "4": {
+          name: "Tasa de éxito por etapa",
+          description:
+            "Qué etapas convierten y por cuáles se escapa el negocio.",
+        },
+        "5": {
+          name: "Pipeline por sector",
+          description: "En qué industrias se concentra el pipeline abierto.",
+        },
+        "6": {
+          name: "Valor por etapa y comercial",
+          description:
+            "Dos dimensiones a la vez: quién lleva qué, y en qué punto está.",
+        },
+        "7": {
+          name: "Generación de leads",
+          description:
+            "Cuántos prospectos entran cada mes y cuántos convierten.",
+        },
+        "8": {
+          name: "Calidad por fuente",
+          description:
+            "Qué canales producen leads que acaban en dinero. Solo ingreso atribuible.",
+        },
+        "9": {
+          name: "Leads por responsable",
+          description:
+            "Carga de prospectos y conversión de cada miembro del equipo.",
+        },
+      },
+      view_autosaved: "Tu configuración se guarda sola",
+      saving_view: "Guardando…",
+      restore_original: "Restaurar original",
+      restored: "Informe restaurado a su configuración original",
+      export_selected:
+        "Exportar %{smart_count} a PDF |||| Exportar %{smart_count} a PDF",
+      print_title: "%{count} informe |||| %{count} informes",
+      print_preparing:
+        "Preparando los informes… el diálogo de impresión se abrirá solo.",
+      print_ready: "Listo. Si cerraste el diálogo, vuelve a abrirlo aquí.",
+      print_again: "Abrir impresión",
+      print_skipped: "Este informe no se pudo preparar y se omitió del PDF.",
+      print_nothing_selected:
+        "No hay informes seleccionados. Vuelve a la biblioteca y marca los que quieras incluir.",
+      group: {
+        mine: "Mis informes",
+        shared: "Compartidos conmigo",
+        builtin: "Biblioteca",
+      },
+      section: {
+        dataset: "Entidad",
+        metrics: "Métricas",
+        dimensions: "Agrupar por",
+        period: "Periodo",
+        filters: "Filtros",
+        visualisation: "Visualización",
+      },
+      hint: {
+        metrics: "Qué quieres medir. Hasta 6.",
+        dimensions: "Cómo desglosarlo. Hasta 2.",
+        period: "Sobre qué fecha se acota el informe.",
+      },
+      no_period: "Sin periodo (foto de ahora)",
+      add_filter: "Añadir filtro",
+      remove_filter: "Quitar filtro",
+      value_placeholder: "Valor",
+      value_list_placeholder: "Valores separados por comas",
+      preset: {
+        this_month: "Este mes",
+        last_month: "Mes anterior",
+        last_3_months: "Últimos 3 meses",
+        last_6_months: "Últimos 6 meses",
+        last_12_months: "Últimos 12 meses",
+        this_quarter: "Este trimestre",
+        last_quarter: "Trimestre anterior",
+        this_year: "Este año",
+        last_year: "Año anterior",
+        custom: "Personalizado",
+      },
+      visualisation: {
+        kpi: "Indicadores",
+        table: "Tabla",
+        bar: "Barras",
+        stacked: "Barras apiladas",
+        ranking: "Ranking",
+        funnel: "Embudo",
+        donut: "Circular",
+      },
+      op: {
+        eq: "es igual a",
+        neq: "no es",
+        contains: "contiene",
+        not_contains: "no contiene",
+        in: "es uno de",
+        not_in: "no es ninguno de",
+        gt: "mayor que",
+        gte: "mayor o igual que",
+        lt: "menor que",
+        lte: "menor o igual que",
+        before: "antes de",
+        after: "después de",
+        between: "entre",
+        is_null: "está vacío",
+        is_not_null: "no está vacío",
+      },
+      invalid: {
+        unknown_dataset: "Esta entidad ya no existe en el catálogo.",
+        unknown_metric: "Una de las métricas elegidas ya no existe.",
+        unknown_dimension: "Una de las agrupaciones elegidas ya no existe.",
+        unknown_filter_field: "Un filtro apunta a un campo que ya no existe.",
+        bad_operator: "Un filtro usa un operador que no aplica a ese campo.",
+        bad_period_field: "El periodo apunta a un campo que no es una fecha.",
+        bad_sort: "El orden apunta a un campo que no está en el informe.",
+        needs_dimension:
+          "Esta visualización necesita al menos una agrupación. Añade una en «Agrupar por».",
+        needs_single_metric:
+          "Esta visualización muestra una sola métrica. Deja solo una.",
+        needs_two_dimensions:
+          "Las barras apiladas necesitan exactamente dos agrupaciones.",
+      },
     },
     teams_dashboard: {
       title: "Rendimiento de los equipos",
@@ -878,15 +1758,43 @@ export const spanishCrmMessages = {
     dashboard: {
       deals_chart: "Ingresos previstos por oportunidades",
       deals_pipeline: "Pipeline de oportunidades",
+      greeting: {
+        morning: "Buenos días, %{name}",
+        morning_anonymous: "Buenos días",
+        afternoon: "Buenas tardes, %{name}",
+        afternoon_anonymous: "Buenas tardes",
+        evening: "Buenas noches, %{name}",
+        evening_anonymous: "Buenas noches",
+      },
+      kpi: {
+        priority_actions: "Acciones prioritarias",
+        urgent: "%{count} urgentes",
+        won_count: "%{count} ganadas",
+        sample: "N=%{count}",
+        unweighted_short: "%{amount} sin ponderar",
+      },
       latest_activity: "Última actividad",
+      trend_basis:
+        "Últimos 6 meses · creadas por fecha de apertura; ganadas y perdidas por cierre previsto",
       latest_activity_error: "Error al cargar la última actividad",
       latest_notes: "Mis últimas notas",
       latest_notes_added_ago: "añadida %{timeAgo}",
+      period: {
+        label: "Periodo",
+        today: "Hoy",
+        this_week: "Esta semana",
+        this_month: "Este mes",
+        this_quarter: "Este trimestre",
+        this_year: "Este año",
+      },
       stepper: {
         install: "Instalar Atomic CRM",
         progress: "%{step}/3 completados",
         whats_next: "¿Qué sigue?",
       },
+      summary: "%{pipeline} en %{deals} oportunidades abiertas.",
+      summary_with_overdue:
+        "%{pipeline} en %{deals} oportunidades abiertas · %{overdue} tareas vencidas.",
       upcoming_tasks: "Próximas tareas",
     },
     header: {
@@ -951,6 +1859,10 @@ export const spanishCrmMessages = {
       tasks: {
         types: "Tipos",
       },
+      products: {
+        units: "Unidades",
+        categories: "Categorías",
+      },
       preferences: "Preferencias",
       title: "Ajustes",
       app_title: "Título de la aplicación",
@@ -975,8 +1887,35 @@ export const spanishCrmMessages = {
       system: "Sistema",
     },
     language: "Idioma",
+    leads: {
+      stats: {
+        new: "Nuevos leads",
+        contacted: "Leads contactados",
+        qualified: "Leads calificados",
+        new_hint: "Sin contactar",
+        contacted_hint: "Cadencia activa",
+        qualified_hint: "Listos para venta",
+        share: "%{share} del total",
+        of_cohort: "de %{total} leads",
+        converted_of: "%{converted} de %{created}",
+        cycle: "Ciclo %{count} d",
+        basis:
+          "Leads llegados en los últimos 12 meses; no depende de los filtros de la lista",
+      },
+    },
     navigation: {
       label: "Navegación del CRM",
+      help: "Centro de ayuda",
+      search: "Buscar",
+      toggle: "Mostrar u ocultar la navegación",
+      groups: {
+        home: "Inicio",
+        sales: "Ventas",
+        customers: "Clientes",
+        activities: "Actividades",
+        analytics: "Analítica",
+        settings: "Configuración",
+      },
     },
     profile: {
       inbound: {

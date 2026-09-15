@@ -4,16 +4,9 @@ import { TrendingUp } from "lucide-react";
 import { useGetList, useTranslate } from "ra-core";
 import { memo, useMemo } from "react";
 
-import { findDealLabel } from "../deals/dealUtils";
+import { findDealLabel, findDealProbability } from "../deals/dealUtils";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
-
-const multiplier = {
-  opportunity: 0.2,
-  "proposal-sent": 0.5,
-  "in-negociation": 0.8,
-  delayed: 0.3,
-};
 
 const threeMonthsAgo = new Date(
   new Date().setMonth(new Date().getMonth() - 6),
@@ -63,8 +56,12 @@ export const DealsChart = memo(() => {
         pending: dealsByMonth[month]
           .filter((deal: Deal) => !["won", "lost"].includes(deal.stage))
           .reduce((acc: number, deal: Deal) => {
-            // @ts-expect-error - multiplier type issue
-            acc += deal.amount * multiplier[deal.stage];
+            // The weighting now lives in the application configuration; a stage
+            // with none configured contributes nothing rather than its full
+            // amount, which is what the old `undefined` multiplier produced
+            // (`amount * undefined` is NaN, and one such deal blanked the bar).
+            acc +=
+              deal.amount * (findDealProbability(dealStages, deal.stage) ?? 0);
             return acc;
           }, 0),
         lost: dealsByMonth[month]
@@ -77,7 +74,11 @@ export const DealsChart = memo(() => {
     });
 
     return amountByMonth;
-  }, [data]);
+    // `dealStages` joined the dependencies when the stage weightings moved out
+    // of this file and into the configuration: the pending series is now a
+    // function of the config, so an admin editing a probability has to redraw
+    // the chart rather than wait for the next deal to load.
+  }, [data, dealStages]);
 
   if (isPending) return null; // FIXME return skeleton instead
   const range = months.reduce(

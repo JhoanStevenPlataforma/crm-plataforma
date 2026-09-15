@@ -2,6 +2,7 @@ import type { AuthProvider } from "ra-core";
 import { supabaseAuthProvider } from "ra-supabase-core";
 
 import type { CrmRole } from "../../types";
+import { isQuotePortalLocation } from "../../quotes/portal/quotePortalPaths";
 import { canAccess } from "../commons/canAccess";
 import { getSupabaseClient } from "./supabase";
 
@@ -117,6 +118,13 @@ export const getAuthProvider = (): AuthProvider => {
       return baseAuthProvider.logout(params);
     },
     checkAuth: async (params) => {
+      // A customer opening a quotation link is not a CRM user, and the page
+      // needs no session: it talks to the `quote-portal` edge function only.
+      // Checked before `getIsInitialized()`, so a customer's browser never
+      // queries the CRM, let alone signs anybody out.
+      if (isQuotePortalLocation(window.location)) {
+        return;
+      }
       // Users are on the set-password page, nothing to do
       if (
         window.location.pathname === "/set-password" ||

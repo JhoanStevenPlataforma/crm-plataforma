@@ -783,11 +783,225 @@ select
     'deal', sc.deal_id,
     jsonb_build_object('from_stage', sc.from_stage, 'to_stage', sc.to_stage,
                        'reason', sc.reason, 'deal_id', sc.deal_id,
-                       'attachments', to_jsonb(sc.attachments))
-from public.deal_stage_changes sc;
+                       'attachments', to_jsonb(sc.attachments),
+                       'override_reason', sc.override_reason)
+from public.deal_stage_changes sc
+
+union all
+
+-- Quote transitions, surfaced on the DEAL the quote was raised against, so the
+-- deal page tells the whole commercial story without a second query per row.
+-- Only quotes that still have a deal: `quotes.deal_id` is `on delete set null`.
+--
+-- The three quote arms take this view from four to seven, which is what makes
+-- the materialized `timeline` table named in the caveat above due. They are the
+-- cheapest kind -- small tables, indexed on `(quote_id, … desc)` -- and every
+-- filter stays on plain columns.
+select
+    'quote_status_change:deal:' || sc.id, sc.changed_at, 'quote.status_changed',
+    'quote_status_change',
+    null::bigint, sc.sales_id,
+    -- 'system' rather than inventing a 'customer' value, so the switch in
+    -- `timeline/EntityTimeline.tsx` cannot fall through. Who acted lives in
+    -- `payload.actor_kind`.
+    case when sc.actor_kind = 'internal' then 'user' else 'system' end,
+    'deal', q.deal_id,
+    jsonb_build_object('quote_id', sc.quote_id, 'quote_number', q.quote_number,
+                       'from_status', sc.from_status, 'to_status', sc.to_status,
+                       'reason', sc.reason, 'actor_kind', sc.actor_kind,
+                       'override_reason', sc.override_reason)
+from public.quote_status_changes sc
+    join public.quotes q on q.id = sc.quote_id
+where q.deal_id is not null
+
+union all
+
+-- The same transitions, on the quote itself.
+select
+    'quote_status_change:' || sc.id, sc.changed_at, 'quote.status_changed',
+    'quote_status_change',
+    null::bigint, sc.sales_id,
+    case when sc.actor_kind = 'internal' then 'user' else 'system' end,
+    'quote', sc.quote_id,
+    jsonb_build_object('quote_id', sc.quote_id, 'quote_number', q.quote_number,
+                       'from_status', sc.from_status, 'to_status', sc.to_status,
+                       'reason', sc.reason, 'actor_kind', sc.actor_kind,
+                       'attachments', to_jsonb(sc.attachments),
+                       'override_reason', sc.override_reason)
+from public.quote_status_changes sc
+    join public.quotes q on q.id = sc.quote_id
+
+union all
+
+-- What the customer did on the portal. `ip_address` and `user_agent` are
+-- deliberately absent from the payload: they belong in the audit table, not on
+-- a screen a whole sales team reads.
+select
+    'quote_portal_event:' || e.id, e.occurred_at, 'quote.' || e.event_type,
+    'quote_portal_event',
+    null::bigint, null::bigint, 'system',
+    'quote', e.quote_id,
+    jsonb_build_object('quote_id', e.quote_id, 'version_id', e.version_id,
+                       'actor_name', e.actor_name, 'detail', e.payload)
+from public.quote_portal_events e;
 
 create or replace view public.init_state with (security_invoker = off) as
 select count(sub.id) as is_initialized
 from (
     select sales.id from public.sales limit 1
 ) sub;
+
+--
+-- Quotes / CPQ module (docs/proposals/quotes-cpq-module.md, Phase 2)
+--
+
+-- The token table minus `token_hash`, plus `is_active` (§6.2).
+--
+-- It exists so `quote_access_tokens` needs NO select policy at all. That removes
+-- the question "is exposing a 256-bit hash safe?" instead of answering it.
+--
+-- `security_invoker = off` is therefore required, not a shortcut: with the
+-- invoker's rights the underlying table returns nothing to anybody. The one
+-- other view declared this way is `init_state`, above. Running as the owner
+-- means row level security does not apply, so the quote visibility rule is
+-- RESTATED in the WHERE clause -- remove it and every rep reads every link.
+create or replace view public.quote_access_tokens_summary with (security_invoker = off) as
+select
+    t.id,
+    t.quote_id,
+    t.version_id,
+    t.label,
+    t.created_by,
+    t.created_at,
+    t.expires_at,
+    t.revoked_at,
+    t.revoked_by,
+    t.last_seen_at,
+    t.view_count,
+    (t.revoked_at is null and t.expires_at > now()) as is_active
+from public.quote_access_tokens t
+where public.can_see_quote(t.quote_id);
+
+-- The list / board projection of a quote (§2.6).
+--
+-- The joins are one-to-one (company, deal, owner, status) and the current
+-- version is one `left join lateral (… limit 1)`, the repo's idiom for "the
+-- newest child". Every counter is a SCALAR SUBQUERY, never a join plus
+-- GROUP BY: the 580 ms -> 5 ms rewrite documented on `companies_summary`
+-- applies verbatim, and `nb_*` counters are exactly the shape it was measured
+-- on. Keep them that way.
+create or replace view public.quotes_summary with (security_invoker = on) as
+select
+    q.id,
+    q.quote_number,
+    q.title,
+    q.deal_id,
+    q.company_id,
+    q.contact_id,
+    q.sales_id,
+    q.price_list_id,
+    q.currency,
+    q.status_key,
+    q.valid_until,
+    q.terms,
+    q.internal_notes,
+    q.created_by,
+    q.created_at,
+    q.updated_at,
+
+    c.name as company_name,
+    d.name as deal_name,
+    nullif(btrim(concat_ws(' ', o.first_name, o.last_name)), '') as owner_name,
+
+    st.label         as status_label,
+    st.color         as status_color,
+    st.is_open       as status_is_open,
+    st.is_terminal   as status_is_terminal,
+    st.counts_as_won as status_counts_as_won,
+
+    -- The version being worked on: the draft when there is one, otherwise the
+    -- newest issued document.
+    cv.id             as current_version_id,
+    cv.version_number as current_version_number,
+    cv.issued_at,
+    cv.subtotal,
+    cv.discount_total,
+    cv.tax_total,
+    cv.total,
+    cv.accepted_at,
+    cv.party_snapshot,
+
+    (select count(*) from public.quote_versions v
+      where v.quote_id = q.id and v.issued_at is not null) as nb_issued_versions,
+    (select count(*) from public.quote_lines l
+      where l.version_id = cv.id) as nb_lines,
+    (select count(*) from public.quote_comments qc
+      where qc.quote_id = q.id and qc.visibility = 'shared'
+        and qc.deleted_at is null) as nb_shared_comments,
+    (select count(*) from public.quote_comments qc
+      where qc.quote_id = q.id and qc.author_kind = 'customer'
+        and qc.read_by_internal_at is null
+        and qc.deleted_at is null) as nb_unanswered_customer_comments,
+    (select count(*) from public.quote_portal_events e
+      where e.quote_id = q.id and e.event_type = 'viewed') as nb_views,
+    (select max(e.occurred_at) from public.quote_portal_events e
+      where e.quote_id = q.id) as last_portal_activity_at,
+    -- Through the summary view, not the table: the table has no select policy,
+    -- so under `security_invoker = on` it would count zero for everybody.
+    (select count(*) from public.quote_access_tokens_summary t
+      where t.quote_id = q.id and t.is_active) as nb_active_tokens
+from public.quotes q
+    left join public.companies c on c.id = q.company_id
+    left join public.deals d on d.id = q.deal_id
+    left join public.sales o on o.id = q.sales_id
+    left join public.quote_statuses st on st.key = q.status_key
+    left join lateral (
+        select v.id, v.version_number, v.issued_at, v.subtotal, v.discount_total,
+               v.tax_total, v.total, v.accepted_at, v.party_snapshot
+          from public.quote_versions v
+         where v.quote_id = q.id
+         order by v.version_number desc
+         limit 1
+    ) cv on true;
+
+-- What the line picker offers: every active product, priced for every active
+-- list (§2.6).
+--
+-- The cross join is fine at catalogue scale -- hundreds of products, a handful
+-- of lists -- and would only need revisiting past a few thousand products.
+--
+-- The last predicate is the load-bearing one. A product with no explicit row in
+-- a list falls back to its own `list_price` ONLY when the currencies match; that
+-- is what stops the picker offering a USD-priced product inside a COP list with
+-- no override. A silent currency mismatch is worse than an absent row.
+--
+-- `internal_notes` is not projected: nothing that renders a price needs it.
+create or replace view public.price_book with (security_invoker = on) as
+select
+    pl.id || ':' || p.id || ':' || coalesce(pli.min_quantity, 1) as id,
+    pl.id                                       as price_list_id,
+    pl.code                                     as price_list_code,
+    pl.name                                     as price_list_name,
+    pl.currency,
+    p.id                                        as product_id,
+    p.sku,
+    p.name,
+    p.description,
+    p.kind,
+    p.category,
+    p.unit,
+    coalesce(pli.unit_price, p.list_price)      as unit_price,
+    (pli.id is not null)                        as is_list_price,
+    coalesce(pli.min_quantity, 1)               as min_quantity,
+    coalesce(pli.tax_rate_id, p.tax_rate_id)    as tax_rate_id,
+    tr.code                                     as tax_rate_code,
+    tr.rate                                     as tax_rate_percent
+from public.price_lists pl
+    cross join public.products p
+    left join public.price_list_items pli
+           on pli.price_list_id = pl.id and pli.product_id = p.id
+    left join public.tax_rates tr
+           on tr.id = coalesce(pli.tax_rate_id, p.tax_rate_id)
+where p.is_active
+  and pl.is_active
+  and (pli.id is not null or pl.currency = p.currency);

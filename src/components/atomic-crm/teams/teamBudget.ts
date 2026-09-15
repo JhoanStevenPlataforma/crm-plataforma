@@ -113,22 +113,8 @@ export const sumTeamTotals = (teams: Team[] | undefined): TeamTotals => {
 };
 
 /**
- * Money, formatted the way the deal cards already do it — same options, so the
- * dashboard and the pipeline never disagree about what "$1.2M" means.
+ * Moved to `misc/reporting.ts` — the analytics screens format the same money
+ * and the same rates, and two copies drift. Re-exported so this folder's
+ * callers and tests are unchanged.
  */
-export const formatMoney = (
-  value: number | null | undefined,
-  currency: string,
-  locale = "en-US",
-) =>
-  (value ?? 0).toLocaleString(locale, {
-    notation: "compact",
-    style: "currency",
-    currency,
-    currencyDisplay: "narrowSymbol",
-    maximumFractionDigits: 1,
-  });
-
-/** `0.42` -> `"42%"`, and `null` -> an em dash rather than "0%". */
-export const formatAttainment = (ratio: number | null) =>
-  ratio == null ? "—" : `${Math.round(ratio * 100)}%`;
+export { formatAttainment, formatMoney } from "../misc/reporting";

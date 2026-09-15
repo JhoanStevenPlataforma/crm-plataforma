@@ -239,7 +239,22 @@ export const englishCrmMessages = {
         remove_file: "Remove %{name}",
         confirm: "Move deal",
         error: "The deal could not be moved",
+        requirement_checking: "Checking the work done on this deal…",
+        requirement_blocked:
+          "%{completed} of %{required} tasks completed since the deal entered %{stage}.",
+        requirement_hint:
+          "Complete a task on this deal and move it again: a stage is earned with work, not with a sentence.",
+        requirement_error:
+          "This deal has not completed enough tasks to change stage",
+        override: "Override reason (admins only)",
+        override_placeholder:
+          "e.g. Contract signed outside the CRM, the task will be recorded tomorrow",
+        override_hint: "Stored on the deal history alongside the stage change.",
         no_reason: "No reason recorded",
+        overridden:
+          "Moved without the completed task this stage requires. Override reason: %{reason}",
+        attachment_error:
+          "Could not open the file. You may no longer have access to this deal.",
       },
       empty: {
         before_create: "before creating a deal.",
@@ -300,6 +315,15 @@ export const englishCrmMessages = {
     leads: {
       name: "Lead |||| Leads",
       unnamed: "(no name)",
+      action: {
+        new: "New lead",
+        call: "Call",
+        email: "Send email",
+      },
+      filters: {
+        any_status: "All statuses",
+        any_source: "All sources",
+      },
       company_name_helper:
         "Use this when the company is not in the CRM yet. Converting the lead creates it.",
       fields: {
@@ -318,6 +342,7 @@ export const englishCrmMessages = {
         notes: "Notes",
         sales_id: "Account manager",
         created_at: "Created",
+        actions: "Actions",
       },
       field_categories: {
         identity: "Identity",
@@ -420,6 +445,412 @@ export const englishCrmMessages = {
         save: "Save the split",
         saved: "Split saved",
         error: "The split could not be saved",
+      },
+    },
+    products: {
+      name: "Product |||| Products",
+      forcedCaseName: "Product",
+      fields: {
+        sku: "SKU",
+        name: "Name",
+        description: "Description",
+        internal_notes: "Internal notes",
+        kind: "Kind",
+        category: "Category",
+        unit: "Unit",
+        list_price: "List price",
+        currency: "Currency",
+        tax_rate_id: "Tax rate",
+        is_active: "Active",
+      },
+      kinds: {
+        product: "Product",
+        service: "Service",
+        plan: "Plan",
+        subscription: "Subscription",
+        concept: "Concept",
+      },
+      action: {
+        new: "New product",
+      },
+      filters: {
+        any_kind: "Any kind",
+        any_category: "Any category",
+      },
+      helpers: {
+        internal_notes: "For the sales team only. Never shown to a customer.",
+        is_active:
+          "An inactive product stays on the quotes that used it but is no longer offered.",
+      },
+      validation: {
+        currency: "Use a three-letter ISO code in capitals, e.g. COP",
+      },
+      errors: {
+        duplicate_sku: "Another product already uses this SKU",
+      },
+    },
+    price_lists: {
+      name: "Price list |||| Price lists",
+      forcedCaseName: "Price list",
+      fields: {
+        code: "Code",
+        name: "Name",
+        currency: "Currency",
+        is_default: "Default for its currency",
+        is_active: "Active",
+        valid_from: "Valid from",
+        valid_to: "Valid to",
+        notes: "Notes",
+      },
+      action: {
+        new: "New price list",
+      },
+      helpers: {
+        validity:
+          "For reference only: quotes are priced from every active list, whatever these dates say.",
+      },
+      validation: {
+        period: "The end date cannot be before the start date",
+      },
+      errors: {
+        conflict:
+          "Another price list already uses this code, or is already the active default for this currency",
+      },
+      items: {
+        title: "Prices",
+        empty:
+          "No prices yet. Products in this list's currency are quoted at their own list price until one is set here.",
+        add: "Add price",
+        product: "Product",
+        unit_price: "Unit price",
+        min_quantity: "Minimum quantity",
+        tax_rate_id: "Tax rate",
+        no_override: "The product's own rate",
+        remove: "Remove the price of %{name}",
+        error: "The price could not be saved",
+        duplicate: "This product already has a price for that minimum quantity",
+        load_error:
+          "The prices of this list could not be loaded, so adding one is disabled. Reload the page.",
+      },
+    },
+    quotes: {
+      name: "Quote |||| Quotes",
+      forcedCaseName: "Quote",
+      fields: {
+        quote_number: "Number",
+        title: "Title",
+        company_id: "Company",
+        contact_id: "Contact",
+        deal_id: "Deal",
+        company_name: "Company",
+        sales_id: "Owner",
+        owner_name: "Owner",
+        price_list_id: "Price list",
+        currency: "Currency",
+        status_key: "Status",
+        valid_until: "Valid until",
+        terms: "Terms",
+        internal_notes: "Internal notes",
+        current_version_number: "Version",
+        total: "Total",
+      },
+      version_short: "v%{number}",
+      action: {
+        new: "New quote",
+      },
+      filters: {
+        any_status: "Any status",
+      },
+      helpers: {
+        price_list_id: "Sets the currency of the quote and the prices offered",
+        valid_until: "After this date the offer, and any link to it, is dead",
+        terms: "Printed on the document, below the lines",
+        internal_notes: "For the sales team only. Never shown to a customer.",
+        frozen_document:
+          "This quote has been issued: its dates, terms and lines are the document a customer was shown, and stay as they were.",
+      },
+      validation: {
+        valid_until_past: "An offer cannot expire before today",
+      },
+      totals: {
+        subtotal: "Subtotal",
+        discount: "Discount",
+        discount_with_percent: "Discount (%{percent}%)",
+        tax: "Tax",
+        total: "Total",
+      },
+      lines: {
+        title: "Lines",
+        empty: "No lines yet. A quote with no lines cannot be issued.",
+        add: "Add line",
+        product: "Product",
+        quantity: "Quantity",
+        quantity_of: "Quantity of %{name}",
+        unit_price: "Unit price",
+        unit_price_of: "Unit price of %{name}",
+        discount_percent: "Discount %",
+        discount_of: "Discount on %{name}",
+        tax_rate_percent: "Tax",
+        line_total: "Total",
+        remove: "Remove %{name} from the quote",
+        error: "The line could not be saved",
+        load_error:
+          "The lines of this quote could not be loaded, so editing is disabled. Reload the page.",
+        frozen:
+          "Lines are editable only while the quote is a draft. Revise it to make changes.",
+        no_price_list:
+          "Choose a price list above to add lines: it decides which products are offered and at what price.",
+        invalid: {
+          quantity: "A quantity has to be greater than zero",
+          unit_price: "A price cannot be negative",
+          discount_percent: "A discount runs from 0 to 100",
+        },
+      },
+      panel: {
+        empty: "No quotes for this deal yet",
+        load_error: "The quotes of this deal could not be loaded",
+      },
+      actions: {
+        terminal: "This quote is closed: there is nothing left to move.",
+      },
+      transitions: {
+        issue: "Send",
+        revise: "Revise",
+        pending_approval: "Request approval",
+        approved: "Approve",
+        draft: "Send back",
+        negotiating: "Negotiate",
+        canceled: "Cancel quote",
+      },
+      dialog: {
+        reason: "Reason",
+        reason_placeholder: "What is behind this move?",
+        confirm: "Confirm",
+        transition_description:
+          "Quote %{number}. The reason is recorded with the move and cannot be edited afterwards.",
+        revise_description:
+          "Quote %{number}. The issued document stays exactly as the customer saw it; this opens a new version to work on, and the links to the previous one stop working.",
+      },
+      issue: {
+        title: "Send quote %{number}",
+        description:
+          "Version %{version} is frozen as it stands and a link is created for the customer. An issued document can never be edited: changing it later means a new version.",
+        gate_checking: "Reading the discount rule…",
+        gate_no_rule:
+          "This document grants %{percent}% discount. No discount ceiling is in force.",
+        gate_blocked:
+          "This document grants %{percent}% discount, above the %{max}% allowed for you (%{lines} line(s) over the limit).",
+        gate_blocked_hint:
+          "Request approval: an approval raises the ceiling to the approver's.",
+        gate_blocked_admin:
+          "As an administrator you may send it anyway, in writing. The motive is stored with the move.",
+        reason: "Why this discount",
+        reason_placeholder: "What justifies the discount granted?",
+        reason_hint:
+          "Required above %{above}%. Stored with the move, and a written approval counts instead.",
+        override: "Override the ceiling",
+        override_placeholder: "Why is this quote sent past the limit?",
+        override_hint:
+          "Administrators only. Recorded permanently and only when the ceiling was actually exceeded.",
+        token_days: "Link valid (days)",
+        token_label: "For whom",
+        token_label_placeholder: "Purchasing, Ms. Lopez…",
+        token_clamped:
+          "A link never outlives the offer: it will be cut off after %{date}.",
+        confirm: "Send",
+      },
+      link: {
+        title: "Link to version %{version}",
+        description:
+          "This link is shown once and is stored nowhere: only its fingerprint is kept. Copy it now — afterwards the only way is to create a new one. Opening it yourself counts as the customer's view.",
+        url: "Customer link",
+        copy: "Copy the link",
+        expires: "Stops working on %{date}",
+        done: "Done",
+      },
+      portal: {
+        loading: "Loading the quotation…",
+        demo_unavailable:
+          "Customer links do not open in the demo: there is no server behind it to keep the offer and record the answer.",
+        print: "Print / PDF",
+        accept: "Accept",
+        reject: "Decline",
+        retry: "Try again",
+        accepted_notice:
+          "Thank you. Your acceptance has been recorded, and the quotation below now carries it.",
+        rejected_notice:
+          "Thank you for letting us know. Your answer has been recorded.",
+        closed:
+          "This quotation can no longer be answered online. Please contact %{name}.",
+        closed_anonymous:
+          "This quotation can no longer be answered online. Please contact whoever sent it to you.",
+        accept_dialog: {
+          title: "Accept quotation %{number}",
+          description:
+            "Version %{version}, for a total of %{total}. Your name, your email address and the time are recorded with the document.",
+          name: "Full name",
+          email: "Email address",
+          confirm: "I accept this quotation as issued",
+          submit: "Accept quotation",
+        },
+        reject_dialog: {
+          title: "Decline quotation %{number}",
+          description: "Telling us why helps us come back with a better offer.",
+          reason_code: "Main reason",
+          reasons: {
+            price: "Price",
+            terms: "Terms and conditions",
+            delivery_time: "Delivery time",
+            product: "Product or scope",
+            other: "Other",
+          },
+          reason: "Anything to add? (optional)",
+          name: "Your name (optional)",
+          email: "Email address (optional)",
+          submit: "Decline quotation",
+        },
+        errors: {
+          quote_link_invalid:
+            "This link is not valid or is no longer active. Ask the person who sent it for a new one.",
+          quote_portal_throttled:
+            "Too many requests from this link. Wait a minute and try again.",
+          quote_portal_unavailable:
+            "The quotation cannot be reached right now. Try again in a moment.",
+          quote_version_superseded:
+            "A newer version of this quotation was issued, so this one can no longer be answered. Ask for the link to the new version.",
+          quote_version_answered: "This version has already been answered.",
+          quote_validity_elapsed:
+            "This offer has expired and can no longer be accepted.",
+          quote_transition_illegal:
+            "This quotation can no longer be answered online.",
+          quote_status_unchanged: "This version has already been answered.",
+          quote_transition_actor_not_allowed:
+            "This quotation can no longer be answered online.",
+          quote_portal_name_required: "Enter your full name.",
+          quote_portal_email_invalid: "Enter a valid email address.",
+          quote_portal_reason_code_invalid: "Choose the main reason.",
+          quote_portal_input_too_long: "One of the fields is too long.",
+        },
+      },
+      document: {
+        label: "Quotation %{number}",
+        heading: "Quotation",
+        version: "Version %{number}",
+        issued_on: "Issued %{date}",
+        valid_until: "Valid until %{date}",
+        draft_banner:
+          "Draft — not an offer. This version has not been issued and can still change.",
+        superseded_banner:
+          "Superseded — a newer version of this quote was issued, and this one is no longer the offer.",
+        prepared_for: "Prepared for",
+        prepared_by: "Prepared by",
+        tax_identifier: "Tax ID %{value}",
+        attention: "Attn. %{name}",
+        line_number: "#",
+        description: "Description",
+        quantity: "Quantity",
+        unit_price: "Unit price",
+        discount: "Discount",
+        tax: "Tax",
+        amount: "Amount",
+        no_lines: "This version has no lines.",
+        terms: "Terms and conditions",
+        accepted: "Accepted on %{date} by %{name}",
+        accepted_anonymous: "Accepted on %{date}",
+        rejected: "Declined on %{date}",
+      },
+      versions: {
+        title: "Versions",
+        view: "Version %{number}",
+        current: "current",
+        draft: "Draft, not issued",
+        issued: "Issued %{date}",
+        superseded: "superseded",
+        accepted: "accepted",
+        rejected: "declined",
+        load_error: "The versions of this quote could not be loaded",
+      },
+      show: {
+        edit: "Edit",
+        print: "Print / PDF",
+        view_document: "View document",
+        load_error: "This version of the quote could not be loaded.",
+      },
+      print: {
+        preparing: "Preparing the document…",
+        ready: "In the print dialog, choose “Save as PDF”.",
+        back: "Back to the quote",
+        again: "Print again",
+        version_missing:
+          "That version does not belong to this quote, so there is nothing to print.",
+      },
+      links: {
+        title: "Customer links",
+        new: "New link",
+        revision_open:
+          "A revision is open: issue it before sharing a new link.",
+        empty: "No link has been created for this quote yet",
+        load_error: "The links of this quote could not be loaded",
+        unlabelled: "Link to version %{version}",
+        active: "Active",
+        inactive: "Inactive",
+        expires: "until %{date}",
+        views: "%{count} view(s)",
+        revoke: "Revoke",
+      },
+      errors: {
+        generic: "The quote could not be updated",
+        quote_version_frozen:
+          "This version was issued: it is the document the customer was shown and cannot be changed. Revise the quote to open a new one.",
+        quote_version_column_protected:
+          "Only the validity, the terms and the discount of a draft can be changed here.",
+        quote_not_draft:
+          "Lines can only be changed while the quote is a draft. Send it back or revise it first.",
+        quote_transition_illegal: "That move is not allowed from this status.",
+        quote_status_unchanged: "The quote is already in that status.",
+        quote_reason_required: "This move needs a written reason.",
+        quote_not_issued:
+          "Nothing has been issued yet, so there is no document to work from.",
+        quote_discount_exceeds_limit:
+          "The discount granted is above your limit. Request approval, or ask an administrator to override it.",
+        quote_discount_reason_required:
+          "A discount this size needs a written reason before it is sent.",
+        quote_draft_exists:
+          "A draft is already open for this quote: send it instead of starting another.",
+        quote_validity_elapsed:
+          "The offer has already expired, so any link would be dead on arrival. Extend the validity first.",
+        quote_header_derived:
+          "The validity and the terms belong to the version being worked on.",
+        quote_empty: "A quote with no lines cannot be sent.",
+        quote_no_draft: "There is no draft to send.",
+        quote_transition_actor_not_allowed:
+          "That move belongs to the customer or to the system, not to you.",
+        quote_approval_requires_manager:
+          "Only a manager can approve a quote — approving your own would be setting your own limit.",
+      },
+    },
+    tax_rates: {
+      name: "Tax rate |||| Tax rates",
+      forcedCaseName: "Tax rate",
+      fields: {
+        code: "Code",
+        label: "Label",
+        rate: "Rate (%)",
+        is_default: "Default",
+        active: "Active",
+        rank: "Order",
+      },
+      action: {
+        new: "New tax rate",
+      },
+      helpers: {
+        system_code:
+          "A seeded rate: its code is fixed, while the label and the rate can follow the law.",
+        rate: "A percentage: 19 for IVA 19%.",
+      },
+      errors: {
+        conflict:
+          "Another tax rate already uses this code, or is already the active default",
       },
     },
     tasks: {
@@ -757,6 +1188,12 @@ export const englishCrmMessages = {
       recovery_email_sent:
         "If you're a registered user, you should receive a password recovery email shortly.",
       sign_in_failed: "Failed to log in.",
+      subtitle: "Enter your credentials to reach your workspace.",
+      email_placeholder: "name@company.com",
+      or_email: "Or with your email",
+      powered_by: "Powered by",
+      show_password: "Reveal characters",
+      hide_password: "Hide characters",
       sign_in_google_workspace: "Sign in with Google Workplace",
       signup: {
         create_account: "Create account",
@@ -801,6 +1238,438 @@ export const englishCrmMessages = {
       at_company: "at",
       to: "to",
       load_more: "Load more activity",
+    },
+    analytics: {
+      title: "Analytics",
+      see_teams_dashboard: "Team budgets →",
+      load_error: "These figures could not be loaded. Try again in a moment.",
+      no_data: "Nothing to report for this period",
+      tabs: {
+        overview: "Overview",
+        pipeline: "Pipeline",
+        leads: "Leads",
+        productivity: "Productivity",
+      },
+      presets: {
+        this_month: "This month",
+        last_3_months: "3 months",
+        last_6_months: "6 months",
+        last_12_months: "12 months",
+        this_year: "This year",
+      },
+      filters: {
+        period: "Period",
+        from: "From",
+        to: "To",
+        owner: "Owner",
+        all_owners: "Everyone",
+        team: "Team",
+        all_teams: "All teams",
+      },
+      basis: {
+        now: "As of now",
+        expected_close: "By expected closing date",
+        lead_created: "By arrival date",
+        cohort: "Cohort of leads that arrived in the period",
+        cohort_month: "By arrival month; recent months are still filling in",
+        deal_flow:
+          "Created by opening date, won and lost by expected closing date",
+        deal_created: "By opening date",
+        forecast: "Expected, not actual",
+        mixed: "Pipeline as of now, won and lost within the period",
+        task_flow: "Created by creation month, completed by completion month",
+        completed: "Completed within the period",
+        unfiltered: "Latest records created, not scoped by the filters above",
+        attribution: "%{share} of converted leads produced a deal we can price",
+        attribution_none: "No converted lead in this period produced a deal",
+      },
+      series: {
+        won: "Won",
+        created: "Created",
+        lost: "Lost",
+        amount: "Amount",
+        pipeline: "Pipeline",
+        deals: "Deals",
+        converted: "Converted",
+        leads: "Leads",
+        rate: "Conversion",
+        completed: "Completed",
+        open: "Open",
+        overdue: "Overdue",
+      },
+      kpi: {
+        open_pipeline: "Open pipeline",
+        won: "Won",
+        win_rate: "Win rate",
+        decided: "%{won} won / %{lost} lost",
+        new_deals: "New opportunities",
+        new_leads: "New leads",
+        lead_conversion: "Lead conversion",
+        overdue_tasks: "Overdue tasks",
+        due_soon: "%{count} due in 7 days",
+        overdue_of_open: "%{count} overdue",
+        open_deals: "%{count} deals",
+        average_deal: "Average deal",
+        forecast_cycle: "Expected cycle",
+        days: "%{count} d",
+        hours: "%{count} h",
+        converted: "Converted",
+        time_to_convert: "Time to convert",
+        open_tasks: "Open tasks",
+        subset_of_open: "Included in open tasks",
+        due_next_7d: "Due in 7 days",
+        on_time: "Completed on time",
+        completed_count: "%{count} completed",
+        cycle_time: "Average cycle",
+        weighted_pipeline: "Weighted pipeline",
+        unweighted: "%{amount} in stages with no weighting configured",
+      },
+      chart: {
+        deal_flow: "Created, won and lost",
+        pipeline_by_stage: "Pipeline by stage",
+        deals_by_stage: "Deals by stage",
+        won_vs_lost: "Won vs lost",
+        deals_created: "Deals created",
+        by_owner: "Performance by owner",
+        owners_hidden: "Top 10 — %{count} more not shown",
+        lead_flow: "Leads and conversions",
+        leads_by_status: "Leads by status",
+        leads_by_source: "Leads by source",
+        conversion_by_source: "Conversion rate by source",
+        revenue_by_source: "Attributed revenue by source",
+        leads_by_owner: "Leads by owner",
+        task_flow: "Created vs completed",
+        activity_mix: "Activity mix",
+        workload_by_owner: "Workload by owner",
+        recent_activity: "Recent activity",
+      },
+      past_due: {
+        title: "Open deals past their closing date",
+        subtitle:
+          "Each one makes the forecast above wrong: re-date it or close it",
+        see_all: "See all %{total}",
+        empty: "No deal is past its closing date",
+        deal: "Deal",
+        stage: "Stage",
+        expected: "Expected",
+        amount: "Amount",
+      },
+      untouched: {
+        title: "Leads nobody has contacted",
+        subtitle: "Still new after %{days} days",
+        empty: "Every lead has been picked up",
+        lead: "Lead",
+        company: "Company",
+        source: "Source",
+        arrived: "Arrived",
+        unnamed: "(no name)",
+      },
+    },
+    reports: {
+      title: "Reports",
+      subtitle: "Build the question you need answered",
+      new: "New report",
+      untitled: "Untitled report",
+      name: "Report name",
+      back: "Back to reports",
+      builtin: "Built-in",
+      shared: "Shared",
+      unsaved: "Unsaved changes",
+      configure: "Configure",
+      duplicate: "Duplicate",
+      save_as_copy: "Save as copy",
+      saved: "Report saved",
+      save_error: "The report could not be saved",
+      delete_error: "The report could not be deleted",
+      list_error: "The reports could not be loaded",
+      catalog_error: "The report catalog could not be loaded",
+      run_error:
+        "This report could not be run. Check the filters and try again.",
+      not_found: "This report does not exist, or you cannot access it",
+      empty: "No reports yet",
+      demo_unavailable:
+        "Reports need the real database; they are not available in demo mode.",
+      copy_of: "Copy of %{name}",
+      unassigned: "Unassigned",
+      result_title: "%{dataset}",
+      basis: "By %{field}",
+      see_analytics: "See summary",
+      truncated:
+        "Showing the first %{count} rows. Narrow the period or the filters to see the rest.",
+      sort_by: "Sort by %{field}",
+      shared_scope_note:
+        "A shared report shares the question, not the data: each person sees the rows their own permissions allow.",
+      builtin_hint:
+        "Duplicate any of these to start from an example that already works.",
+      print_scope_note: "Figures scoped to the permissions of whoever ran it",
+      donut_negative_dropped:
+        "%{smart_count} negative value was left out |||| %{smart_count} negative values were left out",
+      dataset: {
+        deals: "Deals",
+        leads: "Leads",
+        tasks: "Tasks",
+        contacts: "Contacts",
+        companies: "Companies",
+      },
+      field: {
+        companies: {
+          sector: "Sector",
+          country: "Country",
+          city: "City",
+          owner: "Owner",
+          created_month: "Created month",
+          created_at: "Created date",
+          company_count: "Number of companies",
+          avg_size: "Average headcount",
+        },
+        contacts: {
+          status: "Status",
+          owner: "Owner",
+          company: "Company",
+          sector: "Company sector",
+          country: "Company country",
+          title: "Job title",
+          first_seen_month: "First seen month",
+          first_seen: "First seen",
+          last_seen: "Last seen",
+          contact_count: "Number of contacts",
+          company_count: "Distinct companies",
+          newsletter_count: "Newsletter subscribers",
+        },
+        deals: {
+          stage: "Stage",
+          category: "Category",
+          owner: "Owner",
+          team: "Team",
+          company: "Company",
+          sector: "Company sector",
+          country: "Company country",
+          created_month: "Created month",
+          closing_month: "Expected closing month",
+          created_at: "Created date",
+          expected_closing_date: "Expected closing date",
+          deal_count: "Number of deals",
+          amount_sum: "Total value",
+          amount_avg: "Average value",
+          pipeline_amount: "Open pipeline",
+          won_amount: "Won value",
+          lost_amount: "Lost value",
+          won_count: "Deals won",
+          lost_count: "Deals lost",
+          win_rate: "Win rate",
+          cycle_days: "Avg days to expected close",
+        },
+        leads: {
+          source: "Source",
+          status: "Status",
+          owner: "Owner",
+          company_name: "Company",
+          created_month: "Created month",
+          created_at: "Created date",
+          converted_at: "Converted date",
+          lead_count: "Number of leads",
+          converted_count: "Converted",
+          conversion_rate: "Conversion rate",
+          conversion_days: "Avg days to convert",
+          won_deal_count: "Deals won",
+          won_amount: "Attributed won value",
+          pipeline_amount: "Attributed pipeline",
+          avg_score: "Average score",
+        },
+        tasks: {
+          owner: "Owner",
+          task_type: "Type",
+          priority: "Priority",
+          status: "Status",
+          source: "Origin",
+          created_month: "Created month",
+          completed_month: "Completed month",
+          created_at: "Created date",
+          completed_at: "Completed date",
+          due_date: "Due date",
+          task_count: "Number of tasks",
+          open_count: "Open",
+          overdue_count: "Overdue",
+          completed_count: "Completed",
+          on_time_count: "Completed on time",
+          on_time_rate: "On-time rate",
+          cycle_hours: "Avg hours to complete",
+        },
+      },
+      builtin_report: {
+        "1": {
+          name: "Pipeline by stage",
+          description: "Where the open pipeline is sitting right now.",
+        },
+        "10": {
+          name: "Lead status breakdown",
+          description: "Where prospects are stalling before they convert.",
+        },
+        "11": {
+          name: "Team productivity",
+          description:
+            "Work created against work closed, and how much of it landed on time.",
+        },
+        "12": {
+          name: "Overdue workload",
+          description:
+            "Who is carrying late work right now. Not period-scoped: being late has no month.",
+        },
+        "13": {
+          name: "Activity mix",
+          description:
+            "What kind of work actually got done, counted on completion.",
+        },
+        "14": {
+          name: "Task flow",
+          description:
+            "Created against completed, month by month. The gap is the backlog forming.",
+        },
+        "15": {
+          name: "Customer growth",
+          description: "New accounts per month.",
+        },
+        "16": {
+          name: "Portfolio by sector",
+          description:
+            "How the customer base is distributed across industries.",
+        },
+        "17": {
+          name: "Contact growth",
+          description:
+            "New contacts per month. Dated on first seen, which is a proxy for creation.",
+        },
+        "2": {
+          name: "Sales performance by owner",
+          description:
+            "Won, lost and open pipeline for each member of the team.",
+        },
+        "3": {
+          name: "Sales trend",
+          description: "Won against lost value, month by month.",
+        },
+        "4": {
+          name: "Win rate by stage reached",
+          description:
+            "Which stages convert, and which ones the business leaks out of.",
+        },
+        "5": {
+          name: "Pipeline by sector",
+          description: "Which industries the open pipeline is concentrated in.",
+        },
+        "6": {
+          name: "Deal value by stage and owner",
+          description:
+            "Two dimensions at once: who is carrying what, and how far along.",
+        },
+        "7": {
+          name: "Lead generation",
+          description:
+            "How many prospects arrive each month, and how many of them convert.",
+        },
+        "8": {
+          name: "Source quality",
+          description:
+            "Which channels produce leads that turn into money. Attributed revenue only.",
+        },
+        "9": {
+          name: "Leads by owner",
+          description:
+            "Prospect load and conversion for each member of the team.",
+        },
+      },
+      view_autosaved: "Your setup saves itself",
+      saving_view: "Saving…",
+      restore_original: "Restore original",
+      restored: "Report restored to its original setup",
+      export_selected:
+        "Export %{smart_count} to PDF |||| Export %{smart_count} to PDF",
+      print_title: "%{count} report |||| %{count} reports",
+      print_preparing:
+        "Preparing the reports — the print dialog will open on its own.",
+      print_ready: "Ready. If you closed the dialog, open it again here.",
+      print_again: "Open print",
+      print_skipped:
+        "This report could not be prepared and was left out of the PDF.",
+      print_nothing_selected:
+        "No reports selected. Go back to the library and tick the ones to include.",
+      group: {
+        mine: "My reports",
+        shared: "Shared with me",
+        builtin: "Library",
+      },
+      section: {
+        dataset: "Entity",
+        metrics: "Metrics",
+        dimensions: "Group by",
+        period: "Period",
+        filters: "Filters",
+        visualisation: "Visualisation",
+      },
+      hint: {
+        metrics: "What you want to measure. Up to 6.",
+        dimensions: "How to break it down. Up to 2.",
+        period: "Which date the report is scoped to.",
+      },
+      no_period: "No period (snapshot of now)",
+      add_filter: "Add filter",
+      remove_filter: "Remove filter",
+      value_placeholder: "Value",
+      value_list_placeholder: "Comma-separated values",
+      preset: {
+        this_month: "This month",
+        last_month: "Last month",
+        last_3_months: "Last 3 months",
+        last_6_months: "Last 6 months",
+        last_12_months: "Last 12 months",
+        this_quarter: "This quarter",
+        last_quarter: "Last quarter",
+        this_year: "This year",
+        last_year: "Last year",
+        custom: "Custom",
+      },
+      visualisation: {
+        kpi: "Key figures",
+        table: "Table",
+        bar: "Bars",
+        stacked: "Stacked bars",
+        ranking: "Ranking",
+        funnel: "Funnel",
+        donut: "Donut",
+      },
+      op: {
+        eq: "is",
+        neq: "is not",
+        contains: "contains",
+        not_contains: "does not contain",
+        in: "is one of",
+        not_in: "is none of",
+        gt: "greater than",
+        gte: "greater or equal to",
+        lt: "less than",
+        lte: "less or equal to",
+        before: "before",
+        after: "after",
+        between: "between",
+        is_null: "is empty",
+        is_not_null: "is not empty",
+      },
+      invalid: {
+        unknown_dataset: "This entity is no longer in the catalog.",
+        unknown_metric: "One of the chosen metrics no longer exists.",
+        unknown_dimension: "One of the chosen groupings no longer exists.",
+        unknown_filter_field:
+          "A filter points at a field that no longer exists.",
+        bad_operator:
+          "A filter uses an operator that does not apply to that field.",
+        bad_period_field: "The period points at a field that is not a date.",
+        bad_sort: "The sort points at a field that is not in the report.",
+        needs_dimension:
+          "This visualisation needs at least one grouping. Add one under Group by.",
+        needs_single_metric:
+          "This visualisation shows a single metric. Keep only one.",
+        needs_two_dimensions: "Stacked bars need exactly two groupings.",
+      },
     },
     teams_dashboard: {
       title: "Team performance",
@@ -870,15 +1739,43 @@ export const englishCrmMessages = {
     dashboard: {
       deals_chart: "Upcoming Deal Revenue",
       deals_pipeline: "Deals Pipeline",
+      greeting: {
+        morning: "Good morning, %{name}",
+        morning_anonymous: "Good morning",
+        afternoon: "Good afternoon, %{name}",
+        afternoon_anonymous: "Good afternoon",
+        evening: "Good evening, %{name}",
+        evening_anonymous: "Good evening",
+      },
+      kpi: {
+        priority_actions: "Priority actions",
+        urgent: "%{count} urgent",
+        won_count: "%{count} won",
+        sample: "N=%{count}",
+        unweighted_short: "%{amount} unweighted",
+      },
       latest_activity: "Latest Activity",
+      trend_basis:
+        "Last 6 months · created by open date, won and lost by expected close",
       latest_activity_error: "Error loading latest activity",
       latest_notes: "My Latest Notes",
       latest_notes_added_ago: "added %{timeAgo}",
+      period: {
+        label: "Period",
+        today: "Today",
+        this_week: "This week",
+        this_month: "This month",
+        this_quarter: "This quarter",
+        this_year: "This year",
+      },
       stepper: {
         install: "Install Atomic CRM",
         progress: "%{step}/3 done",
         whats_next: "What's next?",
       },
+      summary: "%{pipeline} across %{deals} open opportunities.",
+      summary_with_overdue:
+        "%{pipeline} across %{deals} open opportunities · %{overdue} tasks overdue.",
       upcoming_tasks: "Upcoming Tasks",
     },
     header: {
@@ -943,6 +1840,10 @@ export const englishCrmMessages = {
       tasks: {
         types: "Types",
       },
+      products: {
+        units: "Units",
+        categories: "Categories",
+      },
       preferences: "Preferences",
       title: "Settings",
       app_title: "App Title",
@@ -967,8 +1868,35 @@ export const englishCrmMessages = {
       system: "System",
     },
     language: "Language",
+    leads: {
+      stats: {
+        new: "New leads",
+        contacted: "Contacted leads",
+        qualified: "Qualified leads",
+        new_hint: "Not yet contacted",
+        contacted_hint: "Active cadence",
+        qualified_hint: "Sales ready",
+        share: "%{share} of total",
+        of_cohort: "of %{total} leads",
+        converted_of: "%{converted} of %{created}",
+        cycle: "Cycle %{count} d",
+        basis:
+          "Leads that arrived in the last 12 months; not affected by the list filters below",
+      },
+    },
     navigation: {
       label: "CRM navigation",
+      help: "Help center",
+      search: "Search",
+      toggle: "Toggle navigation",
+      groups: {
+        home: "Home",
+        sales: "Sales",
+        customers: "Customers",
+        activities: "Activities",
+        analytics: "Analytics",
+        settings: "Settings",
+      },
     },
     profile: {
       inbound: {

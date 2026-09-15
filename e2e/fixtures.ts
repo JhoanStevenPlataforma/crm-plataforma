@@ -48,6 +48,16 @@ async function resetDb() {
     throw new Error(`Failed to purge tasks: ${purgeError.message}`);
   }
 
+  // Quotes through their retention path too, for the same reason: issued
+  // versions and the quote audit trail refuse a plain service-role DELETE, and
+  // a quote blocks the companies and sales deleted below.
+  const { error: purgeQuotesError } = await adminSupabase.rpc("purge_quotes", {
+    p_purge_history: true,
+  });
+  if (purgeQuotesError) {
+    throw new Error(`Failed to purge quotes: ${purgeQuotesError.message}`);
+  }
+
   for (const table of TABLES) {
     // Supabase client delete need a where clause to get executed, so we use one that will match on all rows (id is not null)
     await adminSupabase.from(table).delete().not("id", "is", null);

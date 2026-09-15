@@ -9,11 +9,13 @@ import {
 import fakeRestDataProvider from "ra-data-fakerest";
 
 import type {
+  AnalyticsFn,
   Company,
   Contact,
   ContactNote,
   Deal,
   DealNote,
+  DealStageGate,
   Sale,
   SalesFormData,
   SignUpData,
@@ -27,15 +29,18 @@ import type {
 } from "../../types";
 import type { ConfigurationContextValue } from "../../root/ConfigurationContext";
 import { getActivityLog } from "../commons/activity";
+import { getAnalytics as getFakeAnalytics } from "./analytics";
 import { getCompanyAvatar } from "../commons/getCompanyAvatar";
 import { getContactAvatar } from "../commons/getContactAvatar";
 import { convertLead, type ConvertLeadOptions } from "../commons/convertLead";
+import { DealStageGateError } from "../commons/dealStageGate";
 import { mergeContacts } from "../commons/mergeContacts";
 import type { CrmDataProvider } from "../types";
 import {
   authProvider as defaultAuthProvider,
   USER_STORAGE_KEY,
 } from "./authProvider";
+import { computeDealStageGate } from "./dealStageGate";
 import generateData from "./dataGenerator";
 import { TASK_STATUSES } from "./dataGenerator/taskCatalogues";
 import type { Db } from "./dataGenerator/types";
@@ -49,6 +54,13 @@ import {
   getTaskAttachmentUrl,
   uploadTaskAttachment,
 } from "./taskAttachmentStorage";
+import {
+  decorateQuotes,
+  getPriceBook,
+  quoteCallbacks,
+  quoteLineCallbacks,
+} from "./quotes";
+import { createDemoQuoteMethods, decorateQuoteTokens } from "./quoteMethods";
 import { taskChecklistCallbacks } from "./taskChecklistCallbacks";
 import { taskCommentCallbacks } from "./taskCommentCallbacks";
 import {
@@ -320,7 +332,47 @@ export const createDataProvider = ({
         const start = (page - 1) * perPage;
         return { data: all.slice(start, start + perPage), total: all.length };
       }
+      // `quotes_summary` and `price_book` are views in the real backend
+      // (quotes §13.3); FakeRest has none, so both are derived here.
+      if (resource === "quotes") {
+        const result = await baseDataProvider.getList(resource, params);
+        return {
+          ...result,
+          data: await decorateQuotes(dataProvider, result.data),
+        };
+      }
+      // `quote_access_tokens_summary` is a view over a table no client may
+      // read at all (§13.3): the raw table carries `token_hash`. Demo mode has
+      // neither the hash nor the view, so the projection is derived here — the
+      // same shape, and still nothing that could be replayed as a link.
+      if (resource === "quote_access_tokens_summary") {
+        const { filter = {}, pagination, sort } = params;
+        const result = await baseDataProvider.getList("quote_access_tokens", {
+          filter,
+          sort,
+          pagination,
+        });
+        return {
+          ...result,
+          data: decorateQuoteTokens(result.data),
+        };
+      }
+      if (resource === "price_book") {
+        const { filter = {}, pagination } = params;
+        const all = await getPriceBook(baseDataProvider, filter);
+        const { page, perPage } = pagination;
+        const start = (page - 1) * perPage;
+        return { data: all.slice(start, start + perPage), total: all.length };
+      }
       return baseDataProvider.getList(resource, params);
+    },
+    async getOne(resource: string, params: any) {
+      if (resource === "quotes") {
+        const result = await baseDataProvider.getOne(resource, params);
+        const [decorated] = await decorateQuotes(dataProvider, [result.data]);
+        return { ...result, data: decorated };
+      }
+      return baseDataProvider.getOne(resource, params);
     },
     /**
      * Demo-mode `move_deal_stage()`.
@@ -337,12 +389,28 @@ export const createDataProvider = ({
     moveDealStage: async (
       dealId: Identifier,
       toStage: string,
-      options: { reason: string; index?: number; attachments?: File[] },
+      options: {
+        reason: string;
+        index?: number;
+        attachments?: File[];
+        overrideReason?: string;
+      },
     ): Promise<Deal> => {
       const { data: deal } = await dataProvider.getOne<Deal>("deals", {
         id: dealId,
       });
       const currentUser = await getIdentity();
+
+      // The completed-task rule, refused here exactly as the RPC refuses it.
+      // Demo mode has no roles table to consult, so the override is taken at
+      // face value — the real backend is where that decision is made.
+      const gate = await computeDealStageGate(dataProvider, dealId, toStage);
+      if (!gate.ok && !options.overrideReason) {
+        throw new DealStageGateError(
+          `Deal ${dealId} needs ${gate.required} completed task(s) to reach ${toStage}`,
+          gate,
+        );
+      }
 
       await dataProvider.create("deal_stage_changes", {
         data: {
@@ -357,6 +425,9 @@ export const createDataProvider = ({
             title: file.name,
             type: file.type,
           })),
+          // Recorded only when it was actually needed, as the RPC does: an
+          // override marker on a move that met the rule is a false accusation.
+          override_reason: gate.ok ? null : (options.overrideReason ?? null),
         },
       });
 
@@ -372,6 +443,28 @@ export const createDataProvider = ({
 
       return data;
     },
+    /**
+     * Demo-mode counterpart of the `deal_stage_gate()` RPC, so the dialog asks
+     * the same question against either backend.
+     */
+    getDealStageGate: async (
+      dealId: Identifier,
+      toStage: string,
+    ): Promise<DealStageGate> =>
+      computeDealStageGate(dataProvider, dealId, toStage),
+    /**
+     * The six quote RPCs (quotes §13.4), demo-side. Spread in from the mirror
+     * so this provider satisfies the same `QuoteMethods` contract the Supabase
+     * one does — a screen calls the same method against either backend.
+     *
+     * The sale doing the asking is resolved once, here: the mirror needs it for
+     * the discount ceiling and for the history row's author, and the identity
+     * is the only place demo mode knows it from.
+     */
+    ...createDemoQuoteMethods(
+      () => dataProvider,
+      async () => (await getIdentity())?.id ?? null,
+    ),
     unarchiveDeal: async (deal: Deal) => {
       // get all deals where stage is the same as the deal to unarchive
       const { data: deals } = await baseDataProvider.getList<Deal>("deals", {
@@ -459,6 +552,46 @@ export const createDataProvider = ({
         return false;
       }
       return true;
+    },
+    /**
+     * Demo-mode analytics.
+     *
+     * The real backend answers these with eight SQL functions; FakeRest has
+     * neither views nor functions, so `./analytics` recomputes the same
+     * aggregates over the in-browser dataset. Without it the four analytics
+     * tabs render empty, which reads as a broken feature rather than as an
+     * absent server.
+     */
+    getAnalytics: async <T>(
+      fn: AnalyticsFn,
+      params: Record<string, unknown>,
+    ): Promise<T[]> => getFakeAnalytics<T>(baseDataProvider, fn, params),
+    /**
+     * The reports module is not emulated in demo mode.
+     *
+     * Deliberate, and it is the one place this provider refuses rather than
+     * approximates. `/analytics` is emulated because its eight aggregates have
+     * fixed shapes; the report builder's engine is a query COMPILER driven by a
+     * database catalogue, and a second implementation of it in JavaScript would
+     * be a second set of definitions of "pipeline", "open" and "on time" —
+     * which is exactly the drift the single SQL catalogue exists to prevent.
+     *
+     * It throws instead of returning an empty catalogue so the screen says the
+     * feature needs a real backend, rather than rendering a builder with no
+     * fields in it and looking broken.
+     */
+    getReportCatalog: async (): Promise<never> => {
+      throw new Error("crm.reports.demo_unavailable");
+    },
+    runReport: async (): Promise<never> => {
+      throw new Error("crm.reports.demo_unavailable");
+    },
+    getReportPreference: async (): Promise<null> => null,
+    saveReportPreference: async (): Promise<never> => {
+      throw new Error("crm.reports.demo_unavailable");
+    },
+    clearReportPreference: async (): Promise<never> => {
+      throw new Error("crm.reports.demo_unavailable");
     },
     updatePassword: async (id: Identifier): Promise<true> => {
       const currentUser = await getIdentity();
@@ -576,6 +709,14 @@ export const createDataProvider = ({
      */
     uploadTaskAttachment,
     getTaskAttachmentUrl,
+    /**
+     * Demo mode has no bucket, so a stage-change file keeps the blob URL the
+     * browser minted for it and the renderer never asks to sign anything. This
+     * exists so the two providers expose the same surface: a caller that did
+     * ask would otherwise fail with `not a function` rather than a real error.
+     */
+    getDealAttachmentUrl: async (storagePath: string): Promise<string> =>
+      storagePath,
     mergeContacts: async (sourceId: Identifier, targetId: Identifier) => {
       return mergeContacts(sourceId, targetId, baseDataProvider);
     },
@@ -836,6 +977,10 @@ export const createDataProvider = ({
       taskReminderCallbacks(getIdentity),
       // Demo-mode stand-in for the `task_assignments` triggers (§7).
       taskAssignmentCallbacks(getIdentity),
+      // Demo-mode stand-ins for the quote triggers: the first version on
+      // insert, and the line snapshot, amounts and totals (quotes §2.4, D8).
+      quoteCallbacks(),
+      quoteLineCallbacks(),
       {
         // `teams_summary.nb_members` has no view here, so the counter is kept
         // on the team row — the same approach as `nb_tasks` / `nb_contacts`.

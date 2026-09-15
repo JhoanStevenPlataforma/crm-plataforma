@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { CompanyAvatar } from "../companies/CompanyAvatar";
 import { NoteCreate } from "../notes/NoteCreate";
 import { NotesIterator } from "../notes/NotesIterator";
+import { EntityQuotesPanel } from "../quotes/EntityQuotesPanel";
 import { EntityTasksPanel } from "../tasks/EntityTasksPanel";
 import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
@@ -177,6 +178,18 @@ const DealShowContent = () => {
               entityType="deal"
               entityId={record.id}
               entityLabel={record.name}
+            />
+          </div>
+
+          <div className="m-4">
+            <Separator className="mb-4" />
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              {translate("resources.quotes.name", { smart_count: 2 })}
+            </h3>
+            <EntityQuotesPanel
+              dealId={record.id}
+              companyId={record.company_id}
+              dealName={record.name}
             />
           </div>
 

@@ -206,15 +206,5 @@ export const dealFunnel = (
     }));
 };
 
-/**
- * The month a chart axis shows: `"2026-03-01"` -> `"Mar 2026"`.
- *
- * Built from the parts rather than from `new Date(month)`, which parses a bare
- * `YYYY-MM-DD` as UTC midnight and renders it as the previous month for anyone
- * west of Greenwich.
- */
-export const formatMonthLabel = (month: string, locale = "en-US") => {
-  const [year, monthNumber] = month.split("-");
-  const date = new Date(Number(year), Number(monthNumber) - 1, 1);
-  return date.toLocaleDateString(locale, { month: "short", year: "numeric" });
-};
+/** Moved to `misc/reporting.ts`; re-exported so this folder's imports stand. */
+export { formatMonthLabel } from "../misc/reporting";

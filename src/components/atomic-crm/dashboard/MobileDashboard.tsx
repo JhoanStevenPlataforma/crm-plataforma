@@ -14,18 +14,19 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <>
       <MobileHeader>
-        <div className="flex items-center gap-2 text-secondary-foreground no-underline py-3">
+        {/* The logo is a wordmark and carries the product name, so no title
+            text sits beside it. */}
+        <div className="flex items-center py-3">
           <img
-            className="[.light_&]:hidden h-6"
+            className="[.light_&]:hidden h-7 w-auto object-contain"
             src={darkModeLogo}
             alt={title}
           />
           <img
-            className="[.dark_&]:hidden h-6"
+            className="[.dark_&]:hidden h-7 w-auto object-contain"
             src={lightModeLogo}
             alt={title}
           />
-          <h1 className="text-xl font-semibold">{title}</h1>
         </div>
       </MobileHeader>
       <MobileContent>{children}</MobileContent>

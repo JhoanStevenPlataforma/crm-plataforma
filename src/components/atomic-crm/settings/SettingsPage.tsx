@@ -42,6 +42,7 @@ const SECTIONS = [
   { id: "deals", label: "resources.deals.name", fallback: "Deals" },
   { id: "notes", label: "resources.notes.name", fallback: "Notes" },
   { id: "tasks", label: "resources.tasks.name", fallback: "Tasks" },
+  { id: "products", label: "resources.products.name", fallback: "Products" },
 ];
 
 /** Ensure every item in a { value, label } array has a value (slug from label). */
@@ -128,6 +129,8 @@ const transformFormValues = (data: Record<string, any>) => ({
     dealStages: ensureValues(data.dealStages),
     dealPipelineStatuses: data.dealPipelineStatuses,
     noteStatuses: ensureValues(data.noteStatuses),
+    productUnits: ensureValues(data.productUnits),
+    productCategories: ensureValues(data.productCategories),
   } as ConfigurationContextValue,
 });
 
@@ -176,6 +179,8 @@ const SettingsForm = () => {
       dealStages: config.dealStages,
       dealPipelineStatuses: config.dealPipelineStatuses,
       noteStatuses: config.noteStatuses,
+      productUnits: config.productUnits,
+      productCategories: config.productCategories,
     }),
     [config],
   );
@@ -456,6 +461,41 @@ const SettingsFormFields = () => {
               {translate("crm.settings.tasks.types")}
             </h3>
             <ArrayInput source="taskTypes" label={false} helperText={false}>
+              <SimpleFormIterator disableReordering disableClear>
+                <TextInput source="label" label={false} />
+              </SimpleFormIterator>
+            </ArrayInput>
+          </CardContent>
+        </Card>
+
+        {/* Products: labels, not tables (quotes §2.1). A value removed here
+            stays on the products that use it; lists show it raw. */}
+        <Card id="products">
+          <CardContent className="space-y-4">
+            <h2 className="text-xl font-semibold text-muted-foreground">
+              {translate("resources.products.name", {
+                smart_count: 2,
+              })}
+            </h2>
+            <h3 className="text-lg font-medium text-muted-foreground">
+              {translate("crm.settings.products.units")}
+            </h3>
+            <ArrayInput source="productUnits" label={false} helperText={false}>
+              <SimpleFormIterator disableReordering disableClear>
+                <TextInput source="label" label={false} />
+              </SimpleFormIterator>
+            </ArrayInput>
+
+            <Separator />
+
+            <h3 className="text-lg font-medium text-muted-foreground">
+              {translate("crm.settings.products.categories")}
+            </h3>
+            <ArrayInput
+              source="productCategories"
+              label={false}
+              helperText={false}
+            >
               <SimpleFormIterator disableReordering disableClear>
                 <TextInput source="label" label={false} />
               </SimpleFormIterator>

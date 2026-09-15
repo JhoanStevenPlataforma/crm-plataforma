@@ -15,6 +15,10 @@ export interface ConfigurationContextValue {
   leadSources: LabeledValue[];
   leadStatuses: LabeledValue[];
   noteStatuses: NoteStatus[];
+  /** Families the product catalogue is browsed by (quotes §2.1). */
+  productCategories: LabeledValue[];
+  /** Units a product is sold in (quotes §2.1). */
+  productUnits: LabeledValue[];
   taskTypes: LabeledValue[];
   title: string;
   darkModeLogo: string;

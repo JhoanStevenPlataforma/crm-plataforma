@@ -172,3 +172,7 @@ verify_jwt = false
 verify_jwt = false
 [functions.mcp]
 verify_jwt = false
+# The customer portal: a customer holds a quotation link, not a CRM session.
+# The token in the request body is the credential (docs/proposals/quotes-cpq-module.md §6).
+[functions.quote-portal]
+verify_jwt = false

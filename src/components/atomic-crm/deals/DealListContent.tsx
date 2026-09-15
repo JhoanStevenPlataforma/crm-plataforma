@@ -1,11 +1,18 @@
 import { DragDropContext, type OnDragEndResponder } from "@hello-pangea/dnd";
+import { useQuery } from "@tanstack/react-query";
 import isEqual from "lodash/isEqual";
-import { useDataProvider, useListContext, useNotify } from "ra-core";
+import {
+  useDataProvider,
+  useGetIdentity,
+  useListContext,
+  useNotify,
+} from "ra-core";
 import { useEffect, useState } from "react";
 
 import { useConfigurationContext } from "../root/ConfigurationContext";
+import { isDealStageGateError } from "../providers/commons/dealStageGate";
 import type { CrmDataProvider } from "../providers/types";
-import type { Deal } from "../types";
+import type { CrmRole, Deal } from "../types";
 import { DealColumn } from "./DealColumn";
 import { planDealDrop, type DropTarget } from "./dealDrop";
 import { DealStageChangeDialog } from "./DealStageChangeDialog";
@@ -36,6 +43,26 @@ export const DealListContent = () => {
   );
   const [pendingMove, setPendingMove] = useState<PendingStageMove | null>(null);
   const [isMoving, setIsMoving] = useState(false);
+  const { identity } = useGetIdentity();
+
+  // Read the rule for THIS move, from the same function that will decide it.
+  // Asked once the card is dropped rather than for every card on the board: the
+  // answer depends on the target column, so a board-wide prefetch would be one
+  // request per card per column and still be stale by the time it is used.
+  const { data: gate, isPending: isGatePending } = useQuery({
+    queryKey: [
+      "deals",
+      "stageGate",
+      pendingMove?.deal.id,
+      pendingMove?.destination.stage,
+    ],
+    queryFn: () =>
+      dataProvider.getDealStageGate(
+        pendingMove!.deal.id,
+        pendingMove!.destination.stage,
+      ),
+    enabled: pendingMove != null,
+  });
 
   useEffect(() => {
     if (unorderedDeals) {
@@ -83,7 +110,11 @@ export const DealListContent = () => {
     setDealsByStage(getDealsByStage(unorderedDeals ?? [], dealStages));
   };
 
-  const handleConfirmMove = async (reason: string, files: File[]) => {
+  const handleConfirmMove = async (
+    reason: string,
+    files: File[],
+    overrideReason?: string,
+  ) => {
     if (!pendingMove) return;
 
     setIsMoving(true);
@@ -92,13 +123,22 @@ export const DealListContent = () => {
         pendingMove.deal,
         pendingMove.destination,
         dataProvider,
-        { reason, attachments: files },
+        { reason, attachments: files, overrideReason },
       );
       setPendingMove(null);
-    } catch {
+    } catch (error: unknown) {
       // The move is refused (someone else's deal, a lost connection). The
       // refetch below puts the card back where the database says it is.
-      notify("resources.deals.stage_change.error", { type: "error" });
+      //
+      // The completed-task rule gets its own message: it is the only refusal
+      // the user can act on, and "could not be moved" would send them looking
+      // for a bug instead of for the task they have not finished.
+      notify(
+        isDealStageGateError(error)
+          ? "resources.deals.stage_change.requirement_error"
+          : "resources.deals.stage_change.error",
+        { type: "error" },
+      );
       setPendingMove(null);
     } finally {
       setIsMoving(false);
@@ -127,6 +167,9 @@ export const DealListContent = () => {
           fromStage={pendingMove.deal.stage}
           toStage={pendingMove.destination.stage}
           isPending={isMoving}
+          gate={gate}
+          isGatePending={isGatePending}
+          canOverride={(identity?.role as CrmRole | undefined) === "admin"}
           onConfirm={handleConfirmMove}
           onCancel={handleCancelMove}
         />
@@ -172,7 +215,11 @@ const updateDealStage = async (
   source: Deal,
   destination: DropTarget,
   dataProvider: CrmDataProvider,
-  stageChange?: { reason: string; attachments: File[] },
+  stageChange?: {
+    reason: string;
+    attachments: File[];
+    overrideReason?: string;
+  },
 ) => {
   if (source.stage === destination.stage) {
     // moving deal inside the same column
@@ -288,6 +335,7 @@ const updateDealStage = async (
         reason: stageChange.reason,
         index: destinationIndex,
         attachments: stageChange.attachments,
+        overrideReason: stageChange.overrideReason,
       }),
     ]);
   }

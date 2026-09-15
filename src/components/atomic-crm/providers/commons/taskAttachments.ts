@@ -1,5 +1,7 @@
 import type { Identifier } from "ra-core";
 
+import { buildScopedAttachmentPath } from "./attachmentPaths";
+
 import type { TaskAttachmentUpload } from "../../types";
 
 /**
@@ -27,22 +29,14 @@ export const TASK_ATTACHMENT_URL_TTL = 60;
 /**
  * `<task_id>/<random>.<ext>`.
  *
- * The task id is the first folder because the storage policy reads it back out
- * of the path to answer "may this user download this object?". The stored name
- * is random rather than the user's: two people uploading `contrato.pdf` to the
- * same task must not collide, and the real name is kept on the row.
+ * The layout itself is shared with deal attachments (`buildScopedAttachmentPath`):
+ * both buckets' policies parse the first folder back out to decide who may
+ * download an object, so the two must not drift apart.
  */
 export const buildTaskAttachmentPath = (
   taskId: Identifier,
   fileName: string,
-): string => {
-  const parts = fileName.split(".");
-  const extension = parts.length > 1 ? `.${parts.pop()}` : "";
-  const random = globalThis.crypto?.randomUUID
-    ? globalThis.crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `${taskId}/${random}${extension}`;
-};
+): string => buildScopedAttachmentPath(taskId, fileName);
 
 /**
  * SHA-256 of the bytes, as lowercase hex.

@@ -15,29 +15,51 @@ export const NoteAttachments = ({ note }: { note: ContactNote | DealNote }) => (
 );
 
 /**
+ * An attachment that has a storage `path` but no `src` lives in a PRIVATE
+ * bucket: there is no permanent URL to render, because one rendered into the
+ * page would outlive the reader's access to the record it belongs to.
+ *
+ * Notes keep their public `src` and are unaffected. Demo mode hands back a blob
+ * URL, which is also a `src`. So this is only ever true for deal stage-change
+ * files written after they moved to `deal-attachments`.
+ */
+const needsSigning = (attachment: AttachmentNote): boolean =>
+  !attachment.src && Boolean(attachment.path);
+
+/**
  * Renders a list of stored attachments: images as previews, everything else as
- * a link.
+ * a link — and anything in a private bucket as a button that mints its URL on
+ * click.
  *
  * Split out of `NoteAttachments` because a note is no longer the only thing
  * that carries files — a deal stage change does too, and its timeline entry
- * should show them exactly the way a note does.
+ * should show them the way a note does.
  *
  * @param props.attachments - The persisted attachments, if any.
+ * @param props.onOpen - Resolves and opens a private attachment. Without it,
+ *   private attachments render as plain names rather than dead links.
  * @returns `null` when there is nothing to show, otherwise previews and links.
  */
 export const AttachmentList = ({
   attachments,
+  onOpen,
 }: {
   attachments?: AttachmentNote[];
+  onOpen?: (attachment: AttachmentNote) => void;
 }) => {
   if (!attachments || attachments.length === 0) {
     return null;
   }
 
-  const imageAttachments = attachments.filter((attachment: AttachmentNote) =>
-    isImageMimeType(attachment.type),
+  const privateAttachments = attachments.filter(needsSigning);
+  const publicAttachments = attachments.filter(
+    (attachment) => !needsSigning(attachment),
   );
-  const otherAttachments = attachments.filter(
+
+  const imageAttachments = publicAttachments.filter(
+    (attachment: AttachmentNote) => isImageMimeType(attachment.type),
+  );
+  const otherAttachments = publicAttachments.filter(
     (attachment: AttachmentNote) => !isImageMimeType(attachment.type),
   );
 
@@ -80,6 +102,25 @@ export const AttachmentList = ({
             </a>
           </div>
         ))}
+      {privateAttachments.map((attachment: AttachmentNote, index: number) => (
+        <div key={`private-${index}`} className="flex items-center gap-2">
+          <Paperclip className="w-4 h-4" />
+          {onOpen ? (
+            <button
+              type="button"
+              className="underline hover:no-underline text-left"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen(attachment);
+              }}
+            >
+              {attachment.title}
+            </button>
+          ) : (
+            <span className="text-muted-foreground">{attachment.title}</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 };

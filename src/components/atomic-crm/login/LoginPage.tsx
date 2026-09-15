@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Mail } from "lucide-react";
 import { Form, required, useLogin, useNotify, useTranslate } from "ra-core";
-import type { SubmitHandler, FieldValues } from "react-hook-form";
+import { useEffect, useRef, useState } from "react";
+import type { FieldValues, SubmitHandler } from "react-hook-form";
 import { Link, useLocation, useNavigate } from "react-router";
-import { Button } from "@/components/ui/button";
+
 import { TextInput } from "@/components/admin/text-input";
-import { Notification } from "@/components/admin/notification";
-import { useConfigurationContext } from "@/components/atomic-crm/root/ConfigurationContext.tsx";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+
+import { AuthBrand, AuthLayout } from "./AuthLayout";
+import { PasswordInput } from "./PasswordInput";
+import { PoweredBy } from "./PoweredBy";
 import { SSOAuthButton } from "./SSOAuthButton";
 import {
   disableEmailPasswordAuthentication,
@@ -13,16 +18,21 @@ import {
 } from "./authConfig";
 
 /**
- * Login page displayed when authentication is enabled and the user is not authenticated.
+ * The sign-in screen.
  *
- * Automatically shown when an unauthenticated user tries to access a protected route.
- * Handles login via authProvider.login() and displays error notifications on failure.
+ * One card, and the order in it is the order of preference: single sign-on
+ * first when the installation has it configured, then the divider that says the
+ * email form is the alternative, then the form. An installation with
+ * `VITE_DISABLE_EMAIL_PASSWORD_AUTHENTICATION` set renders only the first
+ * block, and the divider disappears with it — a rule that separates one thing
+ * from nothing is furniture.
  *
- * @see {@link https://marmelab.com/shadcn-admin-kit/docs/loginpage LoginPage documentation}
- * @see {@link https://marmelab.com/shadcn-admin-kit/docs/security Security documentation}
+ * Everything here is a control that does something. The screen does not claim
+ * an environment, a session id, a device-trust option or a multi-factor policy:
+ * this application has none of those, and a security assurance that is not true
+ * is worse than an unadorned form.
  */
 export const LoginPage = (props: { redirectTo?: string }) => {
-  const { darkModeLogo, title } = useConfigurationContext();
   const { redirectTo } = props;
   const [loading, setLoading] = useState(false);
   const hasDisplayedRecoveryNotification = useRef(false);
@@ -88,69 +98,102 @@ export const LoginPage = (props: { redirectTo?: string }) => {
       });
   };
 
+  const hasPasswordForm = !disableEmailPasswordAuthentication;
+  const hasSso = !!googleWorkplaceDomain;
+
   return (
-    <div className="min-h-screen flex">
-      <div className="relative grid w-full lg:grid-cols-2">
-        <div className="relative hidden h-full flex-col bg-muted p-10 text-white dark:border-r lg:flex">
-          <div className="absolute inset-0 bg-zinc-900" />
-          <div className="relative z-20 flex items-center text-lg font-medium">
-            <img className="h-6 mr-2" src={darkModeLogo} alt={title} />
-            {title}
+    <AuthLayout footer={<PoweredBy />}>
+      <div className="flex flex-col gap-7">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <AuthBrand />
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {translate("ra.auth.sign_in")}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {translate("crm.auth.subtitle")}
+            </p>
           </div>
         </div>
-        <div className="flex flex-col justify-center w-full p-4 lg:p-8">
-          <div className="w-full space-y-6 lg:mx-auto lg:w-[350px]">
-            <div className="text-center">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {translate("ra.auth.sign_in")}
-              </h1>
+
+        {/* Checked directly rather than through `hasSso`, which is a boolean
+            and does not narrow the domain's type for the prop below. */}
+        {googleWorkplaceDomain ? (
+          <SSOAuthButton
+            variant="outline"
+            className="h-11 w-full"
+            domain={googleWorkplaceDomain}
+          >
+            {translate("crm.auth.sign_in_google_workspace", {
+              _: "Sign in with Google Workplace",
+            })}
+          </SSOAuthButton>
+        ) : null}
+
+        {/* Only when there are two ways in. A divider above a single option
+            separates that option from nothing. */}
+        {hasSso && hasPasswordForm ? (
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              {translate("crm.auth.or_email")}
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        ) : null}
+
+        {hasPasswordForm ? (
+          <Form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+            <div className="relative">
+              <Mail
+                className="pointer-events-none absolute left-3 top-9.5 size-4 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <TextInput
+                label="ra.auth.email"
+                source="email"
+                type="email"
+                autoComplete="email"
+                placeholder={translate("crm.auth.email_placeholder")}
+                validate={required()}
+                inputClassName="pl-9"
+                helperText={false}
+              />
             </div>
-            {disableEmailPasswordAuthentication ? null : (
-              <Form className="space-y-8" onSubmit={handleSubmit}>
-                <TextInput
-                  label="ra.auth.email"
-                  source="email"
-                  type="email"
-                  validate={required()}
-                />
-                <TextInput
-                  label="ra.auth.password"
-                  source="password"
-                  type="password"
-                  validate={required()}
-                />
-                <div className="flex flex-col gap-4">
-                  <Button
-                    type="submit"
-                    className="cursor-pointer"
-                    disabled={loading}
-                  >
-                    {translate("ra.auth.sign_in")}
-                  </Button>
-                </div>
-              </Form>
-            )}
-            {googleWorkplaceDomain ? (
-              <SSOAuthButton className="w-full" domain={googleWorkplaceDomain}>
-                {translate("crm.auth.sign_in_google_workspace", {
-                  _: "Sign in with Google Workplace",
-                })}
-              </SSOAuthButton>
-            ) : null}
-            {disableEmailPasswordAuthentication ? null : (
-              <Link
-                to={"/forgot-password"}
-                className="block text-sm text-center hover:underline"
-              >
-                {translate("ra-supabase.auth.forgot_password", {
-                  _: "Forgot password?",
-                })}
-              </Link>
-            )}
-          </div>
-        </div>
+
+            <PasswordInput
+              label="ra.auth.password"
+              source="password"
+              autoComplete="current-password"
+              validate={required()}
+              action={
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-brand hover:underline"
+                >
+                  {translate("ra-supabase.auth.forgot_password", {
+                    _: "Forgot password?",
+                  })}
+                </Link>
+              }
+            />
+
+            <Button
+              type="submit"
+              size="lg"
+              className="h-11 w-full"
+              disabled={loading}
+            >
+              {translate("ra.auth.sign_in")}
+              {loading ? (
+                <Spinner className="size-4" />
+              ) : (
+                <ArrowRight className="size-4" />
+              )}
+            </Button>
+          </Form>
+        ) : null}
       </div>
-      <Notification />
-    </div>
+    </AuthLayout>
   );
 };

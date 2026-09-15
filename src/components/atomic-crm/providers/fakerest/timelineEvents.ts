@@ -126,6 +126,7 @@ export const getTimelineEvents = async (
       reason: change.reason ?? null,
       deal_id: change.deal_id,
       attachments: change.attachments ?? null,
+      override_reason: change.override_reason ?? null,
     },
   }));
 

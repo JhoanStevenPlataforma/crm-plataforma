@@ -7,10 +7,15 @@ import {
   type ResourceCallbacks,
 } from "ra-core";
 import type {
+  AnalyticsFn,
   ContactNote,
   Deal,
   DealNote,
+  DealStageGate,
   RAFile,
+  ReportCatalog,
+  ReportResult,
+  ReportSpec,
   Sale,
   SalesFormData,
   SignUpData,
@@ -22,12 +27,24 @@ import type {
 import type { ConfigurationContextValue } from "../../root/ConfigurationContext";
 import { ATTACHMENTS_BUCKET } from "../commons/attachments";
 import {
+  DEAL_ATTACHMENTS_BUCKET,
+  DEAL_ATTACHMENT_URL_TTL,
+  buildDealAttachmentPath,
+} from "../commons/dealAttachments";
+import {
+  DealStageGateError,
+  isGateRefusal,
+  parseGateFromHint,
+} from "../commons/dealStageGate";
+import {
   buildTaskAttachmentPath,
   describeUpload,
   TASK_ATTACHMENT_URL_TTL,
   TASK_ATTACHMENTS_BUCKET,
 } from "../commons/taskAttachments";
 import { getIsInitialized } from "./authProvider";
+import { createQuoteMethods } from "./quoteMethods";
+import { stripQuoteVirtuals, updateDraftVersionFields } from "./quoteWrites";
 import { getSupabaseClient } from "./supabase";
 
 const getBaseDataProvider = () =>
@@ -173,6 +190,12 @@ const getDataProviderWithCustomMethods = () => {
       if (resource === "team_members") {
         return baseDataProvider.getList("team_members_summary", params);
       }
+      // Quotations read the projection so a row can show the company, the
+      // owner, the status badge and the current version's total without four
+      // references per row (quotes §13.3).
+      if (resource === "quotes") {
+        return baseDataProvider.getList("quotes_summary", params);
+      }
       if (resource === "activity_log") {
         const { data, total } = await baseDataProvider.getList(
           "activity_log",
@@ -245,6 +268,11 @@ const getDataProviderWithCustomMethods = () => {
       if (resource === "team_members") {
         return baseDataProvider.getOne("team_members_summary", params);
       }
+      // The editor needs the status flags and the current version's id and
+      // totals to decide what it may offer; the bare header carries none of it.
+      if (resource === "quotes") {
+        return baseDataProvider.getOne("quotes_summary", params);
+      }
 
       return baseDataProvider.getOne(resource, params);
     },
@@ -262,9 +290,25 @@ const getDataProviderWithCustomMethods = () => {
         await upsertTeamBudget(baseDataProvider, created.data.id, params.data);
         return created;
       }
+      // `valid_until` and `terms` are kept HERE and only here: on insert they
+      // seed version 1 (quotes §13.2). Afterwards the header is a mirror the
+      // server keeps, and `update` below routes them to the draft version.
+      if (resource === "quotes") {
+        return baseDataProvider.create("quotes", {
+          ...params,
+          data: stripQuoteVirtuals(params.data, { keepVersionFields: true }),
+        });
+      }
       return baseDataProvider.create(resource, params);
     },
     async update(resource: string, params: any) {
+      // `search_tsv` is a generated column, and PostgreSQL refuses any value
+      // for one -- including the unchanged value an edit form posts back.
+      if (resource === "products") {
+        const data = { ...(params.data ?? {}) };
+        delete data.search_tsv;
+        return baseDataProvider.update("products", { ...params, data });
+      }
       if (resource === "teams") {
         const updated = await baseDataProvider.update("teams", {
           ...params,
@@ -272,6 +316,21 @@ const getDataProviderWithCustomMethods = () => {
         });
         await upsertTeamBudget(baseDataProvider, params.id, params.data);
         return updated;
+      }
+      // The version is written FIRST: it is the source of both columns, and the
+      // header mirror follows it by trigger. Writing the header first would be
+      // refused outright (`quote_header_derived`).
+      if (resource === "quotes") {
+        await updateDraftVersionFields(
+          baseDataProvider,
+          params.id,
+          params.data,
+          params.previousData,
+        );
+        return baseDataProvider.update("quotes", {
+          ...params,
+          data: stripQuoteVirtuals(params.data),
+        });
       }
       return baseDataProvider.update(resource, params);
     },
@@ -411,33 +470,40 @@ const getDataProviderWithCustomMethods = () => {
     async moveDealStage(
       dealId: Identifier,
       toStage: string,
-      options: { reason: string; index?: number; attachments?: File[] },
+      options: {
+        reason: string;
+        index?: number;
+        attachments?: File[];
+        /**
+         * Admin-only, and only when the completed-task rule refuses the move.
+         * Sent as typed: the server decides whether the caller may use it, so a
+         * rep filling this in learns nothing.
+         */
+        overrideReason?: string;
+      },
     ): Promise<Deal> {
-      // An empty `src` is what tells `uploadToBucket` to send the raw file
-      // rather than fetch a URL first — there is no object URL to fetch here,
-      // the bytes are already in hand.
-      const uploaded = options.attachments?.length
-        ? await Promise.all(
-            options.attachments.map((file) =>
-              uploadToBucket({
-                src: "",
-                title: file.name,
-                type: file.type,
-                rawFile: file,
-              }),
-            ),
-          )
-        : [];
+      // The PRIVATE bucket, not the `attachments` one the notes use: that one
+      // is public, so a contract justifying a stage move would be readable by
+      // anybody holding the URL. `src` is deliberately left empty — there is
+      // no permanent link to store, and the renderer signs `path` on click.
+      const attachments = await Promise.all(
+        (options.attachments ?? []).map(async (file) => {
+          const path = buildDealAttachmentPath(dealId, file.name);
 
-      // Only the persisted shape reaches the row. `uploadToBucket` hands back
-      // the input object, `rawFile` File handle included, and that serializes
-      // into the audit trail as an empty object nobody can interpret later.
-      const attachments = uploaded.map(({ src, title, type, path }) => ({
-        src,
-        title,
-        type,
-        path,
-      }));
+          const { error: uploadError } = await getSupabaseClient()
+            .storage.from(DEAL_ATTACHMENTS_BUCKET)
+            .upload(path, file, { contentType: file.type || undefined });
+
+          if (uploadError) {
+            console.error("moveDealStage.upload.error", uploadError);
+            throw new Error(
+              uploadError.message || "Failed to upload the attachment",
+            );
+          }
+
+          return { src: "", title: file.name, type: file.type, path };
+        }),
+      );
 
       const { data, error } = await getSupabaseClient().rpc("move_deal_stage", {
         p_deal_id: dealId,
@@ -445,14 +511,66 @@ const getDataProviderWithCustomMethods = () => {
         p_reason: options.reason,
         p_index: options.index ?? null,
         p_attachments: attachments,
+        p_override_reason: options.overrideReason ?? null,
       });
 
       if (error) {
         console.error("move_deal_stage.error", error);
+        // The completed-task rule gets its own error type: it is the one
+        // refusal the user can do something about, and the kanban has a
+        // different message for it.
+        if (isGateRefusal(error)) {
+          throw new DealStageGateError(
+            error.message || "The deal has no completed work behind this move",
+            parseGateFromHint(error.hint),
+          );
+        }
         throw new Error(error.message || "Failed to move the deal");
       }
 
       return data as Deal;
+    },
+    /**
+     * What the stage-change dialog shows before anything is written: how much
+     * completed work this deal has behind the move it is about to make.
+     *
+     * The same function the RPC calls to decide, so the dialog cannot enable a
+     * button for a move the server is going to refuse.
+     */
+    async getDealStageGate(
+      dealId: Identifier,
+      toStage: string,
+    ): Promise<DealStageGate> {
+      const { data, error } = await getSupabaseClient().rpc("deal_stage_gate", {
+        p_deal_id: dealId,
+        p_to_stage: toStage,
+      });
+
+      if (error) {
+        console.error("deal_stage_gate.error", error);
+        throw new Error(error.message || "Failed to read the stage rule");
+      }
+
+      return data as DealStageGate;
+    },
+    /**
+     * A short-lived signed URL for one stage-change file.
+     *
+     * Mirrors `getTaskAttachmentUrl`. Rows written before the bucket was made
+     * private carry a usable public `src` and never reach here — the caller
+     * only asks when there is a `path` and no `src`.
+     */
+    async getDealAttachmentUrl(storagePath: string): Promise<string> {
+      const { data, error } = await getSupabaseClient()
+        .storage.from(DEAL_ATTACHMENTS_BUCKET)
+        .createSignedUrl(storagePath, DEAL_ATTACHMENT_URL_TTL);
+
+      if (error || !data?.signedUrl) {
+        console.error("getDealAttachmentUrl.error", error);
+        throw new Error(error?.message || "Failed to open the attachment");
+      }
+
+      return data.signedUrl;
     },
     /**
      * The single write path for a task's status (§4.5).
@@ -561,6 +679,160 @@ const getDataProviderWithCustomMethods = () => {
     async isInitialized() {
       return getIsInitialized();
     },
+    /**
+     * The analytics module's only read path.
+     *
+     * One method rather than eight, with the allowlist enforced by the type
+     * system: `AnalyticsFn` is a union, so an unknown function name does not
+     * compile and no caller can turn this into a general RPC proxy.
+     *
+     * The aggregation happens in Postgres because PostgREST caps a response at
+     * `max_rows = 1000` — a chart that fetched a list and summed it in the
+     * browser would not error above that volume, it would under-report.
+     *
+     * Every one of these functions is SECURITY INVOKER, so row level security
+     * scopes the numbers: a rep aggregates only the rows their own policies
+     * expose. `p_sales_id` is a filter, never an authorisation parameter.
+     */
+    async getAnalytics<T>(
+      fn: AnalyticsFn,
+      params: Record<string, unknown>,
+    ): Promise<T[]> {
+      const { data, error } = await getSupabaseClient().rpc(fn, params);
+
+      if (error) {
+        console.error(`${fn}.error`, error);
+        throw new Error(error.message || "Failed to load the analytics");
+      }
+
+      return (data ?? []) as T[];
+    },
+    /**
+     * What the report builder is allowed to ask for.
+     *
+     * The catalogue is the executor's allowlist as well as the builder's
+     * pickers, so fetching it here rather than hardcoding a field list in the
+     * frontend is what makes a picker that offers a field the server would
+     * refuse impossible to write.
+     */
+    async getReportCatalog(): Promise<ReportCatalog> {
+      const { data, error } = await getSupabaseClient().rpc("report_catalog");
+
+      if (error) {
+        console.error("report_catalog.error", error);
+        throw new Error(error.message || "Failed to load the report catalog");
+      }
+
+      return (data ?? []) as ReportCatalog;
+    },
+    /**
+     * Runs one report.
+     *
+     * `run_report` is SECURITY INVOKER, so row level security scopes the rows
+     * it aggregates: a rep opening a report shared by their manager sees their
+     * own figures under the same title. Nothing about the spec widens that —
+     * an owner filter is a filter, never an authorisation parameter.
+     *
+     * The aggregation happens in Postgres for the same reason the analytics
+     * functions do it there: PostgREST caps a response at `max_rows`, so a
+     * report that fetched rows and grouped them in the browser would not error
+     * above that volume, it would under-report.
+     */
+    async runReport(params: Record<string, unknown>): Promise<ReportResult> {
+      const { data, error } = await getSupabaseClient().rpc(
+        "run_report",
+        params,
+      );
+
+      if (error) {
+        console.error("run_report.error", error);
+        throw new Error(error.message || "Failed to run the report");
+      }
+
+      return (data ?? {
+        rows: [],
+        row_count: 0,
+        truncated: false,
+      }) as ReportResult;
+    },
+    /**
+     * How this user last left a report they cannot edit.
+     *
+     * Read through a filtered list rather than `getOne`, because the row is
+     * keyed on (sales_id, report_id) and has no surrogate id — it is a
+     * key-value store, not a resource, and giving it a fake identity only to
+     * satisfy a CRUD helper would invite it to be listed and edited as one.
+     *
+     * `sales_id` is never sent: row level security scopes the read to the
+     * caller, so asking for "the preference for report 3" can only ever return
+     * the caller's own.
+     */
+    async getReportPreference(reportId: number): Promise<ReportSpec | null> {
+      const { data, error } = await getSupabaseClient()
+        .from("report_preferences")
+        .select("spec")
+        .eq("report_id", reportId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("report_preferences.get.error", error);
+        throw new Error(
+          error.message || "Failed to load the report preference",
+        );
+      }
+
+      return (data?.spec as ReportSpec | undefined) ?? null;
+    },
+    /**
+     * Remembers this user's view of a report.
+     *
+     * An upsert on the composite key, so the first adjustment inserts and every
+     * one after it overwrites — there is exactly one saved view per person per
+     * report, which is what "the last configuration" means.
+     *
+     * `sales_id` comes from the caller because the table has no default for it
+     * (see the column comment in 01_tables.sql); the insert policy still
+     * requires it to be the caller's own, so passing somebody else's is refused
+     * rather than accepted.
+     */
+    async saveReportPreference(
+      reportId: number,
+      salesId: number,
+      spec: ReportSpec,
+    ): Promise<void> {
+      const { error } = await getSupabaseClient()
+        .from("report_preferences")
+        .upsert(
+          { report_id: reportId, sales_id: salesId, spec },
+          { onConflict: "sales_id,report_id" },
+        );
+
+      if (error) {
+        console.error("report_preferences.save.error", error);
+        throw new Error(
+          error.message || "Failed to save the report preference",
+        );
+      }
+    },
+    /**
+     * Forgets it, which is how "restore the original" works.
+     *
+     * Deleting the row rather than rewriting it with the built-in's spec: a
+     * copy of the original would go stale the moment a migration amended the
+     * built-in, and the user would be left looking at last year's version of a
+     * report they thought they had reset.
+     */
+    async clearReportPreference(reportId: number): Promise<void> {
+      const { error } = await getSupabaseClient()
+        .from("report_preferences")
+        .delete()
+        .eq("report_id", reportId);
+
+      if (error) {
+        console.error("report_preferences.clear.error", error);
+        throw new Error(error.message || "Failed to reset the report");
+      }
+    },
     async mergeContacts(sourceId: Identifier, targetId: Identifier) {
       const { data, error } = await getSupabaseClient().functions.invoke(
         "merge_contacts",
@@ -608,6 +880,12 @@ const getDataProviderWithCustomMethods = () => {
 
       return data as Identifier;
     },
+    /**
+     * The six quote RPCs (quotes §13.4), spread in rather than restated: the
+     * demo mirror implements the same `QuoteMethods` contract, and a method
+     * listed in two places is a method that drifts in one of them.
+     */
+    ...createQuoteMethods(getSupabaseClient),
     async getConfiguration(): Promise<ConfigurationContextValue> {
       const { data } = await baseDataProvider.getOne("configuration", {
         id: 1,
@@ -746,6 +1024,26 @@ const lifeCycleCallbacks: ResourceCallbacks[] = [
     resource: "teams_summary",
     beforeGetList: async (params) => {
       return applyFullTextSearch(["name", "description"])(params);
+    },
+  },
+  // The quotes catalogue. `sku` and `code` are citext, which `ilike` matches
+  // like text.
+  {
+    resource: "products",
+    beforeGetList: async (params) => {
+      return applyFullTextSearch(["sku", "name", "description"], {})(params);
+    },
+  },
+  {
+    resource: "price_lists",
+    beforeGetList: async (params) => {
+      return applyFullTextSearch(["code", "name"], {})(params);
+    },
+  },
+  {
+    resource: "quotes_summary",
+    beforeGetList: async (params) => {
+      return applyFullTextSearch(["quote_number", "title"], {})(params);
     },
   },
   {

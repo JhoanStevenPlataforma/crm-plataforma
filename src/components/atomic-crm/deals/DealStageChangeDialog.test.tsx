@@ -29,6 +29,17 @@ const renderDialog = async (
   return { screen, onConfirm, onCancel };
 };
 
+/** What `deal_stage_gate()` answers for a deal with no completed work on it. */
+const blockedGate = {
+  deal_id: 1,
+  to_stage: "proposal-sent",
+  required: 1,
+  completed: 0,
+  ok: false,
+  since: "2026-08-01T00:00:00Z",
+  qualifying_task_ids: [],
+};
+
 describe("DealStageChangeDialog", () => {
   it("names both ends of the move, so the user knows what they are explaining", async () => {
     const { screen } = await renderDialog();
@@ -111,6 +122,70 @@ describe("DealStageChangeDialog", () => {
     await screen.getByRole("button", { name: "Cancel" }).click();
 
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("refuses the move when the deal has no completed work behind it", async () => {
+    const { screen } = await renderDialog({ gate: blockedGate });
+
+    await expect
+      .element(
+        screen.getByText(
+          "0 of 1 tasks completed since the deal entered Opportunity.",
+        ),
+      )
+      .toBeVisible();
+
+    // A written reason is no longer enough on its own.
+    await screen.getByRole("textbox").fill("El cliente dice que sí");
+    await expect
+      .element(screen.getByRole("button", { name: "Move deal" }))
+      .toBeDisabled();
+  });
+
+  it("confirms nothing while the rule is still being read", async () => {
+    const { screen } = await renderDialog({ isGatePending: true });
+
+    await screen.getByRole("textbox").fill("Propuesta enviada");
+
+    await expect
+      .element(screen.getByRole("button", { name: "Move deal" }))
+      .toBeDisabled();
+  });
+
+  it("does not offer the override to someone who cannot use it", async () => {
+    const { screen } = await renderDialog({ gate: blockedGate });
+
+    await expect
+      .element(screen.getByText("Override reason (admins only)"))
+      .not.toBeInTheDocument();
+  });
+
+  it("lets an admin through only once they write down why", async () => {
+    const { screen, onConfirm } = await renderDialog({
+      gate: blockedGate,
+      canOverride: true,
+    });
+
+    const confirm = screen.getByRole("button", { name: "Move deal" });
+
+    await screen
+      .getByLabelText("Why is it moving to this stage?")
+      .fill("Contrato firmado");
+    // The override field exists, but an empty one is not an override.
+    await expect.element(confirm).toBeDisabled();
+
+    await screen
+      .getByLabelText("Override reason (admins only)")
+      .fill("Firma recibida por email, la tarea se registra mañana");
+    await expect.element(confirm).toBeEnabled();
+
+    await confirm.click();
+
+    expect(onConfirm).toHaveBeenCalledWith(
+      "Contrato firmado",
+      [],
+      "Firma recibida por email, la tarea se registra mañana",
+    );
   });
 
   it("locks both buttons while the move is being written", async () => {

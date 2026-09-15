@@ -1,0 +1,29 @@
+--
+-- The deal stage trail is append-only. Make the privileges say so.
+--
+-- `deal_stage_changes` shipped with `grant select ... to authenticated` and
+-- nothing else, which reads as select-only and is not: Supabase's default
+-- privileges on the `public` schema had already handed every DML privilege to
+-- `anon` and `authenticated` when the table was created, and a later GRANT
+-- cannot take back what a default privilege already gave.
+--
+-- Nothing was actually rewritable. Row level security is enabled and the table
+-- carries no insert/update/delete policy, so a write from a user matches no
+-- row. But the two verbs fail differently: an INSERT raises 42501, while an
+-- UPDATE or DELETE that matches no row SUCCEEDS, silently, affecting zero rows.
+-- The guarantee rested on one mechanism where it should rest on two, and the
+-- gap was already visible in the pgTAP suite -- `deal_stage_changes.test.sql`
+-- asserts 42501 on all three and only the INSERT case passed.
+--
+-- TRUNCATE is why this is a migration and not a test edit: it is not subject to
+-- row level security at all. It was never reachable through PostgREST, which
+-- issues no such statement, but "unreachable through the API we happen to ship
+-- today" is not the guarantee an audit trail should rest on.
+--
+-- Scoped to this one table on purpose. Every table in the schema carries the
+-- same default privileges; tightening them everywhere is a separate decision
+-- with its own blast radius, and this is the table whose whole point is that
+-- nobody can rewrite it.
+--
+revoke insert, update, delete, truncate on table public.deal_stage_changes
+    from anon, authenticated;

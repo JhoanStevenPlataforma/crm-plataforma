@@ -1,43 +1,22 @@
 import { useTranslate } from "ra-core";
-import type { ReactNode } from "react";
+import type { ComponentProps } from "react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { ChartCard } from "../misc/ChartCard";
 
 /**
- * The frame every chart on these screens sits in.
+ * `ChartCard` with this dashboard's own empty-state wording.
  *
- * Extracted so the empty state is written once. It matters more than it looks:
- * a chart with no data must say so, because an empty plot area reads as "zero"
- * and zero is a claim about the business, not about the query.
+ * The generic card moved to `misc/` when the analytics module started drawing
+ * the same charts. Only the default empty label was ever team-specific, so that
+ * is all that stayed here — the eight callers in this folder are unchanged.
  */
-export const TeamChartCard = ({
-  title,
-  isEmpty,
-  emptyLabel,
-  children,
-  height = 280,
-}: {
-  title: string;
-  isEmpty: boolean;
-  /** Defaults to the shared "nothing to report in this period" message. */
-  emptyLabel?: string;
-  children: ReactNode;
-  height?: number;
-}) => {
+export const TeamChartCard = (props: ComponentProps<typeof ChartCard>) => {
   const translate = useTranslate();
 
   return (
-    <Card>
-      <CardContent className="p-4 flex flex-col gap-2">
-        <h2 className="text-sm font-medium">{title}</h2>
-        {isEmpty ? (
-          <p className="text-sm text-muted-foreground py-8">
-            {emptyLabel ?? translate("crm.teams_dashboard.no_stats")}
-          </p>
-        ) : (
-          <div style={{ height }}>{children}</div>
-        )}
-      </CardContent>
-    </Card>
+    <ChartCard
+      {...props}
+      emptyLabel={props.emptyLabel ?? translate("crm.teams_dashboard.no_stats")}
+    />
   );
 };

@@ -12,7 +12,12 @@ describe("LeadList", () => {
 
     await expect.element(screen.getByText("Lucia Prospect")).toBeVisible();
     await expect.element(screen.getByText("Prospect Industries")).toBeVisible();
-    await expect.element(screen.getByText("Qualified")).toBeVisible();
+    // Scoped to the table: the status filter above it renders an <option> per
+    // status, and the summary row a card per stage, so an unscoped query for
+    // "Qualified" matches four things. The claim here is about the ROW.
+    await expect
+      .element(screen.getByRole("table").getByText("Qualified"))
+      .toBeVisible();
   });
 
   it("shows the linked company for a lead attached to a company record", async () => {

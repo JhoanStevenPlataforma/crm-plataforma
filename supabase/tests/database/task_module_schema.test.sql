@@ -8,7 +8,7 @@
 --
 begin;
 
-select plan(41);
+select plan(45);
 
 --
 -- New entities (§3.2)
@@ -125,6 +125,38 @@ select ok(
     not exists (select 1 from public.task_transitions
                 where from_status_key = 'archived' and to_status_key = 'completed'),
     'archived -> completed is not a declared transition');
+
+--
+-- Partitioning stays ahead of the clock (§5.1)
+--
+-- `task_events` is range-partitioned on occurred_at and shipped with five
+-- hard-coded months. A write with no matching partition raises and, because
+-- `tasks_audit` writes here, takes the task write with it -- so 'the module
+-- stops working' and 'a month went by' were the same event. These four
+-- assertions are what stops that from coming back.
+--
+select has_function('public', 'ensure_task_events_partitions', array['integer'],
+    'the partition maintenance function exists');
+
+select has_table('public', 'task_events_default',
+    'a DEFAULT partition catches any month the scheduler missed');
+
+-- Not a fixed month: asserting a literal would start failing the moment the
+-- clock passed it, which is the same class of bug being fixed here.
+select ok(
+    exists (select 1
+              from pg_catalog.pg_class c
+              join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+             where n.nspname = 'public'
+               and c.relname = 'task_events_'
+                   || to_char(date_trunc('month', now()) + interval '2 months', 'YYYY_MM')),
+    'a partition exists at least two months ahead of today');
+
+-- The point of the whole fix, stated as behaviour rather than structure.
+select lives_ok($$
+    insert into public.task_events (task_id, event_type, occurred_at, seq)
+    values (1, 'task.created', now() + interval '10 years', 2147483647)
+$$, 'a write far past the last declared month lands somewhere instead of raising');
 
 select * from finish();
 

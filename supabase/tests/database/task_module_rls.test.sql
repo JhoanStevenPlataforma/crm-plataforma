@@ -12,7 +12,7 @@
 --
 begin;
 
-select plan(14);
+select plan(18);
 
 alter table public.contacts disable trigger "20_contact_saved";
 
@@ -203,6 +203,45 @@ select is(
       where task_id = 9101 and entity_type = 'contact' and unlinked_at is not null),
     1,
     'the link is CLOSED rather than the task destroyed (§14.3)');
+
+--
+-- 8. The state machine itself is reference data, not user data (§17.1).
+--
+-- `task_transitions` shipped with no RLS and no policies while carrying
+-- `grant all ... to authenticated`, so any rep could declare a transition the
+-- machine exists to forbid, clear `requires_reason`, or delete every row and
+-- break task workflow for the whole organisation. Its three sibling
+-- catalogues had the read-all / write-admin pair; this one was skipped.
+--
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"cccccccc-0000-0000-0000-000000000003","role":"authenticated"}', true);
+
+-- Reading stays open: the task form has to render the moves it may offer.
+select ok(
+    (select count(*) from public.task_transitions) > 0,
+    'a rep can still read the declared transitions');
+
+select throws_ok(
+    $$ insert into public.task_transitions (from_status_key, to_status_key)
+       values ('archived', 'completed') $$,
+    '42501',
+    null,
+    'a rep cannot declare a transition the state machine forbids');
+
+-- DELETE and UPDATE under RLS do not raise, they match nothing. Asserting the
+-- row count is what actually proves the rows survived.
+delete from public.task_transitions;
+select ok(
+    (select count(*) from public.task_transitions) > 0,
+    'a rep cannot delete the state machine');
+
+update public.task_transitions set requires_reason = false;
+select ok(
+    exists (select 1 from public.task_transitions where requires_reason),
+    'a rep cannot clear requires_reason to skip justifying a move');
+
+reset role;
 
 select * from finish();
 

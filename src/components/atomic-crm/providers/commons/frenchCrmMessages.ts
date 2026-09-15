@@ -244,7 +244,24 @@ export const frenchCrmMessages = {
         remove_file: "Retirer %{name}",
         confirm: "Déplacer l'affaire",
         error: "L'affaire n'a pas pu être déplacée",
+        requirement_checking:
+          "Vérification du travail effectué sur cette affaire…",
+        requirement_blocked:
+          "%{completed} tâche(s) terminée(s) sur %{required} depuis l'entrée de l'affaire en %{stage}.",
+        requirement_hint:
+          "Terminez une tâche sur cette affaire puis déplacez-la : une étape se gagne par le travail, pas par une phrase.",
+        requirement_error:
+          "Cette affaire n'a pas assez de tâches terminées pour changer d'étape",
+        override: "Motif de la dérogation (administrateurs uniquement)",
+        override_placeholder:
+          "ex. Contrat signé hors du CRM, la tâche sera enregistrée demain",
+        override_hint:
+          "Conservé dans l'historique de l'affaire, à côté du changement d'étape.",
         no_reason: "Aucune raison enregistrée",
+        overridden:
+          "Déplacée sans la tâche terminée exigée par cette étape. Motif de la dérogation : %{reason}",
+        attachment_error:
+          "Impossible d'ouvrir le fichier. Vous n'avez peut-être plus accès à cette affaire.",
       },
       empty: {
         before_create: "avant de créer une affaire.",
@@ -305,6 +322,15 @@ export const frenchCrmMessages = {
     leads: {
       name: "Prospect |||| Prospects",
       unnamed: "(sans nom)",
+      action: {
+        new: "Nouveau lead",
+        call: "Appeler",
+        email: "Envoyer un e-mail",
+      },
+      filters: {
+        any_status: "Tous les statuts",
+        any_source: "Toutes les origines",
+      },
       company_name_helper:
         "À utiliser quand l'entreprise n'est pas encore dans le CRM. La conversion la créera.",
       fields: {
@@ -323,6 +349,7 @@ export const frenchCrmMessages = {
         notes: "Notes",
         sales_id: "Responsable de compte",
         created_at: "Créé le",
+        actions: "Actions",
       },
       field_categories: {
         identity: "Identité",
@@ -426,6 +453,421 @@ export const frenchCrmMessages = {
         save: "Enregistrer la répartition",
         saved: "Répartition enregistrée",
         error: "La répartition n'a pas pu être enregistrée",
+      },
+    },
+    products: {
+      name: "Produit |||| Produits",
+      forcedCaseName: "Produit",
+      fields: {
+        sku: "SKU",
+        name: "Nom",
+        description: "Description",
+        internal_notes: "Notes internes",
+        kind: "Type",
+        category: "Catégorie",
+        unit: "Unité",
+        list_price: "Prix catalogue",
+        currency: "Devise",
+        tax_rate_id: "Taxe",
+        is_active: "Actif",
+      },
+      kinds: {
+        product: "Produit",
+        service: "Service",
+        plan: "Forfait",
+        subscription: "Abonnement",
+        concept: "Poste",
+      },
+      action: {
+        new: "Nouveau produit",
+      },
+      filters: {
+        any_kind: "Tous les types",
+        any_category: "Toutes les catégories",
+      },
+      helpers: {
+        internal_notes:
+          "Réservées à l'équipe commerciale. Jamais montrées au client.",
+        is_active:
+          "Un produit inactif reste sur les devis qui l'ont utilisé, mais n'est plus proposé.",
+      },
+      validation: {
+        currency:
+          "Utilisez un code ISO de trois lettres en majuscules, p. ex. COP",
+      },
+      errors: {
+        duplicate_sku: "Un autre produit utilise déjà ce SKU",
+      },
+    },
+    price_lists: {
+      name: "Liste de prix |||| Listes de prix",
+      forcedCaseName: "Liste de prix",
+      fields: {
+        code: "Code",
+        name: "Nom",
+        currency: "Devise",
+        is_default: "Par défaut pour sa devise",
+        is_active: "Active",
+        valid_from: "Valable du",
+        valid_to: "Valable jusqu'au",
+        notes: "Notes",
+      },
+      action: {
+        new: "Nouvelle liste de prix",
+      },
+      helpers: {
+        validity:
+          "À titre indicatif : les devis utilisent toutes les listes actives, quelles que soient ces dates.",
+      },
+      validation: {
+        period: "La date de fin ne peut pas précéder la date de début",
+      },
+      errors: {
+        conflict:
+          "Une autre liste de prix utilise déjà ce code, ou est déjà la liste active par défaut de cette devise",
+      },
+      items: {
+        title: "Prix",
+        empty:
+          "Aucun prix pour l'instant. Les produits dans la devise de cette liste sont proposés à leur propre prix catalogue tant qu'aucun prix n'est fixé ici.",
+        add: "Ajouter un prix",
+        product: "Produit",
+        unit_price: "Prix unitaire",
+        min_quantity: "Quantité minimale",
+        tax_rate_id: "Taxe",
+        no_override: "La taxe du produit",
+        remove: "Retirer le prix de %{name}",
+        error: "Le prix n'a pas pu être enregistré",
+        duplicate: "Ce produit a déjà un prix pour cette quantité minimale",
+        load_error:
+          "Les prix de cette liste n'ont pas pu être chargés, l'ajout est donc désactivé. Rechargez la page.",
+      },
+    },
+    quotes: {
+      name: "Devis |||| Devis",
+      forcedCaseName: "Devis",
+      fields: {
+        quote_number: "Numéro",
+        title: "Titre",
+        company_id: "Entreprise",
+        contact_id: "Contact",
+        deal_id: "Opportunité",
+        company_name: "Entreprise",
+        sales_id: "Responsable",
+        owner_name: "Responsable",
+        price_list_id: "Liste de prix",
+        currency: "Devise",
+        status_key: "Statut",
+        valid_until: "Valable jusqu’au",
+        terms: "Conditions",
+        internal_notes: "Notes internes",
+        current_version_number: "Version",
+        total: "Total",
+      },
+      version_short: "v%{number}",
+      action: {
+        new: "Nouveau devis",
+      },
+      filters: {
+        any_status: "Tous les statuts",
+      },
+      helpers: {
+        price_list_id: "Fixe la devise du devis et les prix proposés",
+        valid_until:
+          "Passée cette date, l’offre et tout lien vers elle sont caducs",
+        terms: "Imprimées sur le document, sous les lignes",
+        internal_notes:
+          "Pour l’équipe commerciale uniquement. Jamais montrées au client.",
+        frozen_document:
+          "Ce devis a été émis : ses dates, ses conditions et ses lignes sont le document qu’un client a vu et restent en l’état.",
+      },
+      validation: {
+        valid_until_past: "Une offre ne peut pas expirer avant aujourd’hui",
+      },
+      totals: {
+        subtotal: "Sous-total",
+        discount: "Remise",
+        discount_with_percent: "Remise (%{percent} %)",
+        tax: "Taxe",
+        total: "Total",
+      },
+      lines: {
+        title: "Lignes",
+        empty:
+          "Aucune ligne pour l’instant. Un devis sans ligne ne s’émet pas.",
+        add: "Ajouter une ligne",
+        product: "Produit",
+        quantity: "Quantité",
+        quantity_of: "Quantité de %{name}",
+        unit_price: "Prix unitaire",
+        unit_price_of: "Prix unitaire de %{name}",
+        discount_percent: "Remise %",
+        discount_of: "Remise sur %{name}",
+        tax_rate_percent: "Taxe",
+        line_total: "Total",
+        remove: "Retirer %{name} du devis",
+        error: "La ligne n’a pas pu être enregistrée",
+        load_error:
+          "Les lignes de ce devis n’ont pas pu être chargées, l’édition est donc désactivée. Rechargez la page.",
+        frozen:
+          "Les lignes ne sont modifiables que tant que le devis est un brouillon. Créez une révision pour les changer.",
+        no_price_list:
+          "Choisissez une liste de prix ci-dessus pour ajouter des lignes : elle décide des produits proposés et de leur prix.",
+        invalid: {
+          quantity: "Une quantité doit être supérieure à zéro",
+          unit_price: "Un prix ne peut pas être négatif",
+          discount_percent: "Une remise va de 0 à 100",
+        },
+      },
+      panel: {
+        empty: "Aucun devis pour cette opportunité",
+        load_error: "Les devis de cette opportunité n’ont pas pu être chargés",
+      },
+      actions: {
+        terminal: "Ce devis est clos : il ne reste aucun mouvement possible.",
+      },
+      transitions: {
+        issue: "Envoyer",
+        revise: "Réviser",
+        pending_approval: "Demander l’approbation",
+        approved: "Approuver",
+        draft: "Renvoyer",
+        negotiating: "Négocier",
+        canceled: "Annuler le devis",
+      },
+      dialog: {
+        reason: "Motif",
+        reason_placeholder: "Qu’y a-t-il derrière ce mouvement ?",
+        confirm: "Confirmer",
+        transition_description:
+          "Devis %{number}. Le motif est enregistré avec le mouvement et ne pourra plus être modifié.",
+        revise_description:
+          "Devis %{number}. Le document émis reste exactement tel que le client l’a vu ; ceci ouvre une nouvelle version de travail, et les liens vers la précédente cessent de fonctionner.",
+      },
+      issue: {
+        title: "Envoyer le devis %{number}",
+        description:
+          "La version %{version} est figée en l’état et un lien est créé pour le client. Un document émis ne peut plus être modifié : le changer ensuite signifie une nouvelle version.",
+        gate_checking: "Lecture de la règle de remise…",
+        gate_no_rule:
+          "Ce document accorde %{percent}% de remise. Aucun plafond n’est en vigueur.",
+        gate_blocked:
+          "Ce document accorde %{percent}% de remise, au-dessus des %{max}% qui vous sont permis (%{lines} ligne(s) au-dessus du plafond).",
+        gate_blocked_hint:
+          "Demandez l’approbation : une approbation relève le plafond à celui de l’approbateur.",
+        gate_blocked_admin:
+          "En tant qu’administrateur vous pouvez l’envoyer quand même, par écrit. Le motif est conservé avec le mouvement.",
+        reason: "Pourquoi cette remise",
+        reason_placeholder: "Qu’est-ce qui justifie la remise accordée ?",
+        reason_hint:
+          "Obligatoire au-dessus de %{above}%. Conservé avec le mouvement, et une approbation écrite en tient lieu.",
+        override: "Passer outre le plafond",
+        override_placeholder:
+          "Pourquoi ce devis est-il envoyé au-delà de la limite ?",
+        override_hint:
+          "Administrateurs uniquement. Enregistré définitivement, et seulement lorsque le plafond a réellement été dépassé.",
+        token_days: "Lien valable (jours)",
+        token_label: "Pour qui",
+        token_label_placeholder: "Achats, Mme Lopez…",
+        token_clamped:
+          "Un lien ne survit jamais à l’offre : il sera coupé après le %{date}.",
+        confirm: "Envoyer",
+      },
+      link: {
+        title: "Lien vers la version %{version}",
+        description:
+          "Ce lien est affiché une seule fois et n’est stocké nulle part : seule son empreinte est conservée. Copiez-le maintenant — ensuite, la seule issue est d’en créer un nouveau. L’ouvrir vous-même compte comme une consultation du client.",
+        url: "Lien pour le client",
+        copy: "Copier le lien",
+        expires: "Cesse de fonctionner le %{date}",
+        done: "Terminé",
+      },
+      portal: {
+        loading: "Chargement du devis…",
+        demo_unavailable:
+          "Les liens client ne s’ouvrent pas dans la démo : aucun serveur n’y conserve l’offre ni n’enregistre la réponse.",
+        print: "Imprimer / PDF",
+        accept: "Accepter",
+        reject: "Refuser",
+        retry: "Réessayer",
+        accepted_notice:
+          "Merci. Votre acceptation a été enregistrée, et le devis ci-dessous la mentionne désormais.",
+        rejected_notice:
+          "Merci de nous avoir répondu. Votre réponse a été enregistrée.",
+        closed:
+          "Ce devis ne peut plus recevoir de réponse en ligne. Veuillez contacter %{name}.",
+        closed_anonymous:
+          "Ce devis ne peut plus recevoir de réponse en ligne. Veuillez contacter la personne qui vous l’a envoyé.",
+        accept_dialog: {
+          title: "Accepter le devis %{number}",
+          description:
+            "Version %{version}, pour un total de %{total}. Votre nom, votre adresse e-mail et l’heure sont enregistrés avec le document.",
+          name: "Nom complet",
+          email: "Adresse e-mail",
+          confirm: "J’accepte ce devis tel qu’il a été émis",
+          submit: "Accepter le devis",
+        },
+        reject_dialog: {
+          title: "Refuser le devis %{number}",
+          description:
+            "Nous dire pourquoi nous aide à revenir avec une meilleure offre.",
+          reason_code: "Motif principal",
+          reasons: {
+            price: "Prix",
+            terms: "Conditions",
+            delivery_time: "Délai de livraison",
+            product: "Produit ou périmètre",
+            other: "Autre",
+          },
+          reason: "Quelque chose à ajouter ? (facultatif)",
+          name: "Votre nom (facultatif)",
+          email: "Adresse e-mail (facultatif)",
+          submit: "Refuser le devis",
+        },
+        errors: {
+          quote_link_invalid:
+            "Ce lien n’est pas valide ou n’est plus actif. Demandez-en un nouveau à la personne qui vous l’a envoyé.",
+          quote_portal_throttled:
+            "Trop de requêtes depuis ce lien. Patientez une minute et réessayez.",
+          quote_portal_unavailable:
+            "Le devis est inaccessible pour le moment. Réessayez dans un instant.",
+          quote_version_superseded:
+            "Une version plus récente de ce devis a été émise : celle-ci ne peut plus recevoir de réponse. Demandez le lien vers la nouvelle version.",
+          quote_version_answered: "Cette version a déjà reçu une réponse.",
+          quote_validity_elapsed:
+            "Cette offre a expiré et ne peut plus être acceptée.",
+          quote_transition_illegal:
+            "Ce devis ne peut plus recevoir de réponse en ligne.",
+          quote_status_unchanged: "Cette version a déjà reçu une réponse.",
+          quote_transition_actor_not_allowed:
+            "Ce devis ne peut plus recevoir de réponse en ligne.",
+          quote_portal_name_required: "Saisissez votre nom complet.",
+          quote_portal_email_invalid: "Saisissez une adresse e-mail valide.",
+          quote_portal_reason_code_invalid: "Choisissez le motif principal.",
+          quote_portal_input_too_long: "L’un des champs est trop long.",
+        },
+      },
+      document: {
+        label: "Devis %{number}",
+        heading: "Devis",
+        version: "Version %{number}",
+        issued_on: "Émis le %{date}",
+        valid_until: "Valable jusqu’au %{date}",
+        draft_banner:
+          "Brouillon — ceci n’est pas une offre. Cette version n’a pas été émise et peut encore changer.",
+        superseded_banner:
+          "Remplacé — une version plus récente de ce devis a été émise, et celle-ci n’est plus l’offre.",
+        prepared_for: "Établi pour",
+        prepared_by: "Établi par",
+        tax_identifier: "N° d’identification fiscale %{value}",
+        attention: "À l’attention de %{name}",
+        line_number: "#",
+        description: "Désignation",
+        quantity: "Quantité",
+        unit_price: "Prix unitaire",
+        discount: "Remise",
+        tax: "Taxe",
+        amount: "Montant",
+        no_lines: "Cette version ne comporte aucune ligne.",
+        terms: "Conditions générales",
+        accepted: "Accepté le %{date} par %{name}",
+        accepted_anonymous: "Accepté le %{date}",
+        rejected: "Refusé le %{date}",
+      },
+      versions: {
+        title: "Versions",
+        view: "Version %{number}",
+        current: "en cours",
+        draft: "Brouillon, non émis",
+        issued: "Émis le %{date}",
+        superseded: "remplacé",
+        accepted: "accepté",
+        rejected: "refusé",
+        load_error: "Les versions de ce devis n’ont pas pu être chargées",
+      },
+      show: {
+        edit: "Modifier",
+        print: "Imprimer / PDF",
+        view_document: "Voir le document",
+        load_error: "Cette version du devis n’a pas pu être chargée.",
+      },
+      print: {
+        preparing: "Préparation du document…",
+        ready:
+          "Dans la boîte de dialogue d’impression, choisissez « Enregistrer au format PDF ».",
+        back: "Retour au devis",
+        again: "Imprimer à nouveau",
+        version_missing:
+          "Cette version n’appartient pas à ce devis : il n’y a rien à imprimer.",
+      },
+      links: {
+        title: "Liens client",
+        new: "Nouveau lien",
+        revision_open:
+          "Une révision est ouverte : envoyez-la avant de partager un nouveau lien.",
+        empty: "Aucun lien n’a encore été créé pour ce devis",
+        load_error: "Les liens de ce devis n’ont pas pu être chargés",
+        unlabelled: "Lien vers la version %{version}",
+        active: "Actif",
+        inactive: "Inactif",
+        expires: "jusqu’au %{date}",
+        views: "%{count} consultation(s)",
+        revoke: "Révoquer",
+      },
+      errors: {
+        generic: "Le devis n’a pas pu être mis à jour",
+        quote_version_frozen:
+          "Cette version a été émise : c’est le document que le client a vu et il ne peut plus changer. Révisez le devis pour en ouvrir un nouveau.",
+        quote_version_column_protected:
+          "Seuls la validité, les conditions et la remise d’un brouillon peuvent être modifiés ici.",
+        quote_not_draft:
+          "Les lignes ne sont modifiables que tant que le devis est un brouillon. Renvoyez-le ou révisez-le d’abord.",
+        quote_transition_illegal:
+          "Ce mouvement n’est pas autorisé depuis ce statut.",
+        quote_status_unchanged: "Le devis est déjà dans ce statut.",
+        quote_reason_required: "Ce mouvement exige un motif écrit.",
+        quote_not_issued:
+          "Rien n’a encore été émis : il n’y a aucun document sur lequel s’appuyer.",
+        quote_discount_exceeds_limit:
+          "La remise accordée dépasse votre limite. Demandez l’approbation, ou demandez à un administrateur de passer outre.",
+        quote_discount_reason_required:
+          "Une remise de cette ampleur exige un motif écrit avant l’envoi.",
+        quote_draft_exists:
+          "Un brouillon est déjà ouvert pour ce devis : envoyez-le plutôt que d’en commencer un autre.",
+        quote_validity_elapsed:
+          "L’offre a déjà expiré : tout lien serait mort-né. Prolongez d’abord la validité.",
+        quote_header_derived:
+          "La validité et les conditions appartiennent à la version en cours de travail.",
+        quote_empty: "Un devis sans ligne ne peut pas être envoyé.",
+        quote_no_draft: "Il n’y a aucun brouillon à envoyer.",
+        quote_transition_actor_not_allowed:
+          "Ce mouvement revient au client ou au système, pas à vous.",
+        quote_approval_requires_manager:
+          "Seul un manager peut approuver un devis — approuver le sien reviendrait à fixer sa propre limite.",
+      },
+    },
+    tax_rates: {
+      name: "Taxe |||| Taxes",
+      forcedCaseName: "Taxe",
+      fields: {
+        code: "Code",
+        label: "Libellé",
+        rate: "Taux (%)",
+        is_default: "Par défaut",
+        active: "Active",
+        rank: "Ordre",
+      },
+      action: {
+        new: "Nouvelle taxe",
+      },
+      helpers: {
+        system_code:
+          "Taux initial : son code est fixe, le libellé et le taux peuvent suivre la loi.",
+        rate: "Un pourcentage : 19 pour une TVA de 19 %.",
+      },
+      errors: {
+        conflict:
+          "Une autre taxe utilise déjà ce code, ou est déjà la taxe active par défaut",
       },
     },
     tasks: {
@@ -764,6 +1206,12 @@ export const frenchCrmMessages = {
       recovery_email_sent:
         "Si vous êtes un utilisateur enregistré, vous devriez recevoir prochainement un e-mail de récupération de mot de passe.",
       sign_in_failed: "Échec de la connexion.",
+      subtitle: "Saisissez vos identifiants pour accéder à votre espace.",
+      email_placeholder: "nom@entreprise.com",
+      or_email: "Ou avec votre e-mail",
+      powered_by: "Propulsé par",
+      show_password: "Afficher les caractères",
+      hide_password: "Masquer les caractères",
       sign_in_google_workspace: "Connectez-vous avec Google Workplace",
       signup: {
         create_account: "Créer un compte",
@@ -808,6 +1256,447 @@ export const frenchCrmMessages = {
       at_company: "chez",
       to: "à",
       load_more: "Charger plus d'activité",
+    },
+    analytics: {
+      title: "Analytique",
+      see_teams_dashboard: "Objectifs par équipe →",
+      load_error:
+        "Ces chiffres n’ont pas pu être chargés. Réessayez dans un instant.",
+      no_data: "Rien à signaler sur cette période",
+      tabs: {
+        overview: "Synthèse",
+        pipeline: "Pipeline",
+        leads: "Leads",
+        productivity: "Productivité",
+      },
+      presets: {
+        this_month: "Ce mois",
+        last_3_months: "3 mois",
+        last_6_months: "6 mois",
+        last_12_months: "12 mois",
+        this_year: "Cette année",
+      },
+      filters: {
+        period: "Période",
+        from: "Du",
+        to: "Au",
+        owner: "Responsable",
+        all_owners: "Tous",
+        team: "Équipe",
+        all_teams: "Toutes les équipes",
+      },
+      basis: {
+        now: "À ce jour",
+        expected_close: "Par date de clôture prévue",
+        lead_created: "Par date d’arrivée",
+        cohort: "Cohorte des leads arrivés sur la période",
+        cohort_month:
+          "Par mois d’arrivée ; les mois récents se remplissent encore",
+        deal_flow:
+          "Créées par date d’ouverture ; gagnées et perdues par clôture prévue",
+        deal_created: "Par date d’ouverture",
+        forecast: "Prévu, pas réel",
+        mixed: "Pipeline à ce jour ; gagné et perdu sur la période",
+        task_flow:
+          "Créées par mois de création ; terminées par mois de clôture",
+        completed: "Terminées sur la période",
+        unfiltered:
+          "Derniers enregistrements créés ; le filtre ci-dessus ne s’applique pas",
+        attribution:
+          "%{share} des leads convertis ont produit une affaire valorisable",
+        attribution_none:
+          "Aucun lead converti sur cette période n’a produit d’affaire",
+      },
+      series: {
+        won: "Gagné",
+        created: "Créé",
+        lost: "Perdu",
+        amount: "Montant",
+        pipeline: "Pipeline",
+        deals: "Affaires",
+        converted: "Convertis",
+        leads: "Leads",
+        rate: "Conversion",
+        completed: "Terminées",
+        open: "Ouvertes",
+        overdue: "En retard",
+      },
+      kpi: {
+        open_pipeline: "Pipeline ouvert",
+        won: "Gagné",
+        win_rate: "Taux de réussite",
+        decided: "%{won} gagnées / %{lost} perdues",
+        new_deals: "Nouvelles affaires",
+        new_leads: "Nouveaux leads",
+        lead_conversion: "Conversion des leads",
+        overdue_tasks: "Tâches en retard",
+        due_soon: "%{count} échues sous 7 jours",
+        overdue_of_open: "%{count} en retard",
+        open_deals: "%{count} affaires",
+        average_deal: "Panier moyen",
+        forecast_cycle: "Cycle prévu",
+        days: "%{count} j",
+        hours: "%{count} h",
+        converted: "Convertis",
+        time_to_convert: "Délai de conversion",
+        open_tasks: "Tâches ouvertes",
+        subset_of_open: "Incluses dans les ouvertes",
+        due_next_7d: "Échues sous 7 jours",
+        on_time: "Terminées dans les temps",
+        completed_count: "%{count} terminées",
+        cycle_time: "Cycle moyen",
+        weighted_pipeline: "Pipeline pondéré",
+        unweighted: "%{amount} dans des étapes sans pondération configurée",
+      },
+      chart: {
+        deal_flow: "Créé, gagné et perdu",
+        pipeline_by_stage: "Pipeline par étape",
+        deals_by_stage: "Affaires par étape",
+        won_vs_lost: "Gagnées contre perdues",
+        deals_created: "Affaires créées",
+        by_owner: "Performance par responsable",
+        owners_hidden: "Top 10 — %{count} de plus non affichés",
+        lead_flow: "Leads et conversions",
+        leads_by_status: "Leads par statut",
+        leads_by_source: "Leads par source",
+        conversion_by_source: "Taux de conversion par source",
+        revenue_by_source: "Revenu attribué par source",
+        leads_by_owner: "Leads par responsable",
+        task_flow: "Créées contre terminées",
+        activity_mix: "Répartition par type",
+        workload_by_owner: "Charge par responsable",
+        recent_activity: "Activité récente",
+      },
+      past_due: {
+        title: "Affaires ouvertes dont la clôture est passée",
+        subtitle: "Chacune fausse la prévision ci-dessus : redater ou clore",
+        see_all: "Voir les %{total}",
+        empty: "Aucune affaire n’a dépassé sa date de clôture",
+        deal: "Affaire",
+        stage: "Étape",
+        expected: "Clôture prévue",
+        amount: "Montant",
+      },
+      untouched: {
+        title: "Leads que personne n’a contactés",
+        subtitle: "Toujours nouveaux après %{days} jours",
+        empty: "Tous les leads ont été pris en charge",
+        lead: "Lead",
+        company: "Entreprise",
+        source: "Source",
+        arrived: "Arrivé",
+        unnamed: "(sans nom)",
+      },
+    },
+    reports: {
+      title: "Rapports",
+      subtitle: "Construisez la question à laquelle vous voulez répondre",
+      new: "Nouveau rapport",
+      untitled: "Rapport sans titre",
+      name: "Nom du rapport",
+      back: "Retour aux rapports",
+      builtin: "Prédéfini",
+      shared: "Partagé",
+      unsaved: "Modifications non enregistrées",
+      configure: "Configurer",
+      duplicate: "Dupliquer",
+      save_as_copy: "Enregistrer une copie",
+      saved: "Rapport enregistré",
+      save_error: "Le rapport n'a pas pu être enregistré",
+      delete_error: "Le rapport n'a pas pu être supprimé",
+      list_error: "Les rapports n'ont pas pu être chargés",
+      catalog_error: "Le catalogue de rapports n'a pas pu être chargé",
+      run_error:
+        "Ce rapport n'a pas pu être exécuté. Vérifiez les filtres et réessayez.",
+      not_found: "Ce rapport n'existe pas ou vous n'y avez pas accès",
+      empty: "Aucun rapport pour l'instant",
+      demo_unavailable:
+        "Les rapports nécessitent la vraie base de données ; ils ne sont pas disponibles en mode démo.",
+      copy_of: "Copie de %{name}",
+      unassigned: "Non attribué",
+      result_title: "%{dataset}",
+      basis: "Par %{field}",
+      see_analytics: "Voir la synthèse",
+      truncated:
+        "Affichage des %{count} premières lignes. Réduisez la période ou les filtres pour voir le reste.",
+      sort_by: "Trier par %{field}",
+      shared_scope_note:
+        "Un rapport partagé partage la question, pas les données : chacun voit les lignes que ses droits autorisent.",
+      builtin_hint:
+        "Dupliquez l'un d'eux pour partir d'un exemple qui fonctionne déjà.",
+      print_scope_note:
+        "Chiffres limités aux droits de la personne qui l'exécute",
+      donut_negative_dropped:
+        "%{smart_count} valeur négative a été écartée |||| %{smart_count} valeurs négatives ont été écartées",
+      dataset: {
+        deals: "Opportunités",
+        leads: "Leads",
+        tasks: "Tâches",
+        contacts: "Contacts",
+        companies: "Entreprises",
+      },
+      field: {
+        companies: {
+          sector: "Secteur",
+          country: "Pays",
+          city: "Ville",
+          owner: "Responsable",
+          created_month: "Mois de création",
+          created_at: "Date de création",
+          company_count: "Nombre d'entreprises",
+          avg_size: "Effectif moyen",
+        },
+        contacts: {
+          status: "Statut",
+          owner: "Responsable",
+          company: "Entreprise",
+          sector: "Secteur de l'entreprise",
+          country: "Pays de l'entreprise",
+          title: "Fonction",
+          first_seen_month: "Mois du premier contact",
+          first_seen: "Premier contact",
+          last_seen: "Dernier contact",
+          contact_count: "Nombre de contacts",
+          company_count: "Entreprises distinctes",
+          newsletter_count: "Abonnés à la newsletter",
+        },
+        deals: {
+          stage: "Étape",
+          category: "Catégorie",
+          owner: "Responsable",
+          team: "Équipe",
+          company: "Entreprise",
+          sector: "Secteur de l'entreprise",
+          country: "Pays de l'entreprise",
+          created_month: "Mois de création",
+          closing_month: "Mois de clôture prévue",
+          created_at: "Date de création",
+          expected_closing_date: "Date de clôture prévue",
+          deal_count: "Nombre d'opportunités",
+          amount_sum: "Valeur totale",
+          amount_avg: "Valeur moyenne",
+          pipeline_amount: "Pipeline ouvert",
+          won_amount: "Valeur gagnée",
+          lost_amount: "Valeur perdue",
+          won_count: "Gagnées",
+          lost_count: "Perdues",
+          win_rate: "Taux de réussite",
+          cycle_days: "Jours moyens avant clôture prévue",
+        },
+        leads: {
+          source: "Source",
+          status: "Statut",
+          owner: "Responsable",
+          company_name: "Entreprise",
+          created_month: "Mois de création",
+          created_at: "Date de création",
+          converted_at: "Date de conversion",
+          lead_count: "Nombre de leads",
+          converted_count: "Convertis",
+          conversion_rate: "Taux de conversion",
+          conversion_days: "Jours moyens avant conversion",
+          won_deal_count: "Opportunités gagnées",
+          won_amount: "Valeur gagnée attribuée",
+          pipeline_amount: "Pipeline attribué",
+          avg_score: "Score moyen",
+        },
+        tasks: {
+          owner: "Responsable",
+          task_type: "Type",
+          priority: "Priorité",
+          status: "Statut",
+          source: "Origine",
+          created_month: "Mois de création",
+          completed_month: "Mois d'achèvement",
+          created_at: "Date de création",
+          completed_at: "Date d'achèvement",
+          due_date: "Échéance",
+          task_count: "Nombre de tâches",
+          open_count: "Ouvertes",
+          overdue_count: "En retard",
+          completed_count: "Terminées",
+          on_time_count: "Terminées dans les délais",
+          on_time_rate: "Taux de respect des délais",
+          cycle_hours: "Heures moyennes avant achèvement",
+        },
+      },
+      builtin_report: {
+        "1": {
+          name: "Pipeline par étape",
+          description: "Où se situe le pipeline ouvert en ce moment.",
+        },
+        "10": {
+          name: "Répartition par statut",
+          description: "Où les prospects calent avant de convertir.",
+        },
+        "11": {
+          name: "Productivité de l'équipe",
+          description:
+            "Travail créé contre travail clos, et quelle part est arrivée dans les délais.",
+        },
+        "12": {
+          name: "Charge en retard",
+          description:
+            "Qui porte du travail en retard en ce moment. Sans période : être en retard n'a pas de mois.",
+        },
+        "13": {
+          name: "Mix d'activité",
+          description:
+            "Quel type de travail a réellement été fait, compté à l'achèvement.",
+        },
+        "14": {
+          name: "Flux de tâches",
+          description:
+            "Créées contre terminées, mois par mois. L'écart est l'arriéré qui se forme.",
+        },
+        "15": {
+          name: "Croissance clients",
+          description: "Nouveaux comptes par mois.",
+        },
+        "16": {
+          name: "Portefeuille par secteur",
+          description:
+            "Comment la base clients se répartit entre les industries.",
+        },
+        "17": {
+          name: "Croissance des contacts",
+          description:
+            "Nouveaux contacts par mois. Datés au premier contact, qui approxime la création.",
+        },
+        "2": {
+          name: "Performance par commercial",
+          description:
+            "Gagné, perdu et pipeline ouvert de chaque membre de l'équipe.",
+        },
+        "3": {
+          name: "Évolution des ventes",
+          description: "Valeur gagnée contre perdue, mois par mois.",
+        },
+        "4": {
+          name: "Taux de réussite par étape",
+          description:
+            "Quelles étapes convertissent, et par lesquelles le business fuit.",
+        },
+        "5": {
+          name: "Pipeline par secteur",
+          description:
+            "Dans quelles industries le pipeline ouvert est concentré.",
+        },
+        "6": {
+          name: "Valeur par étape et commercial",
+          description:
+            "Deux dimensions à la fois : qui porte quoi, et à quel stade.",
+        },
+        "7": {
+          name: "Génération de leads",
+          description:
+            "Combien de prospects arrivent chaque mois, et combien convertissent.",
+        },
+        "8": {
+          name: "Qualité par source",
+          description:
+            "Quels canaux produisent des leads qui deviennent du chiffre. Revenu attribuable uniquement.",
+        },
+        "9": {
+          name: "Leads par responsable",
+          description:
+            "Charge de prospects et conversion de chaque membre de l'équipe.",
+        },
+      },
+      view_autosaved: "Votre configuration s'enregistre seule",
+      saving_view: "Enregistrement…",
+      restore_original: "Restaurer l'original",
+      restored: "Rapport restauré à sa configuration d'origine",
+      export_selected:
+        "Exporter %{smart_count} en PDF |||| Exporter %{smart_count} en PDF",
+      print_title: "%{count} rapport |||| %{count} rapports",
+      print_preparing:
+        "Préparation des rapports — la boîte d'impression s'ouvrira seule.",
+      print_ready: "Prêt. Si vous avez fermé la boîte, rouvrez-la ici.",
+      print_again: "Ouvrir l'impression",
+      print_skipped:
+        "Ce rapport n'a pas pu être préparé et a été écarté du PDF.",
+      print_nothing_selected:
+        "Aucun rapport sélectionné. Retournez à la bibliothèque et cochez ceux à inclure.",
+      group: {
+        mine: "Mes rapports",
+        shared: "Partagés avec moi",
+        builtin: "Bibliothèque",
+      },
+      section: {
+        dataset: "Entité",
+        metrics: "Mesures",
+        dimensions: "Regrouper par",
+        period: "Période",
+        filters: "Filtres",
+        visualisation: "Visualisation",
+      },
+      hint: {
+        metrics: "Ce que vous voulez mesurer. Jusqu'à 6.",
+        dimensions: "Comment le décomposer. Jusqu'à 2.",
+        period: "Sur quelle date le rapport est cadré.",
+      },
+      no_period: "Sans période (photo actuelle)",
+      add_filter: "Ajouter un filtre",
+      remove_filter: "Retirer le filtre",
+      value_placeholder: "Valeur",
+      value_list_placeholder: "Valeurs séparées par des virgules",
+      preset: {
+        this_month: "Ce mois-ci",
+        last_month: "Mois dernier",
+        last_3_months: "3 derniers mois",
+        last_6_months: "6 derniers mois",
+        last_12_months: "12 derniers mois",
+        this_quarter: "Ce trimestre",
+        last_quarter: "Trimestre dernier",
+        this_year: "Cette année",
+        last_year: "Année dernière",
+        custom: "Personnalisé",
+      },
+      visualisation: {
+        kpi: "Chiffres clés",
+        table: "Tableau",
+        bar: "Barres",
+        stacked: "Barres empilées",
+        ranking: "Classement",
+        funnel: "Entonnoir",
+        donut: "Anneau",
+      },
+      op: {
+        eq: "est",
+        neq: "n'est pas",
+        contains: "contient",
+        not_contains: "ne contient pas",
+        in: "est l'un de",
+        not_in: "n'est aucun de",
+        gt: "supérieur à",
+        gte: "supérieur ou égal à",
+        lt: "inférieur à",
+        lte: "inférieur ou égal à",
+        before: "avant",
+        after: "après",
+        between: "entre",
+        is_null: "est vide",
+        is_not_null: "n'est pas vide",
+      },
+      invalid: {
+        unknown_dataset: "Cette entité n'est plus dans le catalogue.",
+        unknown_metric: "Une des mesures choisies n'existe plus.",
+        unknown_dimension: "Un des regroupements choisis n'existe plus.",
+        unknown_filter_field:
+          "Un filtre pointe vers un champ qui n'existe plus.",
+        bad_operator:
+          "Un filtre utilise un opérateur qui ne s'applique pas à ce champ.",
+        bad_period_field:
+          "La période pointe vers un champ qui n'est pas une date.",
+        bad_sort: "Le tri pointe vers un champ absent du rapport.",
+        needs_dimension:
+          "Cette visualisation nécessite au moins un regroupement. Ajoutez-en un sous Regrouper par.",
+        needs_single_metric:
+          "Cette visualisation affiche une seule mesure. N'en gardez qu'une.",
+        needs_two_dimensions:
+          "Les barres empilées nécessitent exactement deux regroupements.",
+      },
     },
     teams_dashboard: {
       title: "Performance des équipes",
@@ -879,16 +1768,44 @@ export const frenchCrmMessages = {
     dashboard: {
       deals_chart: "Revenus des affaires à venir",
       deals_pipeline: "Pipeline des affaires",
+      greeting: {
+        morning: "Bonjour, %{name}",
+        morning_anonymous: "Bonjour",
+        afternoon: "Bon après-midi, %{name}",
+        afternoon_anonymous: "Bon après-midi",
+        evening: "Bonsoir, %{name}",
+        evening_anonymous: "Bonsoir",
+      },
+      kpi: {
+        priority_actions: "Actions prioritaires",
+        urgent: "%{count} urgentes",
+        won_count: "%{count} gagnées",
+        sample: "N=%{count}",
+        unweighted_short: "%{amount} non pondéré",
+      },
       latest_activity: "Dernière activité",
+      trend_basis:
+        "6 derniers mois · créées par date d'ouverture ; gagnées et perdues par clôture prévue",
       latest_activity_error:
         "Erreur lors du chargement de la dernière activité",
       latest_notes: "Mes dernières notes",
       latest_notes_added_ago: "ajouté %{timeAgo}",
+      period: {
+        label: "Période",
+        today: "Aujourd’hui",
+        this_week: "Cette semaine",
+        this_month: "Ce mois-ci",
+        this_quarter: "Ce trimestre",
+        this_year: "Cette année",
+      },
       stepper: {
         install: "Installer Atomic CRM",
         progress: "%{step}/3 terminé",
         whats_next: "Et ensuite ?",
       },
+      summary: "%{pipeline} sur %{deals} affaires ouvertes.",
+      summary_with_overdue:
+        "%{pipeline} sur %{deals} affaires ouvertes · %{overdue} tâches en retard.",
       upcoming_tasks: "Tâches à venir",
     },
     header: {
@@ -953,6 +1870,10 @@ export const frenchCrmMessages = {
       tasks: {
         types: "Types",
       },
+      products: {
+        units: "Unités",
+        categories: "Catégories",
+      },
       preferences: "Préférences",
       title: "Paramètres",
       app_title: "Titre de l'application",
@@ -977,8 +1898,35 @@ export const frenchCrmMessages = {
       system: "Système",
     },
     language: "Langue",
+    leads: {
+      stats: {
+        new: "Nouveaux leads",
+        contacted: "Leads contactés",
+        qualified: "Leads qualifiés",
+        new_hint: "Pas encore contactés",
+        contacted_hint: "Cadence active",
+        qualified_hint: "Prêts pour la vente",
+        share: "%{share} du total",
+        of_cohort: "sur %{total} leads",
+        converted_of: "%{converted} sur %{created}",
+        cycle: "Cycle %{count} j",
+        basis:
+          "Leads arrivés au cours des 12 derniers mois ; indépendant des filtres de la liste",
+      },
+    },
     navigation: {
       label: "Navigation CRM",
+      help: "Centre d'aide",
+      search: "Rechercher",
+      toggle: "Afficher ou masquer la navigation",
+      groups: {
+        home: "Accueil",
+        sales: "Ventes",
+        customers: "Clients",
+        activities: "Activités",
+        analytics: "Analyse",
+        settings: "Configuration",
+      },
     },
     profile: {
       inbound: {

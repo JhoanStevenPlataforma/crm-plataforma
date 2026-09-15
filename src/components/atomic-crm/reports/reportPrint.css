@@ -1,0 +1,120 @@
+/*
+ * Print styles for a report — this is the PDF export.
+ *
+ * No jspdf, no html2canvas, and not as a compromise: the browser's own print
+ * pipeline produces VECTOR output with real, selectable text, while
+ * html2canvas rasterises the page to a bitmap that pixelates on zoom and
+ * cannot be searched. It also needs no dependency, which `dependency-safety.md`
+ * would otherwise put in front of a human reviewer.
+ *
+ * What it costs: the user goes through the browser's print dialog and chooses
+ * "Save as PDF" rather than getting a file straight from a button. The button
+ * calls `window.print()` and the dialog opens on it, so it is one extra click.
+ *
+ * Scoped under `.report-print-root` so nothing here can leak into printing any
+ * other screen of the CRM.
+ */
+
+@media print {
+  /* The application chrome is navigation; on paper it is noise that eats a
+     third of the first page. */
+  .report-print-hide {
+    display: none !important;
+  }
+
+  /* Backgrounds and chart fills are the data. Without this Chrome and Safari
+     drop every fill and print a legend beside a set of invisible bars. */
+  .report-print-root,
+  .report-print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Paper is a light surface whatever the reader's theme is. Printing the dark
+     palette wastes toner and renders muted foreground text near-invisible. */
+  .report-print-root {
+    background: #ffffff !important;
+    color: #111111 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Cards become rules rather than boxes: a printed border around every tile
+     turns a clean report into a form. */
+  .report-print-root [data-slot="card"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    break-inside: avoid;
+  }
+
+  .report-print-root table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10pt !important;
+  }
+
+  .report-print-root thead {
+    /* A table spilling onto a second page repeats its header there, so the
+       columns stay identifiable without flipping back. */
+    display: table-header-group;
+  }
+
+  .report-print-root th,
+  .report-print-root td {
+    border-bottom: 1px solid #dddddd !important;
+    color: #111111 !important;
+  }
+
+  .report-print-root tr {
+    break-inside: avoid;
+  }
+
+  /* Scroll containers have no meaning on paper — an `overflow: auto` box prints
+     only its visible slice, silently truncating the report. */
+  .report-print-root .overflow-x-auto,
+  .report-print-root .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* The header block that only exists on paper: title, period, and the caveat
+     about whose rows these are. */
+  .report-print-only {
+    display: block !important;
+  }
+
+  .report-print-chart {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
+
+/* The print header is markup that exists all the time and is only shown by the
+   rule above. Hidden here rather than conditionally rendered, so printing never
+   depends on a React state change happening before the dialog opens. */
+.report-print-only {
+  display: none;
+}
+
+/*
+ * The multi-report pack.
+ *
+ * Each report starts on its own page. `break-after-page` is set as a utility on
+ * the section as well, but the last one must NOT force a trailing blank sheet —
+ * which is exactly what a naive `break-after: page` on every child produces.
+ */
+@media print {
+  .report-print-root .break-after-page {
+    break-after: page;
+    page-break-after: always;
+  }
+  .report-print-root .break-after-page:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

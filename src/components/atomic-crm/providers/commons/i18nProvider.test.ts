@@ -1,5 +1,12 @@
+import englishMessages from "ra-language-english";
+import { raSupabaseEnglishMessages } from "ra-supabase-language-english";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { englishCrmMessages } from "./englishCrmMessages";
 import { getInitialLocale, i18nProvider } from "./i18nProvider";
+import { spanishCrmMessages } from "./spanishCrmMessages";
+import { spanishMessages } from "./spanishRaMessages";
+import { raSupabaseSpanishMessages } from "./spanishSupabaseMessages";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -117,5 +124,56 @@ describe("i18nProvider", () => {
     });
 
     expect(getInitialLocale()).toBe("en");
+  });
+});
+
+/**
+ * The Spanish catalogs are maintained by hand: English and French come from
+ * `ra-language-*` / `ra-supabase-language-*` packages that update with
+ * `npm update`, and there is no Spanish equivalent pinned here (adding one is a
+ * supply-chain decision — see `.claude/rules/dependency-safety.md`).
+ *
+ * That asymmetry is the risk these tests exist for. When react-admin adds a
+ * message, English and French get it for free and Spanish silently starts
+ * rendering the raw key at the user. Comparing key paths turns that into a
+ * failing test at upgrade time, which is the only moment anyone can act on it.
+ */
+describe("spanish catalog parity", () => {
+  /** Every leaf path in a nested message catalog, as `a.b.c`. */
+  const leafPaths = (value: unknown, prefix = ""): string[] => {
+    if (typeof value !== "object" || value === null) {
+      return prefix ? [prefix] : [];
+    }
+    return Object.entries(value as Record<string, unknown>).flatMap(
+      ([key, child]) => leafPaths(child, prefix ? `${prefix}.${key}` : key),
+    );
+  };
+
+  it("covers every ra-language-english key", () => {
+    const english = new Set(leafPaths(englishMessages));
+    const spanish = new Set(leafPaths(spanishMessages));
+
+    const missing = [...english].filter((key) => !spanish.has(key));
+
+    expect(missing).toEqual([]);
+  });
+
+  it("covers every ra-supabase-language-english key", () => {
+    const english = new Set(leafPaths(raSupabaseEnglishMessages));
+    const spanish = new Set(leafPaths(raSupabaseSpanishMessages));
+
+    const missing = [...english].filter((key) => !spanish.has(key));
+
+    expect(missing).toEqual([]);
+  });
+
+  it("covers every key of the CRM's own english catalog", () => {
+    const english = new Set(leafPaths(englishCrmMessages));
+    const spanish = new Set(leafPaths(spanishCrmMessages));
+
+    expect([...english].filter((key) => !spanish.has(key))).toEqual([]);
+    // Both ways here: these three catalogs are written together in this repo,
+    // so a key only Spanish has is a typo rather than an upstream addition.
+    expect([...spanish].filter((key) => !english.has(key))).toEqual([]);
   });
 });

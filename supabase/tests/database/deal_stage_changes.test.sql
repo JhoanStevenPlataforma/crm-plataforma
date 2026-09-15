@@ -16,9 +16,15 @@
 --
 begin;
 
-select plan(17);
+select plan(22);
 
 alter table public.contacts disable trigger "20_contact_saved";
+
+-- This file is about the trail, not about the completed-task rule that gates a
+-- move (`deal_stage_gate.test.sql` owns that one). Switching the requirements
+-- off here keeps a change to the gate from failing assertions that are asking a
+-- different question — and keeps these fixtures from needing a task apiece.
+update public.deal_stage_requirements set enforced_from = null;
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('96222222-0000-0000-0000-000000000001', 'stage.admin@test.local', '{"first_name":"Alba","last_name":"Admin"}'::jsonb),
@@ -177,6 +183,46 @@ select is(
         and event_type = 'deal.stage_changed'),
     'Propuesta enviada tras la visita del martes',
     'the deal timeline serves the reason, so the page needs no second query');
+
+reset role;
+
+--
+-- 7. The files behind a move are private, and follow the deal.
+--
+-- They used to go to the `attachments` bucket, which is public: a contract
+-- justifying a stage move was readable by anyone holding the URL, signed in or
+-- not. They now live in `deal-attachments` (private) and the storage policy
+-- asks `can_see_deal()` -- the same question the select policy on deals asks.
+--
+select has_function('public', 'can_see_deal', array['bigint'],
+    'the deal visibility predicate the storage policy calls exists');
+
+select ok(
+    (select rowsecurity from pg_tables
+      where schemaname = 'storage' and tablename = 'objects'),
+    'storage.objects enforces row level security');
+
+select is(
+    (select count(*)::int from pg_policies
+      where schemaname = 'storage' and tablename = 'objects'
+        and coalesce(qual, '') || coalesce(with_check, '') like '%deal-attachments%'),
+    3,
+    'read, insert and delete on deal-attachments are all gated');
+
+select is(
+    (select public from storage.buckets where id = 'deal-attachments'),
+    false,
+    'the deal-attachments bucket is private');
+
+-- The predicate itself, from the owner's seat: 9602 owns 9601, not 9603.
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"96222222-0000-0000-0000-000000000002","role":"authenticated"}', true);
+
+select is(
+    array[public.can_see_deal(9601), public.can_see_deal(9603)],
+    array[true, false],
+    'a rep may open the files of their own deal and not of somebody else''s');
 
 reset role;
 

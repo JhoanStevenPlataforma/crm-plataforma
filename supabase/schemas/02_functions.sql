@@ -101,6 +101,24 @@ $$;
 -- §7.3 access rule for tasks: true if you are an active owner/collaborator/
 -- watcher, a member of an assigned team, the creator (of a task that is not
 -- deleted), the owner of a linked record, or can_manage_all().
+-- Deal visibility as a callable predicate, mirroring `can_see_task`.
+--
+-- The `deal-attachments` storage policy has to give the same answer the select
+-- policy on public.deals gives, and a policy cannot join to a table the reader
+-- may not read -- hence SECURITY DEFINER with a pinned search_path.
+CREATE OR REPLACE FUNCTION "public"."can_see_deal"("p_deal_id" bigint) RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+    select (select public.can_manage_all())
+        or exists (
+            select 1
+              from public.deals d
+             where d.id = p_deal_id
+               and d.sales_id = (select public.current_sale_id())
+        );
+$$;
+
 CREATE OR REPLACE FUNCTION "public"."can_see_task"("p_task_id" bigint) RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -681,6 +699,63 @@ begin
         when 'status_id'  then return 'task.updated';
         else return null;
     end case;
+end;
+$$;
+
+-- Keeps `task_events` supplied with monthly partitions (§5.1).
+--
+-- The table shipped with five hard-coded months and a comment claiming a
+-- scheduled job created more. There was no such job, so the first insert after
+-- the last bound would have raised `no partition of relation task_events found
+-- for row` -- and since `tasks_audit` writes here AFTER INSERT OR UPDATE on
+-- tasks, that aborts the task write itself. pg_cron calls this on the 1st.
+--
+-- Skips months that already exist, and warns rather than raising when a
+-- partition cannot be attached, so one bad month does not take the rest of the
+-- run down with it.
+CREATE OR REPLACE FUNCTION "public"."ensure_task_events_partitions"("p_months_ahead" integer DEFAULT 3) RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+    v_month   date;
+    v_name    text;
+    v_created integer := 0;
+    i         integer;
+begin
+    for i in 0..greatest(p_months_ahead, 0) loop
+        v_month := (date_trunc('month', now()) + make_interval(months => i))::date;
+        v_name  := 'task_events_' || to_char(v_month, 'YYYY_MM');
+
+        if exists (select 1
+                     from pg_catalog.pg_class c
+                     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+                    where n.nspname = 'public'
+                      and c.relname = v_name) then
+            continue;
+        end if;
+
+        begin
+            execute format(
+                'create table public.%I partition of public.task_events '
+                'for values from (%L) to (%L)',
+                v_name,
+                v_month,
+                (v_month + interval '1 month')::date);
+            v_created := v_created + 1;
+        exception
+            when others then
+                -- The realistic cause is rows already sitting in the default
+                -- partition for this month: Postgres refuses to attach a
+                -- partition it would have to steal rows for. Those rows are
+                -- safe where they are, so warn and keep going.
+                raise warning
+                    'task_events: could not create partition % (%). Rows for that month are probably in task_events_default and must be moved before the partition can be attached.',
+                    v_name, sqlerrm;
+        end;
+    end loop;
+
+    return v_created;
 end;
 $$;
 
@@ -3113,6 +3188,7 @@ as $$
 declare
     v_reason      text  := nullif(btrim(coalesce(current_setting('app.deal_stage_reason', true), '')), '');
     v_attachments jsonb := nullif(coalesce(current_setting('app.deal_stage_attachments', true), ''), '')::jsonb;
+    v_override    text  := nullif(btrim(coalesce(current_setting('app.deal_stage_override', true), '')), '');
     v_for_deal    text  := coalesce(current_setting('app.deal_stage_deal_id', true), '');
 begin
     -- The settings belong to one specific deal. Without this check a second
@@ -3121,10 +3197,11 @@ begin
     if v_for_deal <> new.id::text then
         v_reason := null;
         v_attachments := null;
+        v_override := null;
     end if;
 
     insert into public.deal_stage_changes
-        (deal_id, from_stage, to_stage, reason, sales_id, attachments)
+        (deal_id, from_stage, to_stage, reason, sales_id, attachments, override_reason)
     values (
         new.id,
         old.stage,
@@ -3135,10 +3212,113 @@ begin
             when v_attachments is null or jsonb_typeof(v_attachments) <> 'array' then null
             else (select array_agg(element)
                     from jsonb_array_elements(v_attachments) as element)
-        end
+        end,
+        v_override
     );
 
     return null;
+end;
+$$;
+
+-- "Has this deal earned the next stage?" — the completed-task rule, in one place.
+--
+-- Both the enforcement inside `move_deal_stage()` and the readiness the kanban
+-- dialog displays call THIS function. Two implementations of the same rule
+-- drift, and the direction they drift in is always the same: a dialog that
+-- enables its button for a move the server then refuses.
+--
+-- The count is anchored on the deal's entry into its CURRENT stage. Counting
+-- every completed task the deal ever had would satisfy the rule permanently
+-- after the first one — the deal would then cross the whole pipeline on the
+-- strength of a single call logged months earlier, which is precisely the
+-- inspection this rule exists to force.
+--
+-- "Completed" is read off the task columns, not off `task_statuses.counts_as_done`:
+-- the same choice `team_workload_summary` documents, so this counter agrees with
+-- the task lists the user is looking at.
+--
+-- SECURITY DEFINER to read `deals` and `tasks` regardless of who asks, so the
+-- number is the same for a rep and for the manager auditing them. The deals
+-- select policy is therefore restated here — without it this is a probe for the
+-- existence of other people's deals.
+create or replace function public.deal_stage_gate(
+    p_deal_id  bigint,
+    p_to_stage text
+) returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_deal      public.deals;
+    v_req       public.deal_stage_requirements;
+    v_since     timestamp with time zone;
+    v_task_ids  bigint[];
+    v_completed integer;
+begin
+    select * into v_deal from public.deals where id = p_deal_id;
+    if not found or not (select public.can_see_deal(p_deal_id)) then
+        raise exception 'deal % not found', p_deal_id
+            using errcode = 'no_data_found';
+    end if;
+
+    -- When the deal entered the stage it is in now. A deal that has never moved
+    -- has no history row, so its creation is the start of its first stage.
+    v_since := coalesce(
+        (select max(changed_at)
+           from public.deal_stage_changes
+          where deal_id = p_deal_id
+            and to_stage = v_deal.stage),
+        v_deal.created_at);
+
+    select * into v_req
+      from public.deal_stage_requirements
+     where to_stage = p_to_stage;
+
+    -- No row for this stage, no requirement configured, the rule not switched
+    -- on yet, or a deal that entered its current stage before the rule existed:
+    -- the move is free. `required` is reported as 0 so a caller can tell "no
+    -- rule applies here" from "the rule is satisfied".
+    if not found
+       or v_req.min_completed_tasks = 0
+       or v_req.enforced_from is null
+       or v_since < v_req.enforced_from then
+        return jsonb_build_object(
+            'deal_id', p_deal_id,
+            'to_stage', p_to_stage,
+            'required', 0,
+            'completed', 0,
+            'ok', true,
+            'since', v_since,
+            'qualifying_task_ids', '[]'::jsonb);
+    end if;
+
+    -- Any active link to the deal, not just the primary one: a task can be
+    -- primary on the contact and still be the work that moved this deal.
+    select coalesce(array_agg(t.id order by t.completed_at), '{}'::bigint[])
+      into v_task_ids
+      from public.tasks t
+     where t.completed_at is not null
+       and t.completed_at >= v_since
+       and t.canceled_at is null
+       and t.deleted_at is null
+       and exists (
+           select 1
+             from public.task_links l
+            where l.task_id = t.id
+              and l.entity_type = 'deal'
+              and l.entity_id = p_deal_id
+              and l.unlinked_at is null);
+
+    v_completed := coalesce(array_length(v_task_ids, 1), 0);
+
+    return jsonb_build_object(
+        'deal_id', p_deal_id,
+        'to_stage', p_to_stage,
+        'required', v_req.min_completed_tasks,
+        'completed', v_completed,
+        'ok', v_completed >= v_req.min_completed_tasks,
+        'since', v_since,
+        'qualifying_task_ids', to_jsonb(v_task_ids));
 end;
 $$;
 
@@ -3152,19 +3332,29 @@ $$;
 -- The reason is mandatory, exactly as `transition_task()` demands one to
 -- cancel a task. `p_attachments` is the JSON array the client already uploaded
 -- to the attachments bucket, in `deal_notes.attachments` shape.
+--
+-- This is also where the completed-task rule is enforced (`deal_stage_gate()`).
+-- `p_override_reason` is the escape valve, and it is deliberately narrow: only
+-- an admin — not a manager, who is otherwise allowed to move anybody's deal —
+-- and only with a written motive, which is stored on the history row. Anyone
+-- else passing it is ignored and still refused, so the parameter cannot be used
+-- to probe for the privilege.
 create or replace function public.move_deal_stage(
-    p_deal_id     bigint,
-    p_to_stage    text,
-    p_reason      text,
-    p_index       integer default null,
-    p_attachments jsonb   default '[]'::jsonb
+    p_deal_id         bigint,
+    p_to_stage        text,
+    p_reason          text,
+    p_index           integer default null,
+    p_attachments     jsonb   default '[]'::jsonb,
+    p_override_reason text    default null
 ) returns public.deals
     language plpgsql security definer
     set search_path to ''
 as $$
 declare
-    v_deal  public.deals;
-    v_actor bigint := public.current_sale_id();
+    v_deal     public.deals;
+    v_actor    bigint := public.current_sale_id();
+    v_gate     jsonb;
+    v_override text := nullif(btrim(coalesce(p_override_reason, '')), '');
 begin
     if coalesce(btrim(p_to_stage), '') = '' then
         raise exception 'a target stage is required'
@@ -3194,10 +3384,35 @@ begin
             using errcode = 'check_violation';
     end if;
 
+    -- Evaluated inside the row lock taken above, so two concurrent moves cannot
+    -- both pass the gate on the strength of the same single completed task.
+    v_gate := public.deal_stage_gate(p_deal_id, p_to_stage);
+
+    if not (v_gate->>'ok')::boolean then
+        -- Only an admin overrides, and only in writing. A manager can move the
+        -- deal, but not past the rule.
+        if v_override is null
+           or (select public.current_sales_role()) is distinct from 'admin'::public.sales_role then
+            -- `detail` is the stable machine-readable key the client maps to a
+            -- translated message; `hint` carries the counts so the UI can say
+            -- "1 of 2" without asking a second time.
+            raise exception 'deal % needs % completed task(s) since it entered stage % to move to %',
+                    p_deal_id, v_gate->>'required', v_deal.stage, p_to_stage
+                using errcode = 'check_violation',
+                      detail  = 'deal_stage_requires_completed_tasks',
+                      hint    = v_gate::text;
+        end if;
+    else
+        -- The gate was satisfied, so nothing was overridden. Recording a motive
+        -- here would put a skipped-the-rule marker on a move that met it.
+        v_override := null;
+    end if;
+
     -- Handed to the trigger, which is what actually writes the history row.
     perform set_config('app.deal_stage_deal_id', p_deal_id::text, true);
     perform set_config('app.deal_stage_reason', p_reason, true);
     perform set_config('app.deal_stage_attachments', coalesce(p_attachments, '[]'::jsonb)::text, true);
+    perform set_config('app.deal_stage_override', coalesce(v_override, ''), true);
 
     update public.deals
        set stage = p_to_stage,
@@ -3210,7 +3425,3300 @@ begin
     perform set_config('app.deal_stage_deal_id', '', true);
     perform set_config('app.deal_stage_reason', '', true);
     perform set_config('app.deal_stage_attachments', '', true);
+    perform set_config('app.deal_stage_override', '', true);
 
     return v_deal;
+end;
+$$;
+
+--
+-- Analytics module aggregation functions (see the migration of the same name
+-- for the full rationale). SECURITY INVOKER on every one of them -- the
+-- default, deliberately not spelled out, because pg_dump omits it and writing
+-- it produces a phantom diff. RLS does the role scoping.
+--
+-- ---------------------------------------------------------------------------
+-- Deals: stage distribution (stock)
+-- ---------------------------------------------------------------------------
+--
+-- Deliberately NOT date-filtered, and deliberately OPEN deals only.
+--
+-- "Where is the live pipeline right now" has no month, so applying the period
+-- filter to it would make a stock figure move for a reason the label does not
+-- explain. And excluding won/lost is what keeps the chart honest: with the
+-- terminal stages in, the bars mix a snapshot of the pipeline against the
+-- lifetime total of everything ever closed, on one axis.
+--
+-- `not in ('won', 'lost')` is the same definition as
+-- `teams_summary.pipeline_amount`. `<> 'won'` booked dead deals as forecast,
+-- which is the exact bug the team dashboard migration fixed; the two screens
+-- must not disagree about what the word pipeline means. The literals match
+-- `defaultDealStages`, so renaming a stage in the application configuration
+-- needs this function updated too.
+--
+create or replace function public.deal_stage_stats(
+    p_sales_id bigint default null,
+    p_team_id  bigint default null
+) returns table (
+    stage    text,
+    nb_deals bigint,
+    amount   numeric
+)
+language sql
+stable
+set search_path to ''
+as $$
+    select d.stage,
+           count(*)::bigint,
+           coalesce(sum(d.amount), 0)::numeric
+      from public.deals d
+     where d.archived_at is null
+       and d.stage not in ('won', 'lost')
+       and (p_sales_id is null or d.sales_id = p_sales_id)
+       and (p_team_id  is null or d.team_id  = p_team_id)
+     group by d.stage;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Deals: monthly flow
+-- ---------------------------------------------------------------------------
+--
+-- Two date bases in one result, carried by a `union all` -- the same shape
+-- `team_task_stats` uses for created-vs-completed. A deal belongs to the month
+-- it was OPENED and, separately, to the month it was DECIDED, and those are
+-- rarely the same month. Folding them into one row per month is what lets the
+-- chart put creation next to outcome; the UI labels each series with its own
+-- basis, because a chart whose series measure different dates and says only
+-- "this quarter" is how a dashboard loses credibility.
+--
+-- DECISION DATE, and this is the honest limitation of the MVP: it uses
+-- `expected_closing_date`, not the real transition date. There is no
+-- `deals.closed_at`, and the real answer lives in `deal_stage_changes`, which
+-- has only recorded transitions since 2026-08-18 -- days, not quarters. Using
+-- it now would chart noise. `deal_cycle_stats` swaps this basis in phase 2,
+-- once that table has accumulated a period; until then the UI must say
+-- "expected" and never "actual".
+--
+-- A won/lost deal with no `expected_closing_date` therefore contributes to no
+-- month at all. That gap is visible rather than papered over: coalescing it to
+-- `created_at` would invent a close date that nobody entered.
+--
+create or replace function public.deal_flow_stats(
+    p_from     date,
+    p_to       date,
+    p_sales_id bigint default null,
+    p_team_id  bigint default null
+) returns table (
+    month          date,
+    nb_created     bigint,
+    amount_created numeric,
+    nb_won         bigint,
+    amount_won     numeric,
+    nb_lost        bigint,
+    amount_lost    numeric,
+    nb_forecast          bigint,
+    forecast_days_total  numeric
+)
+language sql
+stable
+set search_path to ''
+as $$
+    with events as (
+        select date_trunc('month', d.created_at)::date as m,
+               1                                as created,
+               coalesce(d.amount, 0)::numeric   as amt_created,
+               0                                as won,
+               0::numeric                       as amt_won,
+               0                                as lost,
+               0::numeric                       as amt_lost,
+               -- Forecast cycle length, carried as a SUM and a COUNT rather
+               -- than as an average. Averaging monthly averages weights a month
+               -- with three deals like a month with three hundred; a sum and a
+               -- count divide exactly, at any grouping the UI chooses.
+               case when d.expected_closing_date is not null
+                    then 1 else 0 end            as fc_n,
+               case when d.expected_closing_date is not null
+                    then (d.expected_closing_date - d.created_at::date)::numeric
+                    else 0::numeric end          as fc_days
+          from public.deals d
+         where d.archived_at is null
+           and d.created_at::date between p_from and p_to
+           and (p_sales_id is null or d.sales_id = p_sales_id)
+           and (p_team_id  is null or d.team_id  = p_team_id)
+        union all
+        select date_trunc('month', d.expected_closing_date)::date,
+               0,
+               0::numeric,
+               case when d.stage = 'won'  then 1 else 0 end,
+               case when d.stage = 'won'  then coalesce(d.amount, 0)::numeric
+                    else 0::numeric end,
+               case when d.stage = 'lost' then 1 else 0 end,
+               case when d.stage = 'lost' then coalesce(d.amount, 0)::numeric
+                    else 0::numeric end,
+               0,
+               0::numeric
+          from public.deals d
+         where d.archived_at is null
+           and d.stage in ('won', 'lost')
+           and d.expected_closing_date between p_from and p_to
+           and (p_sales_id is null or d.sales_id = p_sales_id)
+           and (p_team_id  is null or d.team_id  = p_team_id)
+    )
+    select e.m,
+           sum(e.created)::bigint,
+           sum(e.amt_created)::numeric,
+           sum(e.won)::bigint,
+           sum(e.amt_won)::numeric,
+           sum(e.lost)::bigint,
+           sum(e.amt_lost)::numeric,
+           sum(e.fc_n)::bigint,
+           sum(e.fc_days)::numeric
+      from events e
+     group by e.m
+     order by e.m;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Deals: per owner
+-- ---------------------------------------------------------------------------
+--
+-- Mixed bases in one row, on purpose: `nb_open` / `pipeline_amount` are stock
+-- (what this person is carrying right now) while the won and lost figures are
+-- flow inside the period. The chart labels each series; putting them in one
+-- row is what makes the total and its breakdown come from a single call, so
+-- they cannot disagree because a write landed between two requests.
+--
+-- Aggregated from `deals` and then joined to `sales`, so an owner with no deals
+-- simply does not appear. Starting from `sales` instead would list every
+-- account, including disabled ones, as a row of zeroes -- a roster, which is
+-- not what this answers.
+--
+create or replace function public.deal_owner_stats(
+    p_from    date,
+    p_to      date,
+    p_team_id bigint default null
+) returns table (
+    sales_id        bigint,
+    owner_name      text,
+    nb_open         bigint,
+    pipeline_amount numeric,
+    nb_won          bigint,
+    won_amount      numeric,
+    nb_lost         bigint,
+    lost_amount     numeric
+)
+language sql
+stable
+set search_path to ''
+as $$
+    with agg as (
+        select d.sales_id as owner_id,
+               count(*) filter (
+                   where d.stage not in ('won', 'lost')) as open_deals,
+               coalesce(sum(d.amount) filter (
+                   where d.stage not in ('won', 'lost')), 0)::numeric as pipeline,
+               count(*) filter (
+                   where d.stage = 'won'
+                     and d.expected_closing_date between p_from and p_to) as won_deals,
+               coalesce(sum(d.amount) filter (
+                   where d.stage = 'won'
+                     and d.expected_closing_date between p_from and p_to), 0)::numeric as won_amt,
+               count(*) filter (
+                   where d.stage = 'lost'
+                     and d.expected_closing_date between p_from and p_to) as lost_deals,
+               coalesce(sum(d.amount) filter (
+                   where d.stage = 'lost'
+                     and d.expected_closing_date between p_from and p_to), 0)::numeric as lost_amt
+          from public.deals d
+         where d.archived_at is null
+           and d.sales_id is not null
+           and (p_team_id is null or d.team_id = p_team_id)
+         group by d.sales_id
+    )
+    select a.owner_id,
+           nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), ''),
+           a.open_deals::bigint,
+           a.pipeline,
+           a.won_deals::bigint,
+           a.won_amt,
+           a.lost_deals::bigint,
+           a.lost_amt
+      from agg a
+      join public.sales s on s.id = a.owner_id;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Leads: monthly flow
+-- ---------------------------------------------------------------------------
+--
+-- `nb_converted` is COHORT-scoped, not flow-scoped: of the leads created in
+-- this month, how many have converted since. That is what makes a monthly
+-- conversion rate mean anything -- dividing conversions that happened in March
+-- by leads created in March compares two different populations.
+--
+-- The consequence is worth printing next to the chart: the most recent months
+-- always look worse, because their leads have not had time to convert yet. A
+-- cohort rate that is still filling in is not a decline.
+--
+create or replace function public.lead_flow_stats(
+    p_from     date,
+    p_to       date,
+    p_sales_id bigint default null
+) returns table (
+    month               date,
+    nb_created          bigint,
+    nb_converted        bigint,
+    avg_conversion_days numeric
+)
+language sql
+stable
+set search_path to ''
+as $$
+    select date_trunc('month', l.created_at)::date,
+           count(*)::bigint,
+           count(*) filter (where l.converted_at is not null)::bigint,
+           round(
+               avg(extract(epoch from (l.converted_at - l.created_at)) / 86400.0)
+                   filter (where l.converted_at is not null),
+               1)
+      from public.leads l
+     where l.created_at::date between p_from and p_to
+       and (p_sales_id is null or l.sales_id = p_sales_id)
+     group by 1
+     order by 1;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Leads: breakdown by source, status and owner
+-- ---------------------------------------------------------------------------
+--
+-- Three dimensions in one call, discriminated by a `dimension` column -- the
+-- same `union all` trick `team_task_stats` uses for its two date bases. One
+-- round trip serves five charts, and every rate on the Leads tab is computed
+-- over the same cohort, so the breakdowns reconcile with each other by
+-- construction instead of by luck.
+--
+-- ATTRIBUTION, and its limit. `won_amount` is the only path in this schema from
+-- an origin to revenue: `leads.converted_deal_id` -> `deals`. It exists ONLY
+-- for leads converted with `create_deal := true`; a deal typed straight into
+-- the kanban has no traceable origin at all, because `deals` has no `source`
+-- column. So this answers "of the revenue we CAN attribute, which channel
+-- produced it" -- the UI must show the attributable share beside the figure or
+-- it will be read as the whole business.
+--
+-- `bucket` carries a raw key for source and status (the frontend resolves the
+-- label from the application configuration) but a resolved NAME for owner,
+-- because the client cannot turn a `sales_id` into a person without a second
+-- query.
+--
+create or replace function public.lead_breakdown_stats(
+    p_from     date,
+    p_to       date,
+    p_sales_id bigint default null
+) returns table (
+    dimension           text,
+    bucket              text,
+    nb_leads            bigint,
+    nb_converted        bigint,
+    nb_won_deals        bigint,
+    won_amount          numeric,
+    pipeline_amount     numeric,
+    avg_conversion_days numeric
+)
+language sql
+stable
+set search_path to ''
+as $$
+    with cohort as (
+        select l.id,
+               l.source,
+               l.status,
+               l.sales_id,
+               l.created_at,
+               l.converted_at,
+               l.converted_deal_id
+          from public.leads l
+         where l.created_at::date between p_from and p_to
+           and (p_sales_id is null or l.sales_id = p_sales_id)
+    ),
+    enriched as (
+        select c.source,
+               c.status,
+               c.sales_id,
+               c.created_at,
+               c.converted_at,
+               d.stage                        as deal_stage,
+               coalesce(d.amount, 0)::numeric as deal_amount
+          from cohort c
+          left join public.deals d
+                 on d.id = c.converted_deal_id
+                and d.archived_at is null
+    )
+    select 'source'::text,
+           coalesce(nullif(btrim(e.source), ''), 'unknown'),
+           count(*)::bigint,
+           count(*) filter (where e.converted_at is not null)::bigint,
+           count(*) filter (where e.deal_stage = 'won')::bigint,
+           coalesce(sum(e.deal_amount) filter (where e.deal_stage = 'won'), 0)::numeric,
+           coalesce(sum(e.deal_amount) filter (
+               where e.deal_stage is not null
+                 and e.deal_stage not in ('won', 'lost')), 0)::numeric,
+           round(avg(extract(epoch from (e.converted_at - e.created_at)) / 86400.0)
+                     filter (where e.converted_at is not null), 1)
+      from enriched e
+     group by 1, 2
+    union all
+    select 'status'::text,
+           coalesce(nullif(btrim(e.status), ''), 'unknown'),
+           count(*)::bigint,
+           count(*) filter (where e.converted_at is not null)::bigint,
+           count(*) filter (where e.deal_stage = 'won')::bigint,
+           coalesce(sum(e.deal_amount) filter (where e.deal_stage = 'won'), 0)::numeric,
+           coalesce(sum(e.deal_amount) filter (
+               where e.deal_stage is not null
+                 and e.deal_stage not in ('won', 'lost')), 0)::numeric,
+           round(avg(extract(epoch from (e.converted_at - e.created_at)) / 86400.0)
+                     filter (where e.converted_at is not null), 1)
+      from enriched e
+     group by 1, 2
+    union all
+    select 'owner'::text,
+           coalesce(nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), ''),
+                    'unassigned'),
+           count(*)::bigint,
+           count(*) filter (where e.converted_at is not null)::bigint,
+           count(*) filter (where e.deal_stage = 'won')::bigint,
+           coalesce(sum(e.deal_amount) filter (where e.deal_stage = 'won'), 0)::numeric,
+           coalesce(sum(e.deal_amount) filter (
+               where e.deal_stage is not null
+                 and e.deal_stage not in ('won', 'lost')), 0)::numeric,
+           round(avg(extract(epoch from (e.converted_at - e.created_at)) / 86400.0)
+                     filter (where e.converted_at is not null), 1)
+      from enriched e
+      left join public.sales s on s.id = e.sales_id
+     group by 1, 2;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Tasks: monthly flow
+-- ---------------------------------------------------------------------------
+--
+-- The company-wide counterpart of `team_task_stats`, and it exists separately
+-- for a reason that is not duplication: that cube resolves tasks through
+-- `team_members`, so a rep who is in no team is invisible in it, and a rep in
+-- two teams is counted twice. This one hangs tasks off their owner directly.
+--
+-- Two date bases again: a task belongs to the month it was created AND to the
+-- month it was completed. The gap between the two series IS the backlog
+-- forming, which is the only shape that shows a team accumulating work rather
+-- than working it.
+--
+-- ON TIME: a task with no due date counts as on time, so the denominator is
+-- exactly `nb_completed`. Excluding it instead would make the two counters look
+-- comparable while they are not, which is how a rate ends up above 100 %.
+--
+-- CYCLE: measured `completed_at - created_at`, never from
+-- `tasks.total_open_seconds`. That counter is trigger-maintained and reads 0 on
+-- every task predating the trigger, and a chart cannot tell "instant" from
+-- "never recorded". The subtraction is exact for every row, always.
+--
+create or replace function public.task_flow_stats(
+    p_from     date,
+    p_to       date,
+    p_sales_id bigint default null
+) returns table (
+    month                date,
+    nb_created           bigint,
+    nb_completed         bigint,
+    nb_completed_on_time bigint,
+    avg_cycle_hours      numeric
+)
+language sql
+stable
+set search_path to ''
+as $$
+    with events as (
+        select date_trunc('month', tk.created_at)::date as m,
+               1              as created,
+               0              as completed,
+               0              as on_time,
+               null::numeric  as cycle_seconds
+          from public.tasks tk
+         where tk.deleted_at is null
+           and tk.created_at::date between p_from and p_to
+           and (p_sales_id is null or tk.owner_sales_id = p_sales_id)
+        union all
+        select date_trunc('month', tk.completed_at)::date,
+               0,
+               1,
+               case when tk.due_date is null or tk.completed_at <= tk.due_date
+                    then 1 else 0 end,
+               extract(epoch from (tk.completed_at - tk.created_at))::numeric
+          from public.tasks tk
+         where tk.deleted_at is null
+           and tk.completed_at is not null
+           and tk.completed_at::date between p_from and p_to
+           and (p_sales_id is null or tk.owner_sales_id = p_sales_id)
+    )
+    select e.m,
+           sum(e.created)::bigint,
+           sum(e.completed)::bigint,
+           sum(e.on_time)::bigint,
+           -- Null, not 0, for a month where nothing was completed: `avg` over
+           -- no rows has no answer, and 0 would draw a bar claiming tasks
+           -- closed instantly.
+           round(avg(e.cycle_seconds) / 3600.0, 1)
+      from events e
+     group by e.m
+     order by e.m;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Tasks: stock, per owner
+-- ---------------------------------------------------------------------------
+--
+-- "How many are open" has no month, which is why none of this lives in the
+-- flow function above. Returned per owner rather than as three scalars so the
+-- tab's headline tiles and its per-owner chart come from ONE call and cannot
+-- contradict each other; the tiles are the sum of these rows.
+--
+-- OPEN is counted on the COLUMNS (`completed_at`, `canceled_at`, `deleted_at`,
+-- `archived_at` all null), never on `task_statuses.is_open`. The two disagree
+-- on an archived task and on a task completed without its status following, and
+-- the columns are what every partial index and every task-list filter use -- so
+-- this counter equals the list a user lands on when they click it
+-- (`OPEN_TASK_FILTER` in `taskBuckets.ts`).
+--
+-- `nb_overdue` is a SUBSET of `nb_open`, never a sibling. Anything stacking
+-- them must subtract first or every late task is drawn twice; `workloadOf()`
+-- does that subtraction once, for every caller.
+--
+-- One pass per owner with `count(*) filter (...)`, not three subqueries over
+-- the same rows -- the shape `team_workload_summary` settled on after measuring
+-- 330 ms against 35 ms.
+--
+create or replace function public.task_stock_stats(
+    p_sales_id bigint default null
+) returns table (
+    sales_id       bigint,
+    owner_name     text,
+    nb_open        bigint,
+    nb_overdue     bigint,
+    nb_due_next_7d bigint
+)
+language sql
+stable
+set search_path to ''
+as $$
+    with agg as (
+        select tk.owner_sales_id as owner_id,
+               count(*) filter (
+                   where tk.archived_at is null
+                     and tk.completed_at is null
+                     and tk.canceled_at is null) as open_tasks,
+               count(*) filter (
+                   where tk.archived_at is null
+                     and tk.completed_at is null
+                     and tk.canceled_at is null
+                     and tk.due_date < now()) as overdue,
+               count(*) filter (
+                   where tk.archived_at is null
+                     and tk.completed_at is null
+                     and tk.canceled_at is null
+                     and tk.due_date >= now()
+                     and tk.due_date < now() + interval '7 days') as due_next_7d
+          from public.tasks tk
+         where tk.deleted_at is null
+           and (p_sales_id is null or tk.owner_sales_id = p_sales_id)
+         group by tk.owner_sales_id
+    )
+    select a.owner_id,
+           nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), ''),
+           a.open_tasks::bigint,
+           a.overdue::bigint,
+           a.due_next_7d::bigint
+      from agg a
+      join public.sales s on s.id = a.owner_id;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Tasks: activity mix by type
+-- ---------------------------------------------------------------------------
+--
+-- Counted on COMPLETED tasks, not on created ones: the question is what work
+-- actually happened, and a planned call that never took place is not activity.
+-- `task_types` is the only activity-type vocabulary in the schema -- there are
+-- no call, email or meeting records, so "a meeting" here means "a task of type
+-- meeting that somebody closed".
+--
+create or replace function public.task_type_stats(
+    p_from     date,
+    p_to       date,
+    p_sales_id bigint default null
+) returns table (
+    type_key     text,
+    type_label   text,
+    nb_completed bigint
+)
+language sql
+stable
+set search_path to ''
+as $$
+    select ty.key,
+           ty.label,
+           count(*)::bigint
+      from public.tasks tk
+      join public.task_types ty on ty.id = tk.task_type_id
+     where tk.deleted_at is null
+       and tk.completed_at is not null
+       and tk.completed_at::date between p_from and p_to
+       and (p_sales_id is null or tk.owner_sales_id = p_sales_id)
+     group by ty.key, ty.label;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Reports: the catalogue, as the builder sees it
+-- ---------------------------------------------------------------------------
+--
+-- One call, one document, so the builder cannot render a picker that disagrees
+-- with the executor's allowlist -- they read the same two tables.
+--
+-- Open to every authenticated user, and that is not a leak: it describes which
+-- FIELDS exist, never which rows. A rep learning that `owner` is a groupable
+-- dimension still aggregates only their own deals when they group by it,
+-- because `run_report()` runs under their own row level security.
+--
+create or replace function public.report_catalog()
+returns jsonb
+language sql
+stable
+set search_path to ''
+as $$
+    select coalesce(
+        jsonb_agg(
+            jsonb_build_object(
+                'key',   d.key,
+                'label', d.label,
+                'default_date_field', d.default_date_field,
+                'fields', coalesce(f.fields, '[]'::jsonb)
+            )
+            order by d.rank, d.key
+        ),
+        '[]'::jsonb
+    )
+      from public.report_datasets d
+      left join lateral (
+          select jsonb_agg(
+                     jsonb_build_object(
+                         'key',          x.key,
+                         'label',        x.label,
+                         'role',         x.role,
+                         'data_type',    x.data_type,
+                         'aggregate',    x.aggregate,
+                         'filterable',   x.filterable,
+                         'label_source', x.label_source
+                     )
+                     order by x.rank, x.key
+                 ) as fields
+            from public.report_fields x
+           where x.dataset_key = d.key
+      ) f on true;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Reports: one filter predicate
+-- ---------------------------------------------------------------------------
+--
+-- Split out of `run_report()` so the operator allowlist is one readable table
+-- that pgTAP can hit directly, rather than a branch buried in a 200-line
+-- procedure.
+--
+-- `p_expr` is trusted: it arrives from `report_fields.sql_expr`, which only
+-- `service_role` can write. Everything else arrives from the client and is
+-- therefore either matched against a fixed set (`p_op`) or passed through
+-- `quote_literal` (`p_value`). There is no third category, which is what makes
+-- this reviewable.
+--
+create or replace function public.report_filter_sql(
+    p_expr      text,
+    p_data_type text,
+    p_op        text,
+    p_value     jsonb
+) returns text
+language plpgsql
+immutable
+set search_path to ''
+as $$
+declare
+    v_cast     text;
+    v_items    text[];
+    v_low      text;
+    v_high     text;
+    v_operator text;
+begin
+    -- Null tests take no value, so they are settled before anything tries to
+    -- read one.
+    if p_op = 'is_null' then
+        return format('(%s) is null', p_expr);
+    elsif p_op = 'is_not_null' then
+        return format('(%s) is not null', p_expr);
+    end if;
+
+    if p_value is null or p_value = 'null'::jsonb then
+        raise exception 'report: operator % needs a value', p_op
+            using errcode = '22023';
+    end if;
+
+    -- How a literal is spelled for this family of types. `month` is a date the
+    -- catalogue has already truncated, so it compares as a date.
+    v_cast := case p_data_type
+                  when 'number' then '::numeric'
+                  when 'money'  then '::numeric'
+                  when 'date'   then '::date'
+                  when 'month'  then '::date'
+                  else ''
+              end;
+
+    if p_data_type in ('text') then
+        case p_op
+            when 'eq'  then
+                return format('(%s) = %L', p_expr, p_value #>> '{}');
+            when 'neq' then
+                return format('(%s) is distinct from %L', p_expr, p_value #>> '{}');
+            when 'contains' then
+                -- `%` and `_` are escaped so a filter reads as text the user
+                -- typed, not as a pattern they did not know they were writing.
+                return format(
+                    '(%s) ilike %L escape ''\''',
+                    p_expr,
+                    '%' || replace(replace(replace(p_value #>> '{}', '\', '\\'),
+                                           '%', '\%'), '_', '\_') || '%');
+            when 'not_contains' then
+                return format(
+                    '((%s) is null or (%s) not ilike %L escape ''\'')',
+                    p_expr, p_expr,
+                    '%' || replace(replace(replace(p_value #>> '{}', '\', '\\'),
+                                           '%', '\%'), '_', '\_') || '%');
+            when 'in', 'not_in' then
+                if jsonb_typeof(p_value) <> 'array' then
+                    raise exception 'report: operator % needs an array', p_op
+                        using errcode = '22023';
+                end if;
+                -- An empty `in` is not "match everything": it is a filter the
+                -- user has not finished writing, and silently dropping it would
+                -- report the whole company under a label that says otherwise.
+                if jsonb_array_length(p_value) = 0 then
+                    raise exception 'report: operator % needs a non-empty array', p_op
+                        using errcode = '22023';
+                end if;
+                select array_agg(quote_literal(e.value))
+                  into v_items
+                  from jsonb_array_elements_text(p_value) as e(value);
+                return format('(%s) %s (%s)', p_expr,
+                              case when p_op = 'in' then 'in' else 'not in' end,
+                              array_to_string(v_items, ', '));
+            else
+                raise exception 'report: operator % is not allowed on text', p_op
+                    using errcode = '22023';
+        end case;
+    end if;
+
+    if p_data_type in ('number', 'money', 'date', 'month') then
+        if p_op = 'between' then
+            if jsonb_typeof(p_value) <> 'array'
+               or jsonb_array_length(p_value) <> 2 then
+                raise exception 'report: between needs a two-element array'
+                    using errcode = '22023';
+            end if;
+            v_low  := p_value ->> 0;
+            v_high := p_value ->> 1;
+            return format('(%s) between %L%s and %L%s',
+                          p_expr, v_low, v_cast, v_high, v_cast);
+        end if;
+
+        -- Validated BEFORE the expression is built, not inside it: a `case`
+        -- with no matching branch yields null and would compose
+        -- `(expr) <null> '5'`, which is a syntax error at execution time rather
+        -- than a rejected operator here.
+        v_operator := case p_op
+                          when 'eq'     then '='
+                          when 'neq'    then '<>'
+                          when 'gt'     then '>'
+                          when 'gte'    then '>='
+                          when 'lt'     then '<'
+                          when 'lte'    then '<='
+                          -- Date vocabulary mapped onto the same comparisons,
+                          -- so the UI can say "before" without a second code
+                          -- path behind it.
+                          when 'before' then '<'
+                          when 'after'  then '>'
+                      end;
+
+        if v_operator is null then
+            raise exception 'report: operator % is not allowed on %', p_op, p_data_type
+                using errcode = '22023';
+        end if;
+
+        return format('(%s) %s %L%s',
+                      p_expr, v_operator, p_value #>> '{}', v_cast);
+    end if;
+
+    raise exception 'report: unknown data type %', p_data_type
+        using errcode = '22023';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Reports: the executor
+-- ---------------------------------------------------------------------------
+--
+-- SECURITY INVOKER, and this one matters more than on any other function in
+-- the schema. The eight `/analytics` aggregates are invoker so that a rep sees
+-- their own figures; this one is invoker so that a GENERIC query engine cannot
+-- become a way to read the whole company. A `security definer` here would not
+-- leak one report -- it would leak every report anyone can express, which is
+-- every row of five tables. `reports_module.test.sql` asserts `prosecdef` is
+-- false rather than trusting this paragraph.
+--
+-- The composed statement contains no client text. It is assembled from:
+--   * `from_sql` / `base_where` / `sql_expr` -- migration-authored, service
+--     role writable only;
+--   * operators matched against a fixed set in `report_filter_sql`;
+--   * values passed through `quote_literal`.
+-- A key that is not in the catalogue raises, so the reachable statement space
+-- is exactly the catalogue.
+--
+-- Returns ONE jsonb document rather than a set of rows, for two reasons: the
+-- column list is different for every report, so a `returns table` would have to
+-- be a lie or a cursor; and the totals travel with the rows, so a reader cannot
+-- catch a page where the two disagree.
+--
+create or replace function public.run_report(p_spec jsonb)
+returns jsonb
+language plpgsql
+stable
+set search_path to ''
+as $$
+declare
+    v_dataset      public.report_datasets%rowtype;
+    v_field        public.report_fields%rowtype;
+    v_key          text;
+    v_dims         text[] := '{}';
+    v_dim_keys     text[] := '{}';
+    v_metric_keys  text[] := '{}';
+    v_select       text[] := '{}';
+    v_group        text[] := '{}';
+    v_where        text[] := '{}';
+    v_json_dims    text[] := '{}';
+    v_json_metrics text[] := '{}';
+    v_filter       jsonb;
+    v_period       jsonb;
+    v_period_field text;
+    v_sort         jsonb;
+    v_sort_key     text;
+    v_order        text;
+    v_limit        int;
+    v_sql          text;
+    v_rows         jsonb;
+    i              int;
+begin
+    -- ---- dataset ----------------------------------------------------------
+    select * into v_dataset
+      from public.report_datasets
+     where key = p_spec ->> 'dataset';
+
+    if not found then
+        raise exception 'report: unknown dataset %', coalesce(p_spec ->> 'dataset', '(null)')
+            using errcode = '22023';
+    end if;
+
+    -- ---- dimensions -------------------------------------------------------
+    --
+    -- Two at most. A third turns every chart into a table nobody reads, and it
+    -- multiplies the row count by a cardinality the period filter does not
+    -- bound.
+    --
+    if jsonb_typeof(p_spec -> 'dimensions') = 'array' then
+        if jsonb_array_length(p_spec -> 'dimensions') > 2 then
+            raise exception 'report: at most two dimensions'
+                using errcode = '22023';
+        end if;
+
+        for v_key in
+            select value from jsonb_array_elements_text(p_spec -> 'dimensions')
+        loop
+            select * into v_field
+              from public.report_fields
+             where dataset_key = v_dataset.key
+               and key = v_key
+               and role = 'dimension';
+
+            if not found then
+                raise exception 'report: % is not a dimension of %', v_key, v_dataset.key
+                    using errcode = '22023';
+            end if;
+
+            if v_key = any (v_dim_keys) then
+                raise exception 'report: dimension % repeated', v_key
+                    using errcode = '22023';
+            end if;
+
+            v_dim_keys := v_dim_keys || v_key;
+            v_dims     := v_dims || v_field.sql_expr;
+            -- Positional alias, never the user's key: an alias built from
+            -- client text is the one place an identifier could still be
+            -- smuggled into the statement.
+            v_select   := v_select || format('(%s) as d%s', v_field.sql_expr,
+                                             array_length(v_dim_keys, 1));
+            v_group    := v_group || format('%s', array_length(v_dim_keys, 1));
+            v_json_dims := v_json_dims ||
+                format('%L, d%s', v_key, array_length(v_dim_keys, 1));
+        end loop;
+    end if;
+
+    -- ---- metrics ----------------------------------------------------------
+    if jsonb_typeof(p_spec -> 'metrics') <> 'array'
+       or jsonb_array_length(p_spec -> 'metrics') = 0 then
+        raise exception 'report: at least one metric is required'
+            using errcode = '22023';
+    end if;
+
+    if jsonb_array_length(p_spec -> 'metrics') > 6 then
+        raise exception 'report: at most six metrics'
+            using errcode = '22023';
+    end if;
+
+    for v_key in
+        select value from jsonb_array_elements_text(p_spec -> 'metrics')
+    loop
+        select * into v_field
+          from public.report_fields
+         where dataset_key = v_dataset.key
+           and key = v_key
+           and role = 'metric';
+
+        if not found then
+            raise exception 'report: % is not a metric of %', v_key, v_dataset.key
+                using errcode = '22023';
+        end if;
+
+        if v_key = any (v_metric_keys) then
+            raise exception 'report: metric % repeated', v_key
+                using errcode = '22023';
+        end if;
+
+        v_metric_keys := v_metric_keys || v_key;
+        i := array_length(v_metric_keys, 1);
+
+        v_select := v_select || format('(%s) as m%s',
+            case v_field.aggregate
+                when 'raw'            then v_field.sql_expr
+                when 'count'          then format('count(%s)', v_field.sql_expr)
+                when 'count_distinct' then format('count(distinct %s)', v_field.sql_expr)
+                when 'sum'            then format('coalesce(sum(%s), 0)', v_field.sql_expr)
+                -- avg stays null on an empty set on purpose: 0 would draw a bar
+                -- claiming an average of nothing.
+                when 'avg'            then format('avg(%s)', v_field.sql_expr)
+            end, i);
+
+        v_json_metrics := v_json_metrics || format('%L, m%s', v_key, i);
+    end loop;
+
+    -- ---- base predicate ---------------------------------------------------
+    v_where := v_where || format('(%s)', v_dataset.base_where);
+
+    -- ---- period -----------------------------------------------------------
+    --
+    -- Bounds the scan, and it is what keeps a report on three years of deals
+    -- from being one sequential scan per open tab. Optional only for datasets
+    -- that declare no date field at all.
+    --
+    v_period := p_spec -> 'period';
+
+    if v_period is not null and jsonb_typeof(v_period) = 'object' then
+        v_period_field := coalesce(v_period ->> 'field', v_dataset.default_date_field);
+
+        if v_period_field is null then
+            raise exception 'report: % has no date field to filter on', v_dataset.key
+                using errcode = '22023';
+        end if;
+
+        select * into v_field
+          from public.report_fields
+         where dataset_key = v_dataset.key
+           and key = v_period_field
+           and data_type in ('date', 'month')
+           and filterable;
+
+        if not found then
+            raise exception 'report: % is not a filterable date field of %',
+                v_period_field, v_dataset.key
+                using errcode = '22023';
+        end if;
+
+        if (v_period ->> 'from') is not null then
+            v_where := v_where || public.report_filter_sql(
+                v_field.sql_expr, 'date', 'gte',
+                to_jsonb((v_period ->> 'from')));
+        end if;
+
+        if (v_period ->> 'to') is not null then
+            v_where := v_where || public.report_filter_sql(
+                v_field.sql_expr, 'date', 'lte',
+                to_jsonb((v_period ->> 'to')));
+        end if;
+    end if;
+
+    -- ---- filters ----------------------------------------------------------
+    if jsonb_typeof(p_spec -> 'filters') = 'array' then
+        if jsonb_array_length(p_spec -> 'filters') > 12 then
+            raise exception 'report: at most twelve filters'
+                using errcode = '22023';
+        end if;
+
+        for v_filter in
+            select value from jsonb_array_elements(p_spec -> 'filters')
+        loop
+            select * into v_field
+              from public.report_fields
+             where dataset_key = v_dataset.key
+               and key = v_filter ->> 'field'
+               and filterable;
+
+            if not found then
+                raise exception 'report: % is not a filterable field of %',
+                    coalesce(v_filter ->> 'field', '(null)'), v_dataset.key
+                    using errcode = '22023';
+            end if;
+
+            -- A metric filter would be a HAVING clause, which is a different
+            -- question ("groups whose total exceeds X") and is not offered
+            -- rather than silently reinterpreted as a row filter.
+            if v_field.role <> 'dimension' then
+                raise exception 'report: % is a metric and cannot be filtered',
+                    v_field.key using errcode = '22023';
+            end if;
+
+            v_where := v_where || public.report_filter_sql(
+                v_field.sql_expr,
+                v_field.data_type,
+                coalesce(v_filter ->> 'op', ''),
+                v_filter -> 'value');
+        end loop;
+    end if;
+
+    -- ---- order and limit --------------------------------------------------
+    v_sort := p_spec -> 'sort';
+    v_order := null;
+
+    if v_sort is not null and jsonb_typeof(v_sort) = 'object' then
+        v_sort_key := v_sort ->> 'field';
+
+        -- Ordering is expressed positionally against what was already
+        -- selected, so a sort key is only ever an integer in the statement.
+        i := array_position(v_metric_keys, v_sort_key);
+        if i is not null then
+            v_order := format('m%s', i);
+        else
+            i := array_position(v_dim_keys, v_sort_key);
+            if i is not null then
+                v_order := format('d%s', i);
+            else
+                raise exception 'report: cannot sort on %, it is not selected',
+                    coalesce(v_sort_key, '(null)') using errcode = '22023';
+            end if;
+        end if;
+
+        v_order := v_order || case
+            when lower(coalesce(v_sort ->> 'direction', 'desc')) = 'asc'
+            then ' asc nulls last'
+            else ' desc nulls last'
+        end;
+    elsif array_length(v_dim_keys, 1) is not null then
+        -- No sort asked for: order by the first dimension so a month axis comes
+        -- back in calendar order rather than in whatever order the scan
+        -- produced.
+        v_order := 'd1 asc nulls last';
+    end if;
+
+    -- One over the cap, so "there is more than this" is knowable without a
+    -- second count query over the same scan.
+    v_limit := least(greatest(coalesce((p_spec ->> 'limit')::int, 500), 1), 1000);
+
+    -- ---- compose ----------------------------------------------------------
+    v_sql := format(
+        'select %s from %s where %s',
+        array_to_string(v_select, ', '),
+        v_dataset.from_sql,
+        array_to_string(v_where, ' and '));
+
+    if array_length(v_group, 1) is not null then
+        v_sql := v_sql || ' group by ' || array_to_string(v_group, ', ');
+    end if;
+
+    if v_order is not null then
+        v_sql := v_sql || ' order by ' || v_order;
+    end if;
+
+    v_sql := v_sql || format(' limit %s', v_limit + 1);
+
+    -- The generated statement is wrapped so the whole result comes back as one
+    -- document; the object keys are the report keys the caller asked for rather
+    -- than the positional aliases.
+    --
+    -- TWO wrappers, not one, and the inner one is load-bearing. `jsonb_agg` has
+    -- no inherent order: feeding it a subquery that carries `order by` happens
+    -- to preserve that order today, but nothing in the standard or the planner
+    -- promises it, and the failure mode is a month axis that comes back
+    -- shuffled for one report and not another. `row_number() over ()` numbers
+    -- the rows in the order they arrive from the ordered, limited subquery, and
+    -- the aggregate then orders on that number explicitly.
+    v_sql := format(
+        'select coalesce(jsonb_agg(jsonb_build_object(
+             ''dimensions'', jsonb_build_object(%s),
+             ''metrics'',    jsonb_build_object(%s)) order by x.rn), ''[]''::jsonb)
+           from (select t.*, row_number() over () as rn from (%s) t) x',
+        array_to_string(v_json_dims, ', '),
+        array_to_string(v_json_metrics, ', '),
+        v_sql);
+
+    execute v_sql into v_rows;
+
+    return jsonb_build_object(
+        -- `with ordinality` + an explicit `order by`: dropping the extra row
+        -- must not also reshuffle the ones that are kept, and jsonb_agg has no
+        -- inherent order to rely on.
+        'rows',      case when jsonb_array_length(v_rows) > v_limit
+                          then (select coalesce(jsonb_agg(s.value order by s.n),
+                                                '[]'::jsonb)
+                                  from jsonb_array_elements(v_rows)
+                                       with ordinality as s(value, n)
+                                 where s.n <= v_limit)
+                          else v_rows end,
+        'row_count', least(jsonb_array_length(v_rows), v_limit),
+        -- The UI says so rather than quietly showing a prefix: a truncated
+        -- report that looks complete is a wrong answer with a chart on it.
+        'truncated', jsonb_array_length(v_rows) > v_limit);
+end;
+$$;
+
+-- ===========================================================================
+-- Quotes / CPQ module (docs/proposals/quotes-cpq-module.md, Phase 2)
+-- ===========================================================================
+
+-- Quote visibility as a callable predicate, mirroring `can_see_deal`.
+--
+-- The `quote-attachments` storage policy has to give the same answer the select
+-- policy on public.quotes gives, and a policy cannot join to a table the reader
+-- may not read -- hence SECURITY DEFINER with a pinned search_path.
+create or replace function public.can_see_quote(p_quote_id bigint) returns boolean
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select (select public.can_manage_all())
+        or exists (
+            select 1
+              from public.quotes q
+             where q.id = p_quote_id
+               and q.sales_id = (select public.current_sale_id())
+        );
+$$;
+
+--
+-- Derived columns the client never supplies
+--
+-- Several columns here exist only to carry a composite foreign key
+-- (`quote_versions.currency`, `quote_lines.quote_id`, `quote_comments.currency`).
+-- They are derived from the parent rather than posted, because a client that
+-- had to supply them could supply the WRONG one -- which is the exact row the
+-- composite keys exist to make unrepresentable. Deriving them here means the
+-- constraint never has to fire in normal operation.
+--
+
+-- BEFORE INSERT on quotes: the document number and the author.
+create or replace function public.quotes_set_defaults() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    -- A sequence rather than `max(quote_number) + 1`: the latter locks the
+    -- whole table and still collides under concurrency, and a gap in a quote
+    -- number is not a problem worth a lock.
+    if new.quote_number is null or btrim(new.quote_number) = '' then
+        new.quote_number := 'Q-' || to_char(now(), 'YYYY') || '-'
+            || lpad(nextval('public.quote_number_seq')::text, 5, '0');
+    end if;
+
+    -- A quote is born a draft, whatever the request body says. The status guard
+    -- only watches UPDATE, so without this an INSERT would be the one way to put
+    -- a quote straight into 'accepted' with not a single history row behind it.
+    new.status_key := 'draft';
+
+    if new.created_by is null then
+        new.created_by := public.current_sale_id();
+    end if;
+
+    return new;
+end;
+$$;
+
+-- AFTER INSERT on quotes: the working draft.
+--
+-- A quote with no version is a row the UI cannot render and the line editor
+-- cannot write to, so version 1 is not something a client has to remember to
+-- create. `issued_at` stays null, which is what makes it the editable draft.
+create or replace function public.quotes_seed_first_version() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    insert into public.quote_versions
+        (quote_id, currency, version_number, valid_until, terms)
+    values (new.id, new.currency, 1, new.valid_until, new.terms);
+    return new;
+end;
+$$;
+
+-- BEFORE INSERT on quote_versions: the currency carrier and the next number.
+create or replace function public.quote_versions_before_insert() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if new.currency is null then
+        select q.currency into new.currency
+          from public.quotes q where q.id = new.quote_id;
+    end if;
+
+    if new.version_number is null then
+        select coalesce(max(v.version_number), 0) + 1 into new.version_number
+          from public.quote_versions v where v.quote_id = new.quote_id;
+    end if;
+
+    return new;
+end;
+$$;
+
+-- The header's `valid_until` and `terms`, kept equal to the current version's.
+--
+-- Both columns exist on the quote AND on each version. The version is the
+-- source: it is what the document prints and what a link's expiry is clamped
+-- to. The header copy exists for `quotes_expiring_idx` -- the sweeper's only
+-- query -- and for the list, so it must say what the CURRENT version says: the
+-- draft while there is one, otherwise the newest issued document. Two writable
+-- copies meant a quote could print one date and expire on another.
+--
+-- AFTER INSERT OR UPDATE OF valid_until, terms on quote_versions. Issued
+-- versions are frozen, so the row firing this is always the newest one.
+create or replace function public.quote_versions_sync_header() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    perform set_config('app.quote_header_sync', new.quote_id::text, true);
+
+    update public.quotes q
+       set valid_until = new.valid_until,
+           terms       = new.terms
+     where q.id = new.quote_id
+       and (q.valid_until is distinct from new.valid_until
+            or q.terms is distinct from new.terms);
+
+    perform set_config('app.quote_header_sync', '', true);
+
+    return null;
+end;
+$$;
+
+-- BEFORE UPDATE on quotes: the header copy is not a second place to type.
+--
+-- A client writes `valid_until` / `terms` on INSERT, where they seed version 1,
+-- and on the draft version after that. The trigger's WHEN clause compares
+-- values, so a record posted back unchanged -- react-admin's habit -- passes.
+create or replace function public.quotes_header_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.quote_header_sync', true), '') <> old.id::text then
+        raise exception 'valid_until and terms of quote % belong to its current version: edit the draft version',
+                old.id
+            using errcode = 'check_violation', detail = 'quote_header_derived';
+    end if;
+    return new;
+end;
+$$;
+
+-- BEFORE INSERT on quote_lines: the quote carrier.
+create or replace function public.quote_lines_set_carrier() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if new.quote_id is null then
+        select v.quote_id into new.quote_id
+          from public.quote_versions v where v.id = new.version_id;
+    end if;
+    return new;
+end;
+$$;
+
+-- BEFORE INSERT on quote_lines: the snapshot the line IS (§2.4, D6, §13.6 #10).
+--
+-- Fires after `quote_lines_set_carrier` (triggers of one kind fire in name
+-- order), and it exists because the snapshot used to be the client's job: a
+-- line posted with a `tax_rate_id` and no `tax_rate_percent` was taxed at 0%
+-- SILENTLY, because the column carried `default 0` and the server could not
+-- tell an omitted percentage from a deliberate exemption. The default is gone
+-- and this fills the columns instead, which keeps the arithmetic the server's
+-- exactly as the generated columns above do.
+create or replace function public.quote_lines_snapshot_defaults() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_product record;
+begin
+    if new.product_id is not null then
+        select p.sku, p.name, p.unit, p.tax_rate_id
+          into v_product
+          from public.products p
+         where p.id = new.product_id;
+
+        -- `coalesce`, never an overwrite: a line quoted under a negotiated
+        -- description or a renamed SKU is still that line, and the catalogue is
+        -- only where the blanks come from.
+        new.sku  := coalesce(new.sku, v_product.sku);
+        new.name := coalesce(new.name, v_product.name);
+        new.unit := coalesce(new.unit, v_product.unit);
+
+        -- Provenance is taken from the product only when the client named
+        -- NEITHER the rate nor its percentage. A line deliberately quoted at 0%
+        -- must not end up carrying the product's IVA as its provenance, which
+        -- would make the record contradict itself.
+        if new.tax_rate_id is null and new.tax_rate_percent is null then
+            new.tax_rate_id := v_product.tax_rate_id;
+        end if;
+    end if;
+
+    -- One direction only: `tax_rate_percent` is the record and `tax_rate_id` is
+    -- provenance, so an explicit percentage always wins over what the catalogue
+    -- says today. That is what makes a year-old quote still print the rate that
+    -- applied on the day it was issued.
+    if new.tax_rate_percent is null then
+        new.tax_rate_percent := coalesce(
+            (select t.rate from public.tax_rates t where t.id = new.tax_rate_id),
+            0);
+    end if;
+
+    return new;
+end;
+$$;
+
+-- BEFORE INSERT on quote_comments: the currency carrier, the author, the thread
+-- and the clock.
+create or replace function public.quote_comments_before_insert() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_parent public.quote_comments;
+begin
+    if new.currency is null then
+        select q.currency into new.currency
+          from public.quotes q where q.id = new.quote_id;
+    end if;
+
+    -- Authorship comes from the session, never from the request body: a client
+    -- that could name its own author could forge a colleague's remark. A
+    -- CUSTOMER comment is not written through this path at all -- it arrives
+    -- through the portal function, which holds the service role -- and the
+    -- `quote_comments_author` constraint refuses to attribute one to a `sales`
+    -- row whatever gets posted here.
+    --
+    -- An internal comment is signed by its `sales` row and by nothing else: a
+    -- name typed into the request would be the name the portal shows the
+    -- customer.
+    if new.author_kind = 'internal' then
+        new.author_sales_id := public.current_sale_id();
+        new.author_name     := null;
+        new.author_email    := null;
+    end if;
+
+    -- One level of replies (§2.5), on the same quote. A reply to a reply is
+    -- re-parented to the root rather than refused, the rule
+    -- `task_comments_before_insert()` follows. A parent on ANOTHER quote is
+    -- refused: `parent_id` cascades on delete, so a thread spanning two quotes
+    -- is one purge away from removing the other quote's messages.
+    if new.parent_id is not null then
+        select * into v_parent from public.quote_comments c where c.id = new.parent_id;
+        if not found or v_parent.quote_id is distinct from new.quote_id then
+            raise exception 'comment % is not on quote %', new.parent_id, new.quote_id
+                using errcode = 'check_violation', detail = 'quote_comment_parent_invalid';
+        end if;
+        new.parent_id := coalesce(v_parent.parent_id, v_parent.id);
+    end if;
+
+    -- What the thread is read by comes from the server: a comment posted with
+    -- last month's date would reorder a negotiation, and one posted as already
+    -- read would never raise the attention badge.
+    new.created_at          := now();
+    new.edited_at           := null;
+    new.deleted_at          := null;
+    new.read_by_internal_at := null;
+
+    return new;
+end;
+$$;
+
+-- BEFORE UPDATE on quote_comments: what a written comment still accepts.
+--
+-- A comment is a message somebody may already have read, so the only changes
+-- are the ones that say what happened to it:
+--
+--   * its author edits the BODY of an internal comment, which stamps
+--     `edited_at` on the server's clock, so "edited" can be neither faked nor
+--     hidden -- the portal shows it to the customer too;
+--   * its author deletes it SOFTLY, `deleted_at` stamped the same way. There is
+--     no hard delete (no policy, no privilege): the row stays as a tombstone in
+--     the team's thread and leaves the customer's;
+--   * somebody on the team marks a CUSTOMER comment read, through
+--     `mark_quote_comments_read()` -- the only change a customer comment accepts
+--     at all. A customer's words are the other side's record of the
+--     negotiation, and nobody on this side rewrites or removes them.
+--
+-- Everything else -- the quote, the author, the audience, the thread, the date
+-- -- is refused, and so is any change to a deleted comment. Values are compared
+-- rather than column names refused, because react-admin posts the whole record
+-- back.
+--
+-- WHO may update is the row level security's decision: the author, for an
+-- internal comment; nobody signed in, for a customer's. That is why the read
+-- mark is a function.
+create or replace function public.quote_comments_before_update() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if old.deleted_at is not null
+       or new.quote_id        is distinct from old.quote_id
+       or new.currency        is distinct from old.currency
+       or new.version_id      is distinct from old.version_id
+       or new.parent_id       is distinct from old.parent_id
+       or new.author_sales_id is distinct from old.author_sales_id
+       or new.author_kind     is distinct from old.author_kind
+       or new.author_name     is distinct from old.author_name
+       or new.author_email    is distinct from old.author_email
+       or new.visibility      is distinct from old.visibility
+       or new.created_at      is distinct from old.created_at
+       or new.edited_at       is distinct from old.edited_at
+       or (old.author_kind = 'customer'
+           and (new.body is distinct from old.body
+                or new.deleted_at is distinct from old.deleted_at))
+       or (old.author_kind = 'internal'
+           and new.read_by_internal_at is distinct from old.read_by_internal_at) then
+        raise exception 'quote comment % cannot be changed that way', old.id
+            using errcode = 'check_violation', detail = 'quote_comment_column_protected';
+    end if;
+
+    if new.body is distinct from old.body then
+        new.edited_at := now();
+    end if;
+
+    if new.deleted_at is not null then
+        new.deleted_at := now();
+    end if;
+
+    return new;
+end;
+$$;
+
+--
+-- Totals (D8): computed by the server, never by the browser
+--
+-- The per-line arithmetic is in generated columns on `quote_lines`. This rolls
+-- those lines up onto the version, so "the total" has exactly one definition
+-- and it is the sum of what the document visibly shows.
+create or replace function public.refresh_quote_version_totals(p_version_id bigint)
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    -- The totals are system-owned columns (see `quote_versions_freeze_guard`);
+    -- this is the function that owns them.
+    perform set_config('app.quote_version_system_write', p_version_id::text, true);
+
+    update public.quote_versions v
+       set subtotal       = coalesce(t.gross, 0),
+           discount_total = coalesce(t.disc, 0),
+           tax_total      = coalesce(t.tax, 0),
+           total          = coalesce(t.total, 0)
+      from (
+        select sum(l.line_gross)    as gross,
+               sum(l.line_discount) as disc,
+               sum(l.line_tax)      as tax,
+               sum(l.line_total)    as total
+          from public.quote_lines l
+         where l.version_id = p_version_id
+      ) t
+     where v.id = p_version_id;
+
+    perform set_config('app.quote_version_system_write', '', true);
+end;
+$$;
+
+create or replace function public.quote_lines_refresh_totals() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if tg_op = 'DELETE' then
+        perform public.refresh_quote_version_totals(old.version_id);
+        return old;
+    end if;
+
+    perform public.refresh_quote_version_totals(new.version_id);
+
+    -- A line moved between versions leaves one total stale behind it.
+    if tg_op = 'UPDATE' and old.version_id is distinct from new.version_id then
+        perform public.refresh_quote_version_totals(old.version_id);
+    end if;
+
+    return new;
+end;
+$$;
+
+--
+-- Immutability (§4)
+--
+-- `issued_at is not null` means "a customer was shown this". Two guards enforce
+-- it, and both have to exist: one stops the lines from moving under a frozen
+-- document, the other stops the header from being rewritten.
+--
+-- KNOWN CONSEQUENCE, accepted and handled rather than hidden: these fire on
+-- CASCADE DELETE too, and a service-role DELETE holds the privilege and still
+-- hits the trigger. `purge_quotes()` is what makes a database reset possible at
+-- all, and `app.quote_purge` is the one documented way past these guards.
+--
+
+create or replace function public.quote_lines_freeze_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_version_ids bigint[];
+    v_version_id  bigint;
+    v_issued      timestamp with time zone;
+    v_status      text;
+begin
+    if coalesce(current_setting('app.quote_purge', true), '') = 'on' then
+        if tg_op = 'DELETE' then return old; else return new; end if;
+    end if;
+
+    -- On UPDATE both ends are checked: moving a line OFF a frozen version
+    -- rewrites that document just as surely as editing it in place.
+    if tg_op = 'INSERT' then
+        v_version_ids := array[new.version_id];
+    elsif tg_op = 'DELETE' then
+        v_version_ids := array[old.version_id];
+    else
+        v_version_ids := array[old.version_id, new.version_id];
+    end if;
+
+    foreach v_version_id in array v_version_ids loop
+        -- Resolved through the version, not `quote_lines.quote_id`: on INSERT
+        -- that carrier is filled by `quote_lines_set_carrier`, which fires AFTER
+        -- this trigger (triggers of one kind fire in name order).
+        select v.issued_at, q.status_key into v_issued, v_status
+          from public.quote_versions v
+          join public.quotes q on q.id = v.quote_id
+         where v.id = v_version_id;
+
+        if v_issued is not null then
+            raise exception 'quote version % is issued: its lines are immutable',
+                    v_version_id
+                using errcode = 'check_violation', detail = 'quote_version_frozen';
+        end if;
+
+        -- The draft's lines are editable only while the QUOTE is a draft. Once it
+        -- is pending approval or approved, the lines are what somebody is signing
+        -- off on: editing them afterwards would let a rep get a discount approved
+        -- and then raise it. Sending the quote back to draft is the way to edit.
+        if v_status is distinct from 'draft' then
+            raise exception 'quote lines are editable only while the quote is a draft (it is %)',
+                    coalesce(v_status, 'missing')
+                using errcode = 'check_violation', detail = 'quote_not_draft';
+        end if;
+    end loop;
+
+    if tg_op = 'DELETE' then return old; else return new; end if;
+end;
+$$;
+
+create or replace function public.quote_versions_freeze_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.quote_purge', true), '') = 'on' then
+        if tg_op = 'DELETE' then return old; else return new; end if;
+    end if;
+
+    -- An issued version is the document a customer was shown. The only columns
+    -- any later statement may touch are the ones that record what HAPPENED to
+    -- it (superseded, accepted, rejected), and only through the functions that
+    -- own those facts.
+    --
+    -- The GUC carries the VERSION ID rather than a boolean, so a second version
+    -- updated later in the same transaction is not unfrozen by the first one's
+    -- flag.
+    if old.issued_at is not null
+       and coalesce(current_setting('app.quote_version_unfreeze', true), '')
+           <> old.id::text then
+        raise exception 'quote version % is issued and immutable', old.id
+            using errcode = 'check_violation', detail = 'quote_version_frozen';
+    end if;
+
+    -- A DRAFT is editable, but not all of it. Its header -- validity, terms, the
+    -- discount somebody asked for -- belongs to the person drafting; every other
+    -- column belongs to a function. Without this a client could stamp
+    -- `issued_at` onto its own draft, skipping the discount gate and the token,
+    -- or write `total = 1` onto a figure the server is supposed to compute (D8).
+    --
+    -- Compared as "the row minus the editable keys" rather than by refusing
+    -- column names, so a client posting the whole record back unchanged -- which
+    -- is what react-admin does -- still passes.
+    if tg_op = 'UPDATE'
+       and old.issued_at is null
+       and coalesce(current_setting('app.quote_version_system_write', true), '')
+           <> old.id::text
+       and (to_jsonb(old) - array['valid_until', 'terms', 'discount_percent'])
+           is distinct from
+           (to_jsonb(new) - array['valid_until', 'terms', 'discount_percent']) then
+        raise exception 'only valid_until, terms and discount_percent of draft quote version % are editable',
+                old.id
+            using errcode = 'check_violation', detail = 'quote_version_column_protected';
+    end if;
+
+    if tg_op = 'DELETE' then return old; else return new; end if;
+end;
+$$;
+
+-- The two history tables are append-only (§5). `reject_history_mutation()`
+-- exists already but names `task_events` in its message; this one reports the
+-- table it actually fired on, and knows about the retention path.
+create or replace function public.reject_quote_history_mutation() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.quote_purge', true), '') = 'on' then
+        return old;
+    end if;
+
+    raise exception 'public.% is append-only (attempted %)', tg_table_name, tg_op
+        using errcode = 'insufficient_privilege';
+end;
+$$;
+
+--
+-- Catalogue history (§2.2)
+--
+-- One row per watched field, the `log_task_changes()` idiom. Separate from the
+-- quote history because mixing a catalogue's edits with a negotiation's events
+-- makes both harder to read.
+create or replace function public.products_audit() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_actor   bigint := public.current_sale_id();
+    v_field   text;
+    v_watched text[] := array['sku', 'name', 'description', 'kind', 'category',
+                              'unit', 'list_price', 'currency', 'tax_rate_id'];
+begin
+    if tg_op = 'INSERT' then
+        insert into public.product_events
+            (product_id, event_type, sales_id, new_value)
+        values (new.id, 'product.created', v_actor,
+                to_jsonb(new) - 'search_tsv');
+        return new;
+    end if;
+
+    -- Activation is its own event rather than a field change: "who took this
+    -- off the price book" is the question this table is actually asked.
+    if old.is_active is distinct from new.is_active then
+        insert into public.product_events
+            (product_id, event_type, sales_id, field, old_value, new_value)
+        values (new.id,
+                case when new.is_active then 'product.reactivated'
+                     else 'product.deactivated' end,
+                v_actor, 'is_active',
+                to_jsonb(old.is_active), to_jsonb(new.is_active));
+    end if;
+
+    foreach v_field in array v_watched loop
+        if to_jsonb(old) -> v_field is distinct from to_jsonb(new) -> v_field then
+            insert into public.product_events
+                (product_id, event_type, sales_id, field, old_value, new_value)
+            values (new.id, 'product.updated', v_actor, v_field,
+                    to_jsonb(old) -> v_field, to_jsonb(new) -> v_field);
+        end if;
+    end loop;
+
+    return new;
+end;
+$$;
+
+--
+-- Status machine (§3)
+--
+-- Three mechanisms make the RPC the only write path, copied from the task
+-- module: a guard trigger that refuses a bare UPDATE, a shared core that owns
+-- the legality rules, and an authenticated wrapper that adds the capability
+-- check the core cannot make.
+--
+
+create or replace function public.quotes_status_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if old.status_key is distinct from new.status_key
+       and coalesce(current_setting('app.quote_transition_to', true), '') = '' then
+        raise exception 'status changes must go through public.transition_quote()'
+            using errcode = 'check_violation';
+    end if;
+    return new;
+end;
+$$;
+
+-- AFTER UPDATE OF status_key ON quotes: records the transition.
+--
+-- The single insertion point for `quote_status_changes`, so the history cannot
+-- disagree with the quotes table. `apply_quote_status()` puts the reason and the
+-- actor in transaction-local settings first.
+--
+-- The `app.quote_status_quote_id` guard is load-bearing here, exactly as it is
+-- in `deals_log_stage_change()`: `revise_quote()` touches the quote twice in one
+-- transaction, and without the scoping check the second update would inherit the
+-- first one's reason.
+create or replace function public.quotes_log_status_change() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_reason      text  := nullif(btrim(coalesce(current_setting('app.quote_status_reason', true), '')), '');
+    v_actor_kind  text  := nullif(coalesce(current_setting('app.quote_status_actor_kind', true), ''), '');
+    v_actor       text  := nullif(coalesce(current_setting('app.quote_status_sales_id', true), ''), '');
+    v_attachments jsonb := nullif(coalesce(current_setting('app.quote_status_attachments', true), ''), '')::jsonb;
+    v_override    text  := nullif(btrim(coalesce(current_setting('app.quote_status_override', true), '')), '');
+    v_for_quote   text  := coalesce(current_setting('app.quote_status_quote_id', true), '');
+    v_seq         bigint;
+begin
+    if v_for_quote <> new.id::text then
+        v_reason := null;
+        v_actor_kind := null;
+        v_actor := null;
+        v_attachments := null;
+        v_override := null;
+    end if;
+
+    -- `changed_at` cannot order two moves made in one transaction: `now()` is
+    -- the transaction timestamp and would be identical for both. The same
+    -- per-entity counter `emit_task_event()` computes.
+    select coalesce(max(sc.seq), 0) + 1 into v_seq
+      from public.quote_status_changes sc where sc.quote_id = new.id;
+
+    insert into public.quote_status_changes
+        (quote_id, from_status, to_status, reason, sales_id, actor_kind,
+         attachments, override_reason, seq)
+    values (
+        new.id,
+        old.status_key,
+        new.status_key,
+        v_reason,
+        nullif(v_actor, '')::bigint,
+        coalesce(v_actor_kind, 'internal'),
+        case
+            when v_attachments is null or jsonb_typeof(v_attachments) <> 'array' then null
+            else (select array_agg(element)
+                    from jsonb_array_elements(v_attachments) as element)
+        end,
+        v_override,
+        v_seq);
+
+    return null;
+end;
+$$;
+
+-- The shared core of every status change, `service_role` only.
+--
+-- It exists as a SEPARATE function from `transition_quote()` because the portal
+-- path has no `current_sale_id()` and must not restate the legality rules:
+-- without this split, `quote_portal_accept()` would duplicate them and the two
+-- copies would drift. The caller is responsible for having established that the
+-- actor is allowed to act at all; this function decides whether the MOVE is
+-- legal.
+create or replace function public.apply_quote_status(
+    p_quote_id        bigint,
+    p_to_status       text,
+    p_reason          text    default null,
+    p_actor_kind      text    default 'internal',
+    p_actor_sales_id  bigint  default null,
+    p_attachments     jsonb   default null,
+    p_override_reason text    default null
+) returns public.quotes
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote      public.quotes;
+    v_transition public.quote_transitions;
+begin
+    -- Validated before anything else: a null actor would make the
+    -- `allowed_actor` comparison below null, and a null condition does not
+    -- raise -- the check would silently pass for exactly the caller it was
+    -- written to stop.
+    if p_actor_kind is null or p_actor_kind not in ('internal', 'customer', 'system') then
+        raise exception 'unknown actor kind %', coalesce(p_actor_kind, 'null')
+            using errcode = 'check_violation';
+    end if;
+
+    select * into v_quote from public.quotes where id = p_quote_id for update;
+    if not found then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    if v_quote.status_key = p_to_status then
+        raise exception 'quote % is already in status %', p_quote_id, p_to_status
+            using errcode = 'check_violation', detail = 'quote_status_unchanged';
+    end if;
+
+    select * into v_transition
+      from public.quote_transitions t
+     where t.from_status_key = v_quote.status_key
+       and t.to_status_key = p_to_status;
+
+    if not found then
+        raise exception 'illegal transition % -> %', v_quote.status_key, p_to_status
+            using errcode = 'check_violation', detail = 'quote_transition_illegal';
+    end if;
+
+    -- Without this check the portal function would be one parameter away from
+    -- driving `draft -> approved`.
+    if v_transition.allowed_actor <> 'any'
+       and v_transition.allowed_actor <> p_actor_kind then
+        raise exception '% may not move a quote from % to %',
+                p_actor_kind, v_quote.status_key, p_to_status
+            using errcode = 'insufficient_privilege',
+                  detail = 'quote_transition_actor_not_allowed';
+    end if;
+
+    if v_transition.requires_reason and coalesce(btrim(p_reason), '') = '' then
+        raise exception 'a reason is required to move a quote from % to %',
+                v_quote.status_key, p_to_status
+            using errcode = 'check_violation', detail = 'quote_reason_required';
+    end if;
+
+    -- "You cannot send what you never issued." Checked against the existence of
+    -- an issued version rather than against a status, so it stays true whichever
+    -- path reached this transition.
+    if v_transition.requires_issued_version
+       and not exists (select 1 from public.quote_versions v
+                        where v.quote_id = p_quote_id and v.issued_at is not null) then
+        raise exception 'quote % has no issued version', p_quote_id
+            using errcode = 'check_violation', detail = 'quote_not_issued';
+    end if;
+
+    -- Handed to the trigger, which is what actually writes the history row.
+    perform set_config('app.quote_status_quote_id', p_quote_id::text, true);
+    perform set_config('app.quote_status_reason', coalesce(p_reason, ''), true);
+    perform set_config('app.quote_status_actor_kind', p_actor_kind, true);
+    perform set_config('app.quote_status_sales_id',
+                       coalesce(p_actor_sales_id::text, ''), true);
+    perform set_config('app.quote_status_attachments',
+                       coalesce(p_attachments, '[]'::jsonb)::text, true);
+    perform set_config('app.quote_status_override',
+                       coalesce(p_override_reason, ''), true);
+    -- Tells `quotes_status_guard()` this status change is legitimate.
+    perform set_config('app.quote_transition_to', p_to_status, true);
+
+    update public.quotes
+       set status_key = p_to_status,
+           updated_at = now()
+     where id = p_quote_id
+    returning * into v_quote;
+
+    -- Cleared so a later statement in the same transaction cannot reuse them.
+    perform set_config('app.quote_transition_to', '', true);
+    perform set_config('app.quote_status_quote_id', '', true);
+    perform set_config('app.quote_status_reason', '', true);
+    perform set_config('app.quote_status_actor_kind', '', true);
+    perform set_config('app.quote_status_sales_id', '', true);
+    perform set_config('app.quote_status_attachments', '', true);
+    perform set_config('app.quote_status_override', '', true);
+
+    return v_quote;
+end;
+$$;
+
+-- The authenticated status-change path.
+--
+-- `select … for update` first, then the capability check that RESTATES the RLS
+-- predicate (because SECURITY DEFINER bypasses it), then delegation to
+-- `apply_quote_status`. Without the restatement this is a way for a rep to move
+-- somebody else's quote.
+create or replace function public.transition_quote(
+    p_quote_id    bigint,
+    p_to_status   text,
+    p_reason      text  default null,
+    p_attachments jsonb default '[]'::jsonb
+) returns public.quotes
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote public.quotes;
+    v_actor bigint := public.current_sale_id();
+begin
+    select * into v_quote from public.quotes where id = p_quote_id for update;
+    if not found then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    if not (select public.can_manage_all())
+       and v_quote.sales_id is distinct from v_actor then
+        raise exception 'no permission to move quote %', p_quote_id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    -- Approving is what raises the discount ceiling at issue time (see
+    -- `quote_discount_gate`), so it is the one internal move an owner may not
+    -- make: a rep approving their own quote would be a rep setting their own
+    -- limit, and the board would show a sign-off nobody gave.
+    if p_to_status = 'approved' and not (select public.can_manage_all()) then
+        raise exception 'only a manager may approve quote %', p_quote_id
+            using errcode = 'insufficient_privilege',
+                  detail = 'quote_approval_requires_manager';
+    end if;
+
+    return public.apply_quote_status(
+        p_quote_id, p_to_status, p_reason, 'internal', v_actor, p_attachments, null);
+end;
+$$;
+
+--
+-- Discount approval (§3.1)
+--
+-- ONE function with TWO callers -- the RPC that enforces it and the dialog that
+-- explains it. Two implementations of one rule drift, and always in the same
+-- direction: a dialog enabling a button for something the server then refuses.
+--
+-- `max_allowed: null` with `ok: true` reports "no rule applies" SEPARATELY from
+-- "satisfied", because they are different facts and only one of them means the
+-- control is working.
+--
+-- The effective discount is read off the LINES, not off
+-- `quote_versions.discount_percent`: that column is a record of intent, and the
+-- commercial control has to be based on what the document actually grants.
+--
+-- SECURITY DEFINER to read `quotes` and `quote_lines` regardless of who asks, so
+-- the number is the same for a rep and for the manager auditing them. The quotes
+-- select policy is therefore restated here -- without it this is a probe for the
+-- existence of other people's quotes.
+create or replace function public.quote_discount_gate(p_quote_id bigint)
+returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_quote     public.quotes;
+    v_role      public.sales_role;
+    v_rule      public.quote_discount_rules;
+    v_rule_found boolean;
+    v_max       numeric(5,2);
+    v_approver_max  numeric(5,2);
+    v_approver_role public.sales_role;
+    v_approval_reason text;
+    v_version_id bigint;
+    v_gross     numeric(14,2);
+    v_disc      numeric(14,2);
+    v_effective numeric(5,2);
+    v_offending bigint[];
+    v_reason_required boolean;
+begin
+    select * into v_quote from public.quotes where id = p_quote_id;
+    if not found or not (select public.can_see_quote(p_quote_id)) then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    -- The role of the person ASKING, which is also the person who would issue.
+    v_role := (select public.current_sales_role());
+
+    -- The current version: the draft when there is one, otherwise the newest
+    -- issued document. `revise_quote()` numbers a new draft max + 1, so the
+    -- highest number is always the one being worked on.
+    select v.id into v_version_id
+      from public.quote_versions v
+     where v.quote_id = p_quote_id
+     order by v.version_number desc
+     limit 1;
+
+    select coalesce(sum(l.line_gross), 0), coalesce(sum(l.line_discount), 0)
+      into v_gross, v_disc
+      from public.quote_lines l
+     where l.version_id = v_version_id;
+
+    v_effective := case when coalesce(v_gross, 0) = 0 then 0
+                        else round(v_disc * 100 / v_gross, 2) end;
+
+    select * into v_rule
+      from public.quote_discount_rules r where r.role = v_role;
+    v_rule_found := found;
+
+    -- No role (a service-role caller), no rule for it, the rule not switched on
+    -- yet, or a quote created before it was: the issue is free. Reported with
+    -- `max_allowed: null` so a caller can tell "no rule applies here" from
+    -- "the rule is satisfied".
+    if v_role is null
+       or not v_rule_found
+       or v_rule.enforced_from is null
+       or v_quote.created_at < v_rule.enforced_from then
+        return jsonb_build_object(
+            'quote_id', p_quote_id,
+            'role', v_role,
+            'max_allowed', null,
+            'effective_discount_percent', v_effective,
+            'ok', true,
+            'reason_required', false,
+            'requires_reason_above', null,
+            'since', v_rule.enforced_from,
+            'offending_line_ids', '[]'::jsonb);
+    end if;
+
+    v_max := v_rule.max_discount_percent;
+
+    -- AN APPROVAL RAISES THE CEILING TO THE APPROVER'S. That is what
+    -- `pending_approval -> approved` is for: a rep whose limit is 10% sends the
+    -- quote up, a manager signs off, and the rep may then issue at up to the
+    -- manager's 25%. Never lower than the asker's own ceiling -- an approval by
+    -- somebody with a smaller limit is not a reason to refuse what the asker
+    -- could have issued alone.
+    --
+    -- The latest approval is the one that counts, and it certifies exactly the
+    -- lines it saw: `quote_lines_freeze_guard` refuses line edits once the quote
+    -- has left 'draft', so the only way to change them is to send the quote back,
+    -- and the next approval is a new row.
+    if v_quote.status_key = 'approved' then
+        select r.max_discount_percent, s.role, nullif(btrim(sc.reason), '')
+          into v_approver_max, v_approver_role, v_approval_reason
+          from public.quote_status_changes sc
+          join public.sales s on s.id = sc.sales_id
+          left join public.quote_discount_rules r on r.role = s.role
+         where sc.quote_id = p_quote_id
+           and sc.to_status = 'approved'
+         order by sc.seq desc
+         limit 1;
+
+        if v_approver_max is not null and v_approver_max > v_max then
+            v_max := v_approver_max;
+        end if;
+    end if;
+
+    -- Which lines to point the user at. The aggregate decides the verdict; this
+    -- is what lets the dialog say WHERE the problem is instead of only that
+    -- there is one.
+    select coalesce(array_agg(l.id order by l."position", l.id), '{}'::bigint[])
+      into v_offending
+      from public.quote_lines l
+     where l.version_id = v_version_id
+       and l.discount_percent > v_max;
+
+    -- THE REASON BAND. Inside the ceiling but above `requires_reason_above`, an
+    -- issue still needs a written reason, which `issue_quote_version()` stores
+    -- on the `sent` history row. A written approval already is one: the rep is
+    -- not asked to restate a motive a manager signed off on. Reported here
+    -- rather than recomputed by the caller, so the dialog and the RPC cannot
+    -- disagree about when the reason box is mandatory.
+    v_reason_required := coalesce(v_effective > v_rule.requires_reason_above, false)
+        and v_approval_reason is null;
+
+    return jsonb_build_object(
+        'quote_id', p_quote_id,
+        'role', v_role,
+        'approved_by_role', v_approver_role,
+        'max_allowed', v_max,
+        'effective_discount_percent', v_effective,
+        'ok', v_effective <= v_max,
+        'reason_required', v_reason_required,
+        'requires_reason_above', v_rule.requires_reason_above,
+        'since', v_rule.enforced_from,
+        'offending_line_ids', to_jsonb(v_offending));
+end;
+$$;
+
+--
+-- Versioning (§4)
+--
+
+-- "The customer's address on the day we sent it."
+--
+-- The one jsonb blob in this module. Every field is chosen for a printed
+-- document: no `sales` email, no internal id, and the owner reduced to a display
+-- name, because this object is rendered verbatim on a page an anonymous visitor
+-- can open (§6.3).
+create or replace function public.quote_party_snapshot(p_quote_id bigint)
+returns jsonb
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select jsonb_build_object(
+        'company', jsonb_build_object(
+            'name',           c.name,
+            'address',        c.address,
+            'zipcode',        c.zipcode,
+            'city',           c.city,
+            'state_abbr',     c.state_abbr,
+            'country',        c.country,
+            'tax_identifier', c.tax_identifier,
+            'phone_number',   c.phone_number,
+            'website',        c.website),
+        'contact', case when ct.id is null then null else jsonb_build_object(
+            'first_name', ct.first_name,
+            'last_name',  ct.last_name,
+            'title',      ct.title,
+            'email',      jsonb_path_query_first(ct.email_jsonb, '$[0]."email"'),
+            'phone',      jsonb_path_query_first(ct.phone_jsonb, '$[0]."number"')) end,
+        'owner', jsonb_build_object(
+            'name', coalesce(
+                nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), ''),
+                'Sales team')),
+        'snapshot_at', now())
+      from public.quotes q
+      join public.companies c on c.id = q.company_id
+      left join public.contacts ct on ct.id = q.contact_id
+      left join public.sales s on s.id = q.sales_id
+     where q.id = p_quote_id;
+$$;
+
+-- Mint one link to an issued document, and return the raw token once.
+--
+-- `service_role` only: its callers (`issue_quote_version()`,
+-- `create_quote_link()`) have already decided who may share the quote, and this
+-- is the ONE place that decides how a link is made. "A link never outlives the
+-- offer it points at" is a security property, and two copies of it drift.
+create or replace function public.mint_quote_token(
+    p_version_id  bigint,
+    p_token_days  integer default 30,
+    p_token_label text    default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_version  public.quote_versions;
+    v_token    bytea := extensions.gen_random_bytes(32);
+    v_token_id bigint;
+    v_expires  timestamp with time zone;
+begin
+    -- A token pointing at a draft is a link whose contents change while the
+    -- customer reads them.
+    select * into v_version from public.quote_versions v where v.id = p_version_id;
+    if not found or v_version.issued_at is null then
+        raise exception 'quote version % is not an issued document', p_version_id
+            using errcode = 'no_data_found', detail = 'quote_not_issued';
+    end if;
+
+    -- `least` ignores nulls, so a document with no `valid_until` simply gets the
+    -- requested window.
+    v_expires := least(
+        now() + make_interval(days => greatest(coalesce(p_token_days, 30), 1)),
+        (v_version.valid_until + 1)::timestamp with time zone);
+
+    insert into public.quote_access_tokens
+        (quote_id, version_id, token_hash, label, created_by, expires_at)
+    values (v_version.quote_id, v_version.id, sha256(v_token), p_token_label,
+            public.current_sale_id(), v_expires)
+    returning id into v_token_id;
+
+    return jsonb_build_object(
+        'token_id',   v_token_id,
+        'token',      encode(v_token, 'hex'),
+        'expires_at', v_expires);
+end;
+$$;
+
+-- Turn the working draft into a document, and mint the link that shows it.
+--
+-- Everything here happens in ONE transaction because the halves are not
+-- independently meaningful: a version stamped issued with no token is a
+-- document nobody can open, and a token pointing at a draft is a link whose
+-- contents change while the customer reads them.
+--
+-- Returns the RAW TOKEN, exactly once. Only its sha256 is stored, so there is no
+-- second chance to read it -- which is the whole point, and why the UI offers
+-- "generate a new link" (`create_quote_link()`) rather than a copy button that
+-- cannot work.
+--
+-- Two written motives, kept apart because they mean different things:
+-- `p_override_reason` is an admin skipping the discount ceiling and lands on
+-- `override_reason`; `p_reason` explains a discount inside the ceiling but above
+-- the reason band and lands on `reason`.
+create or replace function public.issue_quote_version(
+    p_quote_id        bigint,
+    p_token_days      integer default 30,
+    p_token_label     text    default null,
+    p_override_reason text    default null,
+    p_reason          text    default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote    public.quotes;
+    v_actor    bigint := public.current_sale_id();
+    v_version  public.quote_versions;
+    v_prev     public.quote_versions;
+    v_gate     jsonb;
+    v_override text := nullif(btrim(coalesce(p_override_reason, '')), '');
+    v_reason   text := nullif(btrim(coalesce(p_reason, '')), '');
+    v_link     jsonb;
+begin
+    select * into v_quote from public.quotes where id = p_quote_id for update;
+    if not found then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    -- Same rule as the quotes UPDATE policy. Restated because SECURITY DEFINER
+    -- bypasses RLS.
+    if not (select public.can_manage_all())
+       and v_quote.sales_id is distinct from v_actor then
+        raise exception 'no permission to issue quote %', p_quote_id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    select * into v_version
+      from public.quote_versions v
+     where v.quote_id = p_quote_id and v.issued_at is null
+     for update;
+    if not found then
+        raise exception 'quote % has no editable draft to issue', p_quote_id
+            using errcode = 'no_data_found', detail = 'quote_no_draft';
+    end if;
+
+    -- An empty document is not a quotation. Caught here rather than by the
+    -- customer.
+    if not exists (select 1 from public.quote_lines l
+                    where l.version_id = v_version.id) then
+        raise exception 'quote % has no lines to issue', p_quote_id
+            using errcode = 'check_violation', detail = 'quote_empty';
+    end if;
+
+    -- An offer that has already lapsed cannot be sent. `mint_quote_token()`
+    -- clamps a link to the day after `valid_until`, so issuing this draft would
+    -- hand the customer a link that is dead on arrival -- exactly the case
+    -- `create_quote_link()` already refuses with the same key. The two paths
+    -- mint the same token and now refuse on the same condition (§13.6 #12).
+    if v_version.valid_until < current_date then
+        raise exception 'the offer in quote % expired on %', p_quote_id, v_version.valid_until
+            using errcode = 'check_violation', detail = 'quote_validity_elapsed';
+    end if;
+
+    -- Evaluated inside the row lock taken above, so two concurrent issues
+    -- cannot both pass the gate on the strength of the same state.
+    v_gate := public.quote_discount_gate(p_quote_id);
+
+    if not (v_gate->>'ok')::boolean then
+        -- Only an admin overrides, and only in writing. A manager may issue
+        -- anybody's quote, but not past the rule.
+        if v_override is null
+           or (select public.current_sales_role())
+              is distinct from 'admin'::public.sales_role then
+            raise exception 'quote % grants % percent discount, above the % percent allowed for %',
+                    p_quote_id,
+                    v_gate->>'effective_discount_percent',
+                    v_gate->>'max_allowed',
+                    v_gate->>'role'
+                using errcode = 'check_violation',
+                      detail  = 'quote_discount_exceeds_limit',
+                      hint    = v_gate::text;
+        end if;
+    else
+        -- The gate was satisfied, so nothing was overridden. Recording a motive
+        -- here would put a skipped-the-rule marker on an issue that met it.
+        v_override := null;
+
+        if (v_gate->>'reason_required')::boolean and v_reason is null then
+            raise exception 'quote % grants % percent discount, above the % percent that needs a written reason',
+                    p_quote_id,
+                    v_gate->>'effective_discount_percent',
+                    v_gate->>'requires_reason_above'
+                using errcode = 'check_violation',
+                      detail  = 'quote_discount_reason_required',
+                      hint    = v_gate::text;
+        end if;
+    end if;
+
+    -- The previous document stops being current. One row at a time, with the
+    -- GUC carrying its id, because the unfreeze hole is per version.
+    for v_prev in
+        select * from public.quote_versions v
+         where v.quote_id = p_quote_id
+           and v.issued_at is not null
+           and v.superseded_at is null
+    loop
+        perform set_config('app.quote_version_unfreeze', v_prev.id::text, true);
+        update public.quote_versions set superseded_at = now() where id = v_prev.id;
+        perform set_config('app.quote_version_unfreeze', '', true);
+    end loop;
+
+    -- Recomputed rather than trusted: the totals are about to be frozen, and
+    -- the figure a customer signs must be the one the lines add up to.
+    perform public.refresh_quote_version_totals(v_version.id);
+
+    -- Still a draft at this point, so the freeze guard lets it through once
+    -- this function identifies itself as the owner of the stamped columns. From
+    -- the next statement on, this row is immutable.
+    perform set_config('app.quote_version_system_write', v_version.id::text, true);
+
+    -- `valid_until` and `terms` are left alone: the draft already carries the
+    -- document's own, and the header mirrors them (`quote_versions_sync_header`).
+    update public.quote_versions v
+       set issued_at      = now(),
+           issued_by      = v_actor,
+           party_snapshot = public.quote_party_snapshot(p_quote_id)
+     where v.id = v_version.id
+    returning * into v_version;
+
+    perform set_config('app.quote_version_system_write', '', true);
+
+    v_link := public.mint_quote_token(v_version.id, p_token_days, p_token_label);
+
+    perform public.apply_quote_status(
+        p_quote_id, 'sent', v_reason, 'internal', v_actor, null, v_override);
+
+    return jsonb_build_object(
+        'quote_id',       p_quote_id,
+        'version_id',     v_version.id,
+        'version_number', v_version.version_number) || v_link;
+end;
+$$;
+
+-- Open a new draft from the last issued document.
+--
+-- COPYING rather than editing is what makes the snapshot hold: the customer's
+-- copy stays byte-identical to what they were shown. This is also what Odoo and
+-- Salesforce CPQ do, and the reason is the same -- an accepted quote is a
+-- commercial commitment, and a commitment you can edit is not one.
+create or replace function public.revise_quote(
+    p_quote_id bigint,
+    p_reason   text
+) returns public.quote_versions
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote public.quotes;
+    v_actor bigint := public.current_sale_id();
+    v_last  public.quote_versions;
+    v_new   public.quote_versions;
+begin
+    -- A revision without a stated motive leaves the version chain legible and
+    -- the reason for it lost, which is half an audit trail.
+    if coalesce(btrim(p_reason), '') = '' then
+        raise exception 'a reason is required to revise a quote'
+            using errcode = 'check_violation', detail = 'quote_reason_required';
+    end if;
+
+    select * into v_quote from public.quotes where id = p_quote_id for update;
+    if not found then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    if not (select public.can_manage_all())
+       and v_quote.sales_id is distinct from v_actor then
+        raise exception 'no permission to revise quote %', p_quote_id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    -- `quote_versions_one_draft` would refuse the insert anyway; saying so here
+    -- turns a unique-violation into an answer the UI can render.
+    if exists (select 1 from public.quote_versions v
+                where v.quote_id = p_quote_id and v.issued_at is null) then
+        raise exception 'quote % already has an editable draft', p_quote_id
+            using errcode = 'check_violation', detail = 'quote_draft_exists';
+    end if;
+
+    select * into v_last
+      from public.quote_versions v
+     where v.quote_id = p_quote_id and v.issued_at is not null
+     order by v.version_number desc
+     limit 1;
+    if not found then
+        raise exception 'quote % has no issued version to revise', p_quote_id
+            using errcode = 'no_data_found', detail = 'quote_not_issued';
+    end if;
+
+    -- The status moves FIRST: lines may only be written while the quote is a
+    -- draft (`quote_lines_freeze_guard`), and the clone below writes lines. It
+    -- also means an illegal revision -- of an accepted quote, say -- is refused
+    -- before anything has been copied.
+    perform public.apply_quote_status(
+        p_quote_id, 'draft', p_reason, 'internal', v_actor, null, null);
+
+    insert into public.quote_versions
+        (quote_id, currency, version_number, valid_until, terms, discount_percent)
+    select v.quote_id, v.currency, v.version_number + 1,
+           v.valid_until, v.terms, v.discount_percent
+      from public.quote_versions v where v.id = v_last.id
+    returning * into v_new;
+
+    insert into public.quote_lines
+        (version_id, quote_id, product_id, sku, name, description, unit,
+         quantity, unit_price, discount_percent, tax_rate_id, tax_rate_percent,
+         "position")
+    select v_new.id, l.quote_id, l.product_id, l.sku, l.name, l.description,
+           l.unit, l.quantity, l.unit_price, l.discount_percent, l.tax_rate_id,
+           l.tax_rate_percent, l."position"
+      from public.quote_lines l
+     where l.version_id = v_last.id
+     order by l."position", l.id;
+
+    -- The link that pointed at the superseded document stops working. Leaving it
+    -- live would let a customer accept a version we have just replaced.
+    update public.quote_access_tokens t
+       set revoked_at = now(), revoked_by = v_actor
+     where t.version_id = v_last.id and t.revoked_at is null;
+
+    return v_new;
+end;
+$$;
+
+-- "Generate a new link" (§6.2): another token for the document the customer is
+-- currently being offered. Returns the raw token once, exactly like the issue;
+-- older links keep working until somebody revokes them.
+--
+-- Refused while a revision is open: `revise_quote()` revoked the links to the
+-- version it is replacing precisely so nobody accepts it, and a fresh link would
+-- reopen that door. Refused for an elapsed offer too, because the expiry clamp
+-- would hand back a link that is dead on arrival.
+create or replace function public.create_quote_link(
+    p_quote_id    bigint,
+    p_token_days  integer default 30,
+    p_token_label text    default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote   public.quotes;
+    v_actor   bigint := public.current_sale_id();
+    v_version public.quote_versions;
+begin
+    select * into v_quote from public.quotes where id = p_quote_id for update;
+    if not found then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    -- Same rule as `issue_quote_version()`. Restated because SECURITY DEFINER
+    -- bypasses RLS.
+    if not (select public.can_manage_all())
+       and v_quote.sales_id is distinct from v_actor then
+        raise exception 'no permission to share quote %', p_quote_id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    select * into v_version
+      from public.quote_versions v
+     where v.quote_id = p_quote_id
+       and v.issued_at is not null
+       and v.superseded_at is null;
+    if not found then
+        raise exception 'quote % has no issued version to link to', p_quote_id
+            using errcode = 'no_data_found', detail = 'quote_not_issued';
+    end if;
+
+    if exists (select 1 from public.quote_versions v
+                where v.quote_id = p_quote_id and v.issued_at is null) then
+        raise exception 'quote % has an open revision: issue it instead', p_quote_id
+            using errcode = 'check_violation', detail = 'quote_draft_exists';
+    end if;
+
+    if v_version.valid_until < current_date then
+        raise exception 'the offer in quote % expired on %', p_quote_id, v_version.valid_until
+            using errcode = 'check_violation', detail = 'quote_validity_elapsed';
+    end if;
+
+    return jsonb_build_object(
+        'quote_id',       p_quote_id,
+        'version_id',     v_version.id,
+        'version_number', v_version.version_number)
+        || public.mint_quote_token(v_version.id, p_token_days, p_token_label);
+end;
+$$;
+
+-- Withdraw one link. `authenticated`, restating the quote capability check.
+--
+-- Returns nothing: the token row carries `token_hash`, which must never reach a
+-- browser -- that is what `quote_access_tokens_summary` is for. The caller
+-- re-reads the summary.
+create or replace function public.revoke_quote_token(p_token_id bigint)
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote_id bigint;
+    v_revoked  timestamp with time zone;
+    v_actor    bigint := public.current_sale_id();
+begin
+    select t.quote_id, t.revoked_at into v_quote_id, v_revoked
+      from public.quote_access_tokens t where t.id = p_token_id for update;
+    if not found then
+        raise exception 'token % not found', p_token_id
+            using errcode = 'no_data_found';
+    end if;
+
+    if not (select public.can_see_quote(v_quote_id)) then
+        raise exception 'no permission to revoke token %', p_token_id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    -- Idempotent: revoking twice is not an error, and re-stamping the date would
+    -- rewrite when the link actually stopped working.
+    if v_revoked is null then
+        update public.quote_access_tokens t
+           set revoked_at = now(), revoked_by = v_actor
+         where t.id = p_token_id;
+    end if;
+end;
+$$;
+
+-- Somebody on the team has read what the customer wrote (§11's attention badge,
+-- `quotes_summary.nb_unanswered_customer_comments`). `authenticated`, restating
+-- the quote capability check.
+--
+-- A function because no policy can say it: a comment update belongs to its
+-- author, and a customer comment has no author on this side. Marks every unread
+-- customer comment of the quote and returns how many; an already-read thread is
+-- 0, not an error.
+create or replace function public.mark_quote_comments_read(p_quote_id bigint)
+returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_count integer;
+begin
+    if not exists (select 1 from public.quotes q where q.id = p_quote_id) then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    if not (select public.can_see_quote(p_quote_id)) then
+        raise exception 'no permission on quote %', p_quote_id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    update public.quote_comments c
+       set read_by_internal_at = now()
+     where c.quote_id = p_quote_id
+       and c.author_kind = 'customer'
+       and c.read_by_internal_at is null
+       and c.deleted_at is null;
+    get diagnostics v_count = row_count;
+
+    return v_count;
+end;
+$$;
+
+--
+-- Retention (§4, F5)
+--
+-- The freeze guards and the append-only triggers fire on a service-role DELETE
+-- too -- it holds the privilege and still hits the trigger. So `e2e/fixtures.ts`
+-- `resetDb()` cannot reset the database without this function, which is why it
+-- is Phase 2 work and not Phase 12 work. `resetDb` already routes around exactly
+-- this for tasks.
+--
+-- ONE DIFFERENCE FROM `purge_tasks()`, worth stating because the signatures
+-- match: `task_events` deliberately carries NO foreign key to `tasks`, so its
+-- history outlives the row and `p_purge_history` is what destroys it. The quote
+-- history DOES reference `quotes`, so it goes with the quote whatever the flag
+-- says. The flag additionally truncates both tables, which is what a disposable
+-- database wants and what nothing else should ever do.
+create or replace function public.purge_quotes(
+    p_quote_ids     bigint[] default null,
+    p_purge_history boolean  default false
+) returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_count integer;
+begin
+    perform set_config('app.quote_purge', 'on', true);
+
+    delete from public.quote_portal_events
+     where p_quote_ids is null or quote_id = any (p_quote_ids);
+    delete from public.quote_access_tokens
+     where p_quote_ids is null or quote_id = any (p_quote_ids);
+    delete from public.quote_comments
+     where p_quote_ids is null or quote_id = any (p_quote_ids);
+    delete from public.quote_lines
+     where p_quote_ids is null or quote_id = any (p_quote_ids);
+    delete from public.quote_versions
+     where p_quote_ids is null or quote_id = any (p_quote_ids);
+    delete from public.quote_status_changes
+     where p_quote_ids is null or quote_id = any (p_quote_ids);
+
+    delete from public.quotes
+     where p_quote_ids is null or id = any (p_quote_ids);
+    get diagnostics v_count = row_count;
+
+    if p_purge_history then
+        truncate public.quote_portal_events, public.quote_status_changes;
+    end if;
+
+    perform set_config('app.quote_purge', 'off', true);
+
+    return v_count;
+end;
+$$;
+
+-- An offer nobody answered stops being an offer.
+--
+-- Runs on `quotes_expiring_idx`, so it costs the size of the pending work rather
+-- than the size of the quote history. Goes through `apply_quote_status()` like
+-- every other transition, so an expiry lands in the same audit trail as a move
+-- somebody made by hand -- attributed to 'system', with no `sales_id`, because
+-- inventing an actor is worse than admitting there was none.
+create or replace function public.sweep_expired_quotes()
+returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_id    bigint;
+    v_count integer := 0;
+begin
+    for v_id in
+        select q.id from public.quotes q
+         where q.valid_until is not null
+           and q.valid_until < current_date
+           and q.status_key in ('sent', 'viewed', 'under_review')
+         order by q.valid_until
+    loop
+        perform public.apply_quote_status(
+            v_id, 'expired', 'validity elapsed', 'system', null, null, null);
+        v_count := v_count + 1;
+    end loop;
+
+    return v_count;
+end;
+$$;
+
+--
+-- The customer portal (§6, Phase 7)
+--
+-- `service_role` only, and the `quote-portal` edge function is their one
+-- caller. That function authenticates by HOLDING THE TOKEN -- the entire
+-- security model -- so the rules live here, where `make test-db` can defend
+-- them (D7), rather than in TypeScript only an edge-function test could reach.
+-- See adr/ADR-7dcff21a-PHASE-7-quote-portal-no-anon-rls.md.
+--
+-- The edge function hashes the token before calling: the raw token never
+-- reaches the database, exactly as it is never stored in it.
+--
+-- TWO WAYS TO REFUSE, and the choice is not style. A refusal that must LEAVE A
+-- TRACE -- a dead link somebody is still opening, a link pulled faster than a
+-- person reads -- is RETURNED as `{"error": <key>}`, because raising would roll
+-- the trace back with everything else. Every other refusal RAISES, with its key
+-- in DETAIL like the rest of the module, so nothing it half-wrote survives.
+--
+-- LOCK ORDER: the quote, then the token. `revise_quote()` revokes tokens while
+-- holding the quote's lock; taking the token first here would be one concurrent
+-- revision away from a deadlock.
+--
+
+-- The one insertion point for `quote_portal_events`.
+--
+-- The caller holds the quote's row lock, and that lock is what serialises the
+-- per-quote `seq`: two portal requests on one quote cannot compute the same
+-- next value. The address and the browser arrive as PARAMETERS because a
+-- service-role RPC has no request headers (§5) -- `request_context()` would
+-- return nulls here, and an audit trail of nulls reads as complete.
+create or replace function public.quote_portal_log(
+    p_quote_id    bigint,
+    p_version_id  bigint,
+    p_token_id    bigint,
+    p_event_type  text,
+    p_ip_address  inet,
+    p_user_agent  text,
+    p_actor_name  text  default null,
+    p_actor_email text  default null,
+    p_payload     jsonb default '{}'::jsonb
+) returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_seq bigint;
+begin
+    select coalesce(max(e.seq), 0) + 1 into v_seq
+      from public.quote_portal_events e where e.quote_id = p_quote_id;
+
+    insert into public.quote_portal_events
+        (quote_id, version_id, token_id, event_type, ip_address, user_agent,
+         actor_name, actor_email, payload, seq)
+    values (p_quote_id, p_version_id, p_token_id, p_event_type, p_ip_address,
+            left(p_user_agent, 512), p_actor_name, p_actor_email,
+            coalesce(p_payload, '{}'::jsonb), v_seq);
+end;
+$$;
+
+-- Resolve a token hash to the document it opens, or to the reason it does not.
+--
+-- Returns `{token_id, quote_id, version_id}` with the quote and the token
+-- locked, or `{error}` after recording why:
+--
+--   * `quote_link_invalid` for a hash nobody minted, a revoked link and an
+--     expired one alike. ONE answer for all three, never a 403: a distinct
+--     reply would confirm to whoever holds the value that it once was a link.
+--     A dead link that names a quote leaves a `token_invalid` event on it, so
+--     the rep can see the customer still trying the old one; an unknown hash
+--     names no quote to file anything under.
+--   * `quote_portal_throttled` once a link has made `v_max_events` requests in
+--     `v_window`. This defends against SCRAPING, not guessing -- a 256-bit
+--     token is not guessable -- by capping how fast one link can be pulled.
+--     The refusal is recorded at most once per window, so a scraper cannot
+--     turn the throttle into the flood of writes it exists to stop.
+create or replace function public.quote_portal_resolve(
+    p_token_hash bytea,
+    p_ip_address inet,
+    p_user_agent text
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_max_events constant integer  := 30;
+    v_window     constant interval := interval '1 minute';
+    v_token      public.quote_access_tokens;
+    v_recent     integer;
+begin
+    -- Read without a lock, only to learn which quote to lock first.
+    select t.* into v_token
+      from public.quote_access_tokens t where t.token_hash = p_token_hash;
+    if not found then
+        return jsonb_build_object('error', 'quote_link_invalid');
+    end if;
+
+    perform 1 from public.quotes q where q.id = v_token.quote_id for update;
+
+    -- Re-read under the lock: a revocation may have committed in between.
+    select t.* into v_token
+      from public.quote_access_tokens t where t.id = v_token.id for update;
+
+    -- Counted up to the limit and no further, so a hammered link costs this
+    -- query no more than a quiet one.
+    select count(*) into v_recent
+      from (select 1 from public.quote_portal_events e
+             where e.token_id = v_token.id
+               and e.occurred_at > clock_timestamp() - v_window
+             limit v_max_events) recent;
+
+    if v_recent >= v_max_events then
+        if not exists (select 1 from public.quote_portal_events e
+                        where e.token_id = v_token.id
+                          and e.event_type = 'throttled'
+                          and e.occurred_at > clock_timestamp() - v_window) then
+            perform public.quote_portal_log(
+                v_token.quote_id, v_token.version_id, v_token.id, 'throttled',
+                p_ip_address, p_user_agent);
+        end if;
+        return jsonb_build_object(
+            'error',               'quote_portal_throttled',
+            'retry_after_seconds', extract(epoch from v_window)::integer);
+    end if;
+
+    if v_token.revoked_at is not null or v_token.expires_at <= now() then
+        perform public.quote_portal_log(
+            v_token.quote_id, v_token.version_id, v_token.id, 'token_invalid',
+            p_ip_address, p_user_agent);
+        return jsonb_build_object('error', 'quote_link_invalid');
+    end if;
+
+    return jsonb_build_object(
+        'token_id',   v_token.id,
+        'quote_id',   v_token.quote_id,
+        'version_id', v_token.version_id);
+end;
+$$;
+
+-- The payload: one issued version, as the customer may see it (§6.3).
+--
+-- EVERY KEY BUILT HERE IS A PUBLIC DISCLOSURE. There is no row level security
+-- behind this read -- the service role reads everything -- so a column named
+-- below reaches anybody holding the link, and a typo is a data leak. That is
+-- the price of D1, and building the payload in SQL is what makes it payable:
+-- `quote_portal.test.sql` pins the exact key set of every group and asserts
+-- what must never appear (the internal notes of the quote and of every
+-- product, internal and deleted comments, the team's emails, the commenting
+-- customer's email, the deal, internal ids, the customer's address, the token
+-- and its hash). A key added here without its assertion turns that test red on
+-- purpose.
+--
+-- The groups are `QuoteDocumentData`'s (`quotes/quoteDocumentData.ts`), so the
+-- portal renders the one document component through the one mapper.
+--
+-- `parties` is picked KEY BY KEY from `party_snapshot` rather than passed
+-- through: the snapshot is built for the internal document, and a field added
+-- to `quote_party_snapshot()` later must not reach the portal by accident.
+-- `quote.title` is disclosed on purpose -- the printed quotation already
+-- carries it -- and the owner appears only as the display name the snapshot
+-- took.
+--
+-- `actions` reads the status machine, never a list of statuses: which answers
+-- a customer may give is `quote_transitions`' decision, the same rule the
+-- internal toolbar follows. The document conditions beside it are the ones
+-- `quote_portal_begin_answer()` enforces, so the buttons and the refusals
+-- cannot disagree.
+--
+-- Null for a draft: a draft is not a document. The change-detection etag
+-- (Phase 9) joins the payload with the poll that reads it.
+create or replace function public.quote_portal_document(p_version_id bigint)
+returns jsonb
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select jsonb_build_object(
+        'quote', jsonb_build_object(
+            'number',         q.quote_number,
+            'title',          q.title,
+            'status',         q.status_key,
+            'currency',       v.currency,
+            'version_number', v.version_number,
+            'issued_at',      v.issued_at,
+            'valid_until',    v.valid_until,
+            'is_superseded',  v.superseded_at is not null),
+        'parties', jsonb_build_object(
+            'company', case when jsonb_typeof(v.party_snapshot -> 'company') = 'object'
+                then jsonb_build_object(
+                    'name',           v.party_snapshot -> 'company' -> 'name',
+                    'address',        v.party_snapshot -> 'company' -> 'address',
+                    'zipcode',        v.party_snapshot -> 'company' -> 'zipcode',
+                    'city',           v.party_snapshot -> 'company' -> 'city',
+                    'state_abbr',     v.party_snapshot -> 'company' -> 'state_abbr',
+                    'country',        v.party_snapshot -> 'company' -> 'country',
+                    'tax_identifier', v.party_snapshot -> 'company' -> 'tax_identifier',
+                    'phone_number',   v.party_snapshot -> 'company' -> 'phone_number',
+                    'website',        v.party_snapshot -> 'company' -> 'website')
+                end,
+            'contact', case when jsonb_typeof(v.party_snapshot -> 'contact') = 'object'
+                then jsonb_build_object(
+                    'first_name', v.party_snapshot -> 'contact' -> 'first_name',
+                    'last_name',  v.party_snapshot -> 'contact' -> 'last_name',
+                    'title',      v.party_snapshot -> 'contact' -> 'title',
+                    'email',      v.party_snapshot -> 'contact' -> 'email',
+                    'phone',      v.party_snapshot -> 'contact' -> 'phone')
+                end,
+            'owner', jsonb_build_object(
+                'name', v.party_snapshot -> 'owner' -> 'name')),
+        'lines', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                       'position',         l.position,
+                       'sku',              l.sku,
+                       'name',             l.name,
+                       'description',      l.description,
+                       'unit',             l.unit,
+                       'quantity',         l.quantity,
+                       'unit_price',       l.unit_price,
+                       'discount_percent', l.discount_percent,
+                       'tax_rate_percent', l.tax_rate_percent,
+                       'line_total',       l.line_total)
+                   order by l.position, l.id)
+              from public.quote_lines l
+             where l.version_id = v.id), '[]'::jsonb),
+        'totals', jsonb_build_object(
+            'subtotal',       v.subtotal,
+            'discount_total', v.discount_total,
+            'tax_total',      v.tax_total,
+            'total',          v.total),
+        'terms', v.terms,
+        -- The shared thread of the QUOTE, every version's, oldest first (§2.5):
+        -- a negotiation outlives the version it started on. Never an internal
+        -- comment, never a deleted one, and of each author only what the page
+        -- prints -- the kind and a display name. A team member is named by
+        -- their `sales` row, as the owner is; a customer by the name they
+        -- signed with. The customer's email stays with the team: whoever else
+        -- holds the link has no business reading it.
+        'comments', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                       'author_kind', c.author_kind,
+                       'author_name', case c.author_kind
+                                          when 'customer' then c.author_name
+                                          else nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), '')
+                                      end,
+                       'body',        c.body,
+                       'created_at',  c.created_at,
+                       'edited_at',   c.edited_at)
+                   order by c.created_at, c.id)
+              from public.quote_comments c
+              left join public.sales s on s.id = c.author_sales_id
+             where c.quote_id = q.id
+               and c.visibility = 'shared'
+               and c.deleted_at is null), '[]'::jsonb),
+        -- From the configuration singleton, because a page with no layout
+        -- never loads it (F3). Null when the installation never set one; the
+        -- page falls back to the build's own branding, never to a guess.
+        'branding', jsonb_build_object(
+            'title', (select nullif(btrim(c.config ->> 'title'), '')
+                        from public.configuration c where c.id = 1),
+            -- The settings screen stores the logo as `{src}`; a configuration
+            -- written by hand holds a plain string.
+            'logo_url', (select nullif(case jsonb_typeof(c.config -> 'lightModeLogo')
+                                           when 'string' then c.config ->> 'lightModeLogo'
+                                           when 'object' then c.config -> 'lightModeLogo' ->> 'src'
+                                       end, '')
+                           from public.configuration c where c.id = 1)),
+        'actions', jsonb_build_object(
+            'can_accept', answerable.is_answerable and exists (
+                select 1 from public.quote_transitions t
+                 where t.from_status_key = q.status_key
+                   and t.to_status_key = 'accepted'
+                   and t.allowed_actor in ('customer', 'any')),
+            'can_reject', answerable.is_answerable and exists (
+                select 1 from public.quote_transitions t
+                 where t.from_status_key = q.status_key
+                   and t.to_status_key = 'rejected'
+                   and t.allowed_actor in ('customer', 'any')),
+            -- The thread stays open while the negotiation does: the live
+            -- version of a quote whose status is not terminal. Read off
+            -- `quote_statuses.is_terminal`, never a list of statuses, and read
+            -- HERE by `quote_portal_comment()` too, so the form and the refusal
+            -- are one predicate.
+            'can_comment', v.superseded_at is null and exists (
+                select 1 from public.quote_statuses st
+                 where st.key = q.status_key
+                   and not st.is_terminal)),
+        'acceptance', jsonb_build_object(
+            'accepted_at',      v.accepted_at,
+            'accepted_by_name', v.accepted_by_name,
+            'rejected_at',      v.rejected_at))
+      from public.quote_versions v
+      join public.quotes q on q.id = v.quote_id
+     cross join lateral (
+        select v.superseded_at is null
+               and v.accepted_at is null
+               and v.rejected_at is null
+               and (v.valid_until is null or v.valid_until >= current_date)
+               as is_answerable
+     ) answerable
+     where v.id = p_version_id
+       and v.issued_at is not null;
+$$;
+
+-- The customer opens the link.
+--
+-- Every successful open is one `viewed` event and one more on the token's
+-- `view_count`. The first look at the LIVE document also moves the quote to
+-- `viewed`, when the status machine has that edge for the customer from where
+-- the quote stands. Opening a superseded version moves nothing: an old link is
+-- not news about the document the rep is negotiating now.
+create or replace function public.quote_portal_view(
+    p_token_hash bytea,
+    p_ip_address inet default null,
+    p_user_agent text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_access  jsonb;
+    v_quote   public.quotes;
+    v_version public.quote_versions;
+begin
+    v_access := public.quote_portal_resolve(p_token_hash, p_ip_address, p_user_agent);
+    if v_access ? 'error' then
+        return v_access;
+    end if;
+
+    select * into v_quote from public.quotes q
+     where q.id = (v_access ->> 'quote_id')::bigint;
+    select * into v_version from public.quote_versions v
+     where v.id = (v_access ->> 'version_id')::bigint;
+
+    update public.quote_access_tokens t
+       set view_count = t.view_count + 1,
+           last_seen_at = now()
+     where t.id = (v_access ->> 'token_id')::bigint;
+
+    perform public.quote_portal_log(
+        v_quote.id, v_version.id, (v_access ->> 'token_id')::bigint, 'viewed',
+        p_ip_address, p_user_agent, null, null,
+        jsonb_build_object('version_number', v_version.version_number));
+
+    if v_version.superseded_at is null
+       and exists (select 1 from public.quote_transitions t
+                    where t.from_status_key = v_quote.status_key
+                      and t.to_status_key = 'viewed'
+                      and t.allowed_actor in ('customer', 'any')) then
+        perform public.apply_quote_status(
+            v_quote.id, 'viewed', null, 'customer', null, null, null);
+    end if;
+
+    return public.quote_portal_document(v_version.id);
+end;
+$$;
+
+-- What accepting and rejecting check before either writes anything (§6.4).
+--
+-- Returns what `quote_portal_resolve()` returns, plus the trimmed `name` and
+-- `email` the answer is signed with. In this order, under the quote's lock --
+-- so two tabs answering at once serialise there:
+--
+--   1. the input: the name and email, required to accept and optional to
+--      reject, capped the way the edge function caps them. Checked before the
+--      token is even looked up, so a malformed request reads nothing;
+--   2. the link is alive;
+--   3. the version is still answerable: not superseded
+--      (`quote_version_superseded`, the "a newer version was issued" page), not
+--      already answered (`quote_version_answered` -- a version is accepted or
+--      rejected once, `quote_versions_one_outcome`), not past its validity
+--      (`quote_validity_elapsed`, the key the issue already uses).
+--
+-- The status machine is the fourth check and the callers make it, through
+-- `apply_quote_status()`: that is where a second click lands, so idempotency
+-- comes from the state machine rather than from a mechanism that could
+-- disagree with it.
+create or replace function public.quote_portal_begin_answer(
+    p_token_hash     bytea,
+    p_name           text,
+    p_email          text,
+    p_party_required boolean,
+    p_ip_address     inet,
+    p_user_agent     text
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_name    text := nullif(btrim(coalesce(p_name, '')), '');
+    v_email   text := nullif(btrim(coalesce(p_email, '')), '');
+    v_access  jsonb;
+    v_version public.quote_versions;
+begin
+    if char_length(coalesce(v_name, '')) > 200
+       or char_length(coalesce(v_email, '')) > 320 then
+        raise exception 'a portal answer exceeds its length limit'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_input_too_long';
+    end if;
+
+    if p_party_required and v_name is null then
+        raise exception 'a name is required to answer a quote'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_name_required';
+    end if;
+
+    if (p_party_required and v_email is null)
+       or (v_email is not null and v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$') then
+        raise exception 'a valid email is required to answer a quote'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_email_invalid';
+    end if;
+
+    v_access := public.quote_portal_resolve(p_token_hash, p_ip_address, p_user_agent);
+    if v_access ? 'error' then
+        return v_access;
+    end if;
+
+    select * into v_version from public.quote_versions v
+     where v.id = (v_access ->> 'version_id')::bigint;
+
+    if v_version.superseded_at is not null then
+        raise exception 'quote version % was superseded by a newer one', v_version.id
+            using errcode = 'check_violation', detail = 'quote_version_superseded';
+    end if;
+
+    if v_version.accepted_at is not null or v_version.rejected_at is not null then
+        raise exception 'quote version % has already been answered', v_version.id
+            using errcode = 'check_violation', detail = 'quote_version_answered';
+    end if;
+
+    if v_version.valid_until < current_date then
+        raise exception 'the offer in quote version % expired on %',
+                v_version.id, v_version.valid_until
+            using errcode = 'check_violation', detail = 'quote_validity_elapsed';
+    end if;
+
+    return v_access || jsonb_build_object('name', v_name, 'email', v_email);
+end;
+$$;
+
+-- The customer accepts the version the link opens.
+--
+-- One transaction writes what §6.4 lists: the status move (through
+-- `apply_quote_status()`, as 'customer'), the history row it triggers, the
+-- acceptance columns on the version -- through the per-version unfreeze hole,
+-- the only way past the freeze -- and the `accepted` portal event with the
+-- address and the browser. The owner's notification is Phase 11.
+create or replace function public.quote_portal_accept(
+    p_token_hash bytea,
+    p_name       text,
+    p_email      text,
+    p_ip_address inet default null,
+    p_user_agent text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_answer  jsonb;
+    v_version public.quote_versions;
+begin
+    v_answer := public.quote_portal_begin_answer(
+        p_token_hash, p_name, p_email, true, p_ip_address, p_user_agent);
+    if v_answer ? 'error' then
+        return v_answer;
+    end if;
+
+    perform public.apply_quote_status(
+        (v_answer ->> 'quote_id')::bigint, 'accepted', null, 'customer',
+        null, null, null);
+
+    perform set_config('app.quote_version_unfreeze', v_answer ->> 'version_id', true);
+
+    update public.quote_versions v
+       set accepted_at         = now(),
+           accepted_by_name    = v_answer ->> 'name',
+           accepted_by_email   = v_answer ->> 'email',
+           accepted_ip         = p_ip_address,
+           acceptance_method   = 'portal_click',
+           -- What was agreed to, beside who agreed: the version and the figure
+           -- as they stood at the click, and the browser that clicked. Internal
+           -- only: no payload and no timeline row reads this column.
+           acceptance_evidence = jsonb_build_object(
+               'token_id',       (v_answer ->> 'token_id')::bigint,
+               'version_number', v.version_number,
+               'currency',       v.currency,
+               'total',          v.total,
+               'user_agent',     left(p_user_agent, 512))
+     where v.id = (v_answer ->> 'version_id')::bigint
+    returning * into v_version;
+
+    perform set_config('app.quote_version_unfreeze', '', true);
+
+    perform public.quote_portal_log(
+        v_version.quote_id, v_version.id, (v_answer ->> 'token_id')::bigint,
+        'accepted', p_ip_address, p_user_agent,
+        v_answer ->> 'name', v_answer ->> 'email',
+        jsonb_build_object('version_number', v_version.version_number,
+                           'currency',       v_version.currency,
+                           'total',          v_version.total));
+
+    return public.quote_portal_document(v_version.id);
+end;
+$$;
+
+-- The customer declines the version the link opens.
+--
+-- The same shape as accepting, with a reason instead of a signature: the code
+-- is required, so "why we lost it" is reportable; the free text, the name and
+-- the email are optional, because a customer asked to fill in a form to say no
+-- mostly does not say anything at all.
+create or replace function public.quote_portal_reject(
+    p_token_hash  bytea,
+    p_reason_code text,
+    p_reason      text default null,
+    p_name        text default null,
+    p_email       text default null,
+    p_ip_address  inet default null,
+    p_user_agent  text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_code    text := nullif(btrim(coalesce(p_reason_code, '')), '');
+    v_reason  text := nullif(btrim(coalesce(p_reason, '')), '');
+    v_answer  jsonb;
+    v_version public.quote_versions;
+begin
+    -- The list `quote_versions.rejected_reason_code` checks, restated so a bad
+    -- code is refused with a key the portal can explain. Left to the
+    -- constraint it would be a bare 23514 -- which the freeze guard raises too,
+    -- so the two could not be told apart.
+    if v_code is null
+       or v_code not in ('price', 'terms', 'delivery_time', 'product', 'other') then
+        raise exception 'unknown rejection reason %', coalesce(v_code, 'null')
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_reason_code_invalid';
+    end if;
+
+    if char_length(coalesce(v_reason, '')) > 2000 then
+        raise exception 'a portal answer exceeds its length limit'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_input_too_long';
+    end if;
+
+    v_answer := public.quote_portal_begin_answer(
+        p_token_hash, p_name, p_email, false, p_ip_address, p_user_agent);
+    if v_answer ? 'error' then
+        return v_answer;
+    end if;
+
+    perform public.apply_quote_status(
+        (v_answer ->> 'quote_id')::bigint, 'rejected', v_reason, 'customer',
+        null, null, null);
+
+    perform set_config('app.quote_version_unfreeze', v_answer ->> 'version_id', true);
+
+    update public.quote_versions v
+       set rejected_at          = now(),
+           rejected_reason      = v_reason,
+           rejected_reason_code = v_code
+     where v.id = (v_answer ->> 'version_id')::bigint
+    returning * into v_version;
+
+    perform set_config('app.quote_version_unfreeze', '', true);
+
+    perform public.quote_portal_log(
+        v_version.quote_id, v_version.id, (v_answer ->> 'token_id')::bigint,
+        'rejected', p_ip_address, p_user_agent,
+        v_answer ->> 'name', v_answer ->> 'email',
+        jsonb_build_object('version_number', v_version.version_number,
+                           'reason_code',    v_code,
+                           'reason',         v_reason));
+
+    return public.quote_portal_document(v_version.id);
+end;
+$$;
+
+-- The customer writes to the team (§2.5, Phase 8).
+--
+-- The comment is `customer`-authored and `shared` -- the only shape
+-- `quote_comments_author` lets a customer comment take -- signed with the name
+-- the customer typed, and filed under the version the link opens. In the order
+-- the answers use, under the quote's lock:
+--
+--   1. the input: a body, a name to sign it with (the table requires one), an
+--      optional email that is one, and the lengths. The signature follows the
+--      rules and keys of `quote_portal_begin_answer()`; the body is capped at
+--      4000 characters, inside the table's 8000, so a message in any script
+--      fits the edge function's 16 KB request;
+--   2. the link is alive, through `quote_portal_resolve()` and its throttle;
+--   3. the thread is open (`quote_portal_comments_closed`), which is the
+--      payload's own `actions.can_comment` -- read from the document rather than
+--      restated, so the form and the refusal cannot disagree. A customer who
+--      accepted, declined or holds a superseded link still READS the thread;
+--   4. the link has not written `v_max_comments` comments in `v_window`
+--      (`quote_portal_comment_limit`). Nobody can edit or delete a customer
+--      comment, so a leaked link must not be able to bury a negotiation under
+--      messages nobody can remove -- and the request throttle is a reader's
+--      pace, thirty a minute, not a writer's.
+--
+-- The `commented` event carries the address and the browser, as every act on
+-- the portal does; the comment row carries neither. Notifying the owner is
+-- Phase 11 -- until then `quotes_summary.nb_unanswered_customer_comments` is
+-- the signal.
+create or replace function public.quote_portal_comment(
+    p_token_hash bytea,
+    p_body       text,
+    p_name       text,
+    p_email      text default null,
+    p_ip_address inet default null,
+    p_user_agent text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_max_comments constant integer  := 20;
+    v_window       constant interval := interval '1 hour';
+    v_body     text := nullif(btrim(coalesce(p_body, '')), '');
+    v_name     text := nullif(btrim(coalesce(p_name, '')), '');
+    v_email    text := nullif(btrim(coalesce(p_email, '')), '');
+    v_access   jsonb;
+    v_token_id bigint;
+    v_version  public.quote_versions;
+    v_recent   integer;
+begin
+    if char_length(coalesce(v_body, '')) > 4000
+       or char_length(coalesce(v_name, '')) > 200
+       or char_length(coalesce(v_email, '')) > 320 then
+        raise exception 'a portal comment exceeds its length limit'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_input_too_long';
+    end if;
+
+    if v_body is null then
+        raise exception 'a comment needs a body'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_body_required';
+    end if;
+
+    if v_name is null then
+        raise exception 'a name is required to sign a comment'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_name_required';
+    end if;
+
+    if v_email is not null and v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+        raise exception 'the email a comment is signed with is not valid'
+            using errcode = 'invalid_parameter_value',
+                  detail  = 'quote_portal_email_invalid';
+    end if;
+
+    v_access := public.quote_portal_resolve(p_token_hash, p_ip_address, p_user_agent);
+    if v_access ? 'error' then
+        return v_access;
+    end if;
+    v_token_id := (v_access ->> 'token_id')::bigint;
+
+    select * into v_version from public.quote_versions v
+     where v.id = (v_access ->> 'version_id')::bigint;
+
+    if not coalesce((public.quote_portal_document(v_version.id)
+                       -> 'actions' ->> 'can_comment')::boolean, false) then
+        raise exception 'the thread of quote % is closed to the customer', v_version.quote_id
+            using errcode = 'check_violation',
+                  detail  = 'quote_portal_comments_closed';
+    end if;
+
+    -- Counted up to the limit and no further, as the request throttle counts.
+    select count(*) into v_recent
+      from (select 1 from public.quote_portal_events e
+             where e.token_id = v_token_id
+               and e.event_type = 'commented'
+               and e.occurred_at > clock_timestamp() - v_window
+             limit v_max_comments) recent;
+
+    if v_recent >= v_max_comments then
+        raise exception 'link % has written % comments within %',
+                v_token_id, v_max_comments, v_window
+            using errcode = 'check_violation',
+                  detail  = 'quote_portal_comment_limit';
+    end if;
+
+    insert into public.quote_comments
+        (quote_id, version_id, author_kind, author_name, author_email, visibility, body)
+    values (v_version.quote_id, v_version.id, 'customer', v_name, v_email, 'shared', v_body);
+
+    perform public.quote_portal_log(
+        v_version.quote_id, v_version.id, v_token_id, 'commented',
+        p_ip_address, p_user_agent, v_name, v_email,
+        jsonb_build_object('version_number', v_version.version_number));
+
+    return public.quote_portal_document(v_version.id);
 end;
 $$;

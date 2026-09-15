@@ -28,6 +28,18 @@ import type {
   TeamWorkload,
   TeamMember,
   TeamMemberBudget,
+  PriceList,
+  PriceListItem,
+  Product,
+  Quote,
+  QuoteAccessToken,
+  QuoteDiscountRule,
+  QuoteLine,
+  QuoteStatus,
+  QuoteStatusChange,
+  QuoteTransition,
+  QuoteVersion,
+  TaxRate,
 } from "../../../types";
 import type { ConfigurationContextValue } from "../../../root/ConfigurationContext";
 
@@ -86,5 +98,30 @@ export interface Db {
   // Anti-fatigue settings (§9.5). Empty means "everyone is on the defaults",
   // which is exactly what the real backend's `notification_prefs_for` does.
   notification_preferences: NotificationPreference[];
+  // The quotes catalogue. Tax rates are seeded as the migration seeds them; the
+  // rest starts empty until the module's demo mirror (quotes Phase 5).
+  tax_rates: TaxRate[];
+  products: Product[];
+  price_lists: PriceList[];
+  price_list_items: PriceListItem[];
+  // Quotations (quotes Phase 4). Empty in the generated demo dataset — a
+  // quotation is written by a person, one at a time, and inventing a document
+  // somebody was supposedly shown is the one thing this module exists to
+  // prevent. The collections are declared so stories and tests can seed them,
+  // and so the line triggers' demo stand-ins have somewhere to write.
+  quote_statuses: QuoteStatus[];
+  // The status machine and the discount ceilings, seeded exactly as the
+  // migration seeds them — the graph as data (quotes §3) and the rule switched
+  // OFF (§3.1). A demo that shipped the ceiling enforced would refuse issues
+  // the real backend allows.
+  quote_transitions: QuoteTransition[];
+  quote_discount_rules: QuoteDiscountRule[];
+  quotes: Quote[];
+  quote_versions: QuoteVersion[];
+  quote_lines: QuoteLine[];
+  // The audit trail and the portal links a Phase 5 move writes. Empty to start
+  // with, because both are records of something that happened.
+  quote_status_changes: QuoteStatusChange[];
+  quote_access_tokens: QuoteAccessToken[];
   configuration: Array<{ id: number; config: ConfigurationContextValue }>;
 }

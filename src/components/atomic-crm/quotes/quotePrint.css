@@ -1,0 +1,139 @@
+/*
+ * Print styles for a quotation — this is the PDF (quotes §9, D4).
+ *
+ * The class contracts are copied from `reports/reportPrint.css`, for its reason:
+ * the browser's own print pipeline produces VECTOR output with selectable,
+ * searchable text and needs no dependency, where html2canvas rasterises a
+ * bitmap and a PDF library is a supply-chain decision (`dependency-safety.md`).
+ * The cost is the same too: the rep picks "Save as PDF" in the print dialog.
+ *
+ * One difference from a report, and it is why this file hides more: a report is
+ * printed for a colleague, a quotation for a CUSTOMER. The CRM's navigation on
+ * that page is not merely noise, it is the CRM showing through a commercial
+ * document. Those rules are scoped with `body:has(.quote-print-root)`, so they
+ * exist only while a quote document is on the page and never touch printing any
+ * other screen.
+ */
+
+@media print {
+  /* The application shell: the sidebar and the bar above the content. The
+     topbar is matched as the inset's direct `header`, not as any `header`, so
+     a header inside the document itself is never hidden. */
+  body:has(.quote-print-root) [data-slot="sidebar"],
+  body:has(.quote-print-root) [data-slot="sidebar-rail"],
+  body:has(.quote-print-root) [data-slot="sidebar-inset"] > header {
+    display: none !important;
+  }
+
+  body:has(.quote-print-root),
+  body:has(.quote-print-root) [data-slot="sidebar-wrapper"],
+  body:has(.quote-print-root) [data-slot="sidebar-inset"],
+  body:has(.quote-print-root) #main-content {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+  }
+
+  /* The page's own controls: moves, versions, links, buttons. */
+  .quote-print-hide {
+    display: none !important;
+  }
+
+  /* The document's rules and banners are information; without this Chrome and
+     Safari drop every background and the draft banner prints as plain text. */
+  .quote-print-root,
+  .quote-print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Paper is a light surface whatever the reader's theme is. The dark palette
+     wastes toner and prints muted text near-invisible. */
+  .quote-print-root {
+    background: #ffffff !important;
+    color: #111111 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  .quote-print-root [data-slot="card"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  /* The document is a card on screen and a sheet on paper: the page margin is
+     the frame, so a printed box around it is a form inside a form. */
+  .quote-print-root .quote-document {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .quote-print-root table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9.5pt !important;
+  }
+
+  /* A line table spilling onto a second page repeats its header there, so the
+     columns stay identifiable without flipping back. */
+  .quote-print-root thead {
+    display: table-header-group;
+  }
+
+  .quote-print-root th,
+  .quote-print-root td {
+    border-bottom: 1px solid #dddddd !important;
+    color: #111111 !important;
+  }
+
+  .quote-print-root tr {
+    break-inside: avoid;
+  }
+
+  /* A figure split across two pages is a total nobody can read in one place. */
+  .quote-print-root .quote-print-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* An `overflow: auto` box prints only its visible slice, which on a wide line
+     table silently drops the amounts column. */
+  .quote-print-root .overflow-x-auto,
+  .quote-print-root .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  .quote-print-root .text-muted-foreground {
+    color: #555555 !important;
+  }
+
+  .quote-print-only {
+    display: block !important;
+  }
+
+  .quote-print-root .break-after-page {
+    break-after: page;
+    page-break-after: always;
+  }
+  .quote-print-root .break-after-page:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
+
+/* Markup that exists all the time and is only shown on paper. Hidden here rather
+   than conditionally rendered, so printing never depends on a React state change
+   landing before the dialog opens. */
+.quote-print-only {
+  display: none;
+}

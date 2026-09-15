@@ -1,4 +1,4 @@
-import { Paperclip, X } from "lucide-react";
+import { CircleAlert, Paperclip, X } from "lucide-react";
 import { useTranslate } from "ra-core";
 import { useEffect, useState } from "react";
 
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { TaskAttachmentFileInput } from "../tasks/TaskAttachmentFileInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
+import type { DealStageGate } from "../types";
 import { findDealLabel } from "./dealUtils";
 
 /**
@@ -27,6 +28,12 @@ import { findDealLabel } from "./dealUtils";
  * reason `move_deal_stage()` refuses a blank one — an optional field on a form
  * everyone is in a hurry to dismiss is an empty column.
  *
+ * A reason is a claim, though, and typing one costs nothing. `gate` carries the
+ * part that cannot be typed: how much work was actually completed on the deal
+ * since it entered the stage it is leaving. It comes from the same database
+ * function that will decide the move, so this dialog cannot enable its button
+ * for something the server is about to refuse.
+ *
  * The dialog never moves the deal itself. It collects, the caller persists, and
  * cancelling puts the card back where it was.
  */
@@ -36,6 +43,9 @@ export const DealStageChangeDialog = ({
   fromStage,
   toStage,
   isPending,
+  gate,
+  isGatePending,
+  canOverride,
   onConfirm,
   onCancel,
 }: {
@@ -44,13 +54,20 @@ export const DealStageChangeDialog = ({
   fromStage: string;
   toStage: string;
   isPending?: boolean;
-  onConfirm: (reason: string, files: File[]) => void;
+  /** What `deal_stage_gate()` answered. Absent means no rule is known to apply. */
+  gate?: DealStageGate;
+  /** The rule is still being read. Nothing is confirmable until it is known. */
+  isGatePending?: boolean;
+  /** Admins, and only admins, may move a deal past an unmet requirement. */
+  canOverride?: boolean;
+  onConfirm: (reason: string, files: File[], overrideReason?: string) => void;
   onCancel: () => void;
 }) => {
   const translate = useTranslate();
   const { dealStages } = useConfigurationContext();
   const [reason, setReason] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [overrideReason, setOverrideReason] = useState("");
 
   // A fresh dialog per move: the previous reason must never be submitted for
   // the next card by a user who did not read the form again.
@@ -58,10 +75,22 @@ export const DealStageChangeDialog = ({
     if (open) {
       setReason("");
       setFiles([]);
+      setOverrideReason("");
     }
   }, [open]);
 
   const trimmedReason = reason.trim();
+  const trimmedOverride = overrideReason.trim();
+  const isBlocked = gate != null && !gate.ok;
+  // An admin still has to say why. An override nobody wrote down is the rule
+  // quietly not existing.
+  const isOverridden = isBlocked && canOverride && trimmedOverride !== "";
+  const canConfirm =
+    trimmedReason !== "" &&
+    !isPending &&
+    !isGatePending &&
+    (!isBlocked || isOverridden);
+
   // A stage configured after this deal was created has no label; showing the
   // raw value beats showing "undefined".
   const stageLabel = (stage: string) =>
@@ -90,6 +119,33 @@ export const DealStageChangeDialog = ({
           </DialogDescription>
         </DialogHeader>
 
+        {isGatePending ? (
+          <p className="text-sm text-muted-foreground">
+            {translate("resources.deals.stage_change.requirement_checking")}
+          </p>
+        ) : null}
+
+        {isBlocked ? (
+          <div
+            role="alert"
+            className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"
+          >
+            <CircleAlert className="h-4 w-4 shrink-0 text-destructive" />
+            <div className="flex flex-col gap-1">
+              <span>
+                {translate("resources.deals.stage_change.requirement_blocked", {
+                  completed: gate.completed,
+                  required: gate.required,
+                  stage: stageLabel(fromStage),
+                })}
+              </span>
+              <span className="text-muted-foreground">
+                {translate("resources.deals.stage_change.requirement_hint")}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-2">
           <Label htmlFor="deal-stage-change-reason">
             {translate("resources.deals.stage_change.reason")}
@@ -105,6 +161,26 @@ export const DealStageChangeDialog = ({
             onChange={(event) => setReason(event.target.value)}
           />
         </div>
+
+        {isBlocked && canOverride ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="deal-stage-change-override">
+              {translate("resources.deals.stage_change.override")}
+            </Label>
+            <Textarea
+              id="deal-stage-change-override"
+              value={overrideReason}
+              rows={2}
+              placeholder={translate(
+                "resources.deals.stage_change.override_placeholder",
+              )}
+              onChange={(event) => setOverrideReason(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {translate("resources.deals.stage_change.override_hint")}
+            </p>
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-2">
           <TaskAttachmentFileInput
@@ -153,8 +229,12 @@ export const DealStageChangeDialog = ({
             {translate("ra.action.cancel")}
           </Button>
           <Button
-            disabled={trimmedReason === "" || isPending}
-            onClick={() => onConfirm(trimmedReason, files)}
+            disabled={!canConfirm}
+            onClick={() =>
+              isOverridden
+                ? onConfirm(trimmedReason, files, trimmedOverride)
+                : onConfirm(trimmedReason, files)
+            }
           >
             {translate("resources.deals.stage_change.confirm")}
           </Button>

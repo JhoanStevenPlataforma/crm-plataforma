@@ -10,6 +10,10 @@ import { generateSales } from "./sales";
 import { generateTags } from "./tags";
 import { generateTasks } from "./tasks";
 import { TASK_PRIORITIES, TASK_STATUSES } from "./taskCatalogues";
+import { DEMO_QUOTE_DISCOUNT_RULES } from "./quoteDiscountRules";
+import { DEMO_QUOTE_STATUSES } from "./quoteStatuses";
+import { DEMO_QUOTE_TRANSITIONS } from "./quoteTransitions";
+import { DEMO_TAX_RATES } from "./taxRates";
 import { generateTeamDealStats } from "./teamDealStats";
 import { generateTeamTaskStats } from "./teamTaskStats";
 import {
@@ -97,6 +101,30 @@ export default (): Db => {
   db.task_notifications = [];
   db.notification_preferences = [];
   db.leads = generateLeads(db);
+  // The quotes catalogue. The tax rates mirror the rows the migration seeds, so
+  // the product form's tax picker resolves; products and price lists start
+  // empty, because the demo mirror of the quotes module is Phase 5 (§10.1).
+  db.tax_rates = DEMO_TAX_RATES;
+  db.products = [];
+  db.price_lists = [];
+  db.price_list_items = [];
+  // Quotations. The status catalogue mirrors the rows the migration seeds, so a
+  // list filter and a status badge resolve; the documents themselves start
+  // empty, because a quotation is written by a person and a fabricated one that
+  // a customer was supposedly shown is exactly what this module refuses to
+  // produce. The collections must exist all the same, or the screens read from
+  // a resource FakeRest has never heard of.
+  db.quote_statuses = DEMO_QUOTE_STATUSES;
+  // The graph and the ceilings, mirrored from the migration: the demo mirror of
+  // the status machine reads them exactly as `apply_quote_status()` does, so a
+  // move demo mode refuses is a move the real backend refuses too (quotes §3).
+  db.quote_transitions = DEMO_QUOTE_TRANSITIONS;
+  db.quote_discount_rules = DEMO_QUOTE_DISCOUNT_RULES;
+  db.quotes = [];
+  db.quote_versions = [];
+  db.quote_lines = [];
+  db.quote_status_changes = [];
+  db.quote_access_tokens = [];
   db.configuration = [
     {
       id: 1,

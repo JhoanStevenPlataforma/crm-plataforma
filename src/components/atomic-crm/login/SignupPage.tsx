@@ -19,7 +19,7 @@ import { googleWorkplaceDomain } from "./authConfig";
 export const SignupPage = () => {
   const queryClient = useQueryClient();
   const dataProvider = useDataProvider<CrmDataProvider>();
-  const { darkModeLogo: logo, title } = useConfigurationContext();
+  const { darkModeLogo, lightModeLogo, title } = useConfigurationContext();
   const navigate = useNavigate();
   const translate = useTranslate();
   const { data: isInitialized, isPending } = useQuery({
@@ -97,14 +97,21 @@ export const SignupPage = () => {
 
   return (
     <div className="h-screen p-8">
-      <div className="flex items-center gap-4">
+      {/* The wordmark carries the product name, so no title text beside it.
+          The two variants swap by mode; the old `brightness-0 dark:invert`
+          filter forced the mark to pure black or pure white and would strip
+          the brand colour out of it. */}
+      <div className="flex items-center">
         <img
-          src={logo}
+          className="[.light_&]:hidden h-7 w-auto object-contain"
+          src={darkModeLogo}
           alt={title}
-          width={24}
-          className="filter brightness-0 dark:invert"
         />
-        <h1 className="text-xl font-semibold">{title}</h1>
+        <img
+          className="[.dark_&]:hidden h-7 w-auto object-contain"
+          src={lightModeLogo}
+          alt={title}
+        />
       </div>
       <div className="h-full">
         <div className="max-w-sm mx-auto h-full flex flex-col justify-center gap-4">

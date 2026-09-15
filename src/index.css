@@ -41,41 +41,108 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-tint: var(--brand-tint);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-tint: var(--success-tint);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-tint: var(--warning-tint);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-tint: var(--info-tint);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-surface-muted: var(--surface-muted);
+  --color-border-strong: var(--border-strong);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --radius: 0.5rem;
+
+  /* ---- brand ------------------------------------------------------------
+     Warm amber/bronze read off the product mark. It is an ACCENT, not a
+     ground: it appears on primary actions, the active navigation item, focus
+     rings and selected data, never on page backgrounds, table headers or
+     status badges, which carry their own semantic colours below. */
+  --brand: oklch(0.5327 0.1226 57.37); /* #A0570F, 5.43:1 on white */
+  --brand-strong: oklch(0.4357 0.1008 56.18); /* #7A400A, text on tint    */
+  --brand-subtle: oklch(0.7811 0.1464 72.73); /* #F0A73A, marks           */
+  --brand-foreground: oklch(1 0 0);
+  --brand-tint: oklch(0.9649 0.0186 75.32); /* #FBF2E6, active bg       */
+
+  /* ---- neutrals ---------------------------------------------------------
+     Biased slightly cool (hue ~257) so the warm brand reads as deliberate
+     against them rather than as a cast. The page ground is off-white, not
+     white: cards have to separate from it without a heavy shadow. */
+  --background: oklch(0.9722 0.0034 247.86); /* #F4F6F8 */
+  --foreground: oklch(0.2168 0.0109 260.68); /* #171A1F, 16.1:1 */
+  --surface: oklch(1 0 0);
+  --surface-foreground: oklch(0.2168 0.0109 260.68);
+  --surface-muted: oklch(0.9876 0.0017 247.84); /* #FAFBFC, table headers */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2168 0.0109 260.68);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.2168 0.0109 260.68);
+  --primary: oklch(0.5327 0.1226 57.37);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.951 0.0063 255.48); /* #ECEFF3 */
+  --secondary-foreground: oklch(0.2168 0.0109 260.68);
+  --muted: oklch(0.951 0.0063 255.48);
+  --muted-foreground: oklch(
+    0.5456 0.023 257.51
+  ); /* #68717E, 4.56:1 on ground */
+  /* Generic hover stays NEUTRAL on purpose. Tinting every dropdown row amber
+     is how an accent turns into a theme. The brand tint is reserved for the
+     sidebar active item, below. */
+  --accent: oklch(0.951 0.0063 255.48);
+  --accent-foreground: oklch(0.2168 0.0109 260.68);
+  --destructive: oklch(0.5353 0.1628 25.69); /* #B93B38, 5.61:1 */
+  --border: oklch(0.9145 0.0092 258.34); /* #DFE3E9 */
+  --border-strong: oklch(0.8549 0.0146 254.62); /* #C9D0D9 */
+  --input: oklch(0.9145 0.0092 258.34);
+  --ring: oklch(0.5327 0.1226 57.37);
+
+  /* ---- semantic states --------------------------------------------------
+     Separate from the brand hue so "primary action" and "this went well"
+     never read as the same signal. Each verified at 4.5:1 or better as text
+     on white. */
+  --success: oklch(0.5333 0.1094 162.91); /* #15805A, 4.92:1 */
+  --success-foreground: oklch(1 0 0);
+  --success-tint: oklch(0.9561 0.0152 171.05);
+  --warning: oklch(0.5722 0.1226 70.23); /* #A56904, 4.54:1 */
+  --warning-foreground: oklch(1 0 0);
+  --warning-tint: oklch(0.9609 0.0273 83.54);
+  --info: oklch(0.5003 0.1521 258.67); /* #2560B8, 6.10:1 */
+  --info-foreground: oklch(1 0 0);
+  --info-tint: oklch(0.9531 0.0166 259.42);
+
+  /* Unused by the CRM own charts, which read misc/chartTheme.ts. Kept
+     coherent so a stock shadcn chart dropped in does not clash. */
+  --chart-1: oklch(0.5327 0.1226 57.37);
+  --chart-2: oklch(0.5003 0.1521 258.67);
+  --chart-3: oklch(0.5333 0.1094 162.91);
+  --chart-4: oklch(0.5722 0.1226 70.23);
+  --chart-5: oklch(0.5353 0.1628 25.69);
+
+  /* ---- sidebar ----------------------------------------------------------
+     White against the off-white page, separated by a border rather than a
+     shade: the navigation should read as a fixed edge, not as a panel
+     floating over the content. */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.4144 0.0205 259.41);
+  --sidebar-primary: oklch(0.5327 0.1226 57.37);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.9649 0.0186 75.32);
+  --sidebar-accent-foreground: oklch(0.4357 0.1008 56.18);
+  --sidebar-border: oklch(0.9145 0.0092 258.34);
+  --sidebar-ring: oklch(0.5327 0.1226 57.37);
+
   --avatar-0: oklch(0.85 0.08 240);
   --avatar-1: oklch(0.88 0.1 340);
   --avatar-2: oklch(0.85 0.07 180);
@@ -89,37 +156,63 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 15%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Not the light palette inverted. The amber that clears 5.4:1 on white
+     drops below 2:1 on a near-black ground, so the brand moves UP the ramp
+     here and takes dark text on solid fills. */
+  --brand: oklch(0.7434 0.1317 66.87); /* #E39A46, 7.46:1 */
+  --brand-strong: oklch(0.7811 0.1464 72.73);
+  --brand-subtle: oklch(0.6899 0.1307 67.8);
+  --brand-foreground: oklch(0.2165 0.0398 76.87);
+  --brand-tint: oklch(0.252 0.0248 68.99);
+
+  --background: oklch(0.1808 0.0095 255.64); /* #0F1216 */
+  --foreground: oklch(0.9484 0.0046 258.32); /* #ECEEF1, 15.0:1 */
+  --surface: oklch(0.2168 0.0109 260.68); /* #171A1F */
+  --surface-foreground: oklch(0.9484 0.0046 258.32);
+  --surface-muted: oklch(0.2468 0.0146 261.66);
+  --card: oklch(0.2168 0.0109 260.68);
+  --card-foreground: oklch(0.9484 0.0046 258.32);
+  --popover: oklch(0.2168 0.0109 260.68);
+  --popover-foreground: oklch(0.9484 0.0046 258.32);
+  --primary: oklch(0.7434 0.1317 66.87);
+  --primary-foreground: oklch(0.2165 0.0398 76.87);
+  --secondary: oklch(0.2753 0.0165 259.78); /* #232830 */
+  --secondary-foreground: oklch(0.9484 0.0046 258.32);
+  --muted: oklch(0.2753 0.0165 259.78);
+  --muted-foreground: oklch(0.64 0.0208 255.58); /* #848D99, 5.19:1 */
+  --accent: oklch(0.2753 0.0165 259.78);
+  --accent-foreground: oklch(0.9484 0.0046 258.32);
+  --destructive: oklch(0.6858 0.1498 23.73); /* #E8706C, 5.79:1 */
+  --border: oklch(0.3036 0.0161 259.8);
+  --border-strong: oklch(0.3728 0.0196 257.26);
+  --input: oklch(0.3036 0.0161 259.8);
+  --ring: oklch(0.7434 0.1317 66.87);
+
+  --success: oklch(0.7115 0.1297 164); /* #3FBB8C, 7.22:1 */
+  --success-foreground: oklch(0.2168 0.0109 260.68);
+  --success-tint: oklch(0.2503 0.0275 167.53);
+  --warning: oklch(0.7514 0.135 78.87);
+  --warning-foreground: oklch(0.2168 0.0109 260.68);
+  --warning-tint: oklch(0.257 0.027 81.03);
+  --info: oklch(0.7025 0.1279 258.28); /* #6CA0EE, 6.56:1 */
+  --info-foreground: oklch(0.2168 0.0109 260.68);
+  --info-tint: oklch(0.241 0.0306 256.87);
+
+  --chart-1: oklch(0.7434 0.1317 66.87);
+  --chart-2: oklch(0.7025 0.1279 258.28);
+  --chart-3: oklch(0.7115 0.1297 164);
+  --chart-4: oklch(0.7514 0.135 78.87);
+  --chart-5: oklch(0.6858 0.1498 23.73);
+
+  --sidebar: oklch(0.2168 0.0109 260.68);
+  --sidebar-foreground: oklch(0.7893 0.0149 254.63);
+  --sidebar-primary: oklch(0.7434 0.1317 66.87);
+  --sidebar-primary-foreground: oklch(0.2165 0.0398 76.87);
+  --sidebar-accent: oklch(0.252 0.0248 68.99);
+  --sidebar-accent-foreground: oklch(0.7811 0.1464 72.73);
+  --sidebar-border: oklch(0.3036 0.0161 259.8);
+  --sidebar-ring: oklch(0.7434 0.1317 66.87);
+
   --avatar-0: oklch(0.35 0.12 240);
   --avatar-1: oklch(0.38 0.14 340);
   --avatar-2: oklch(0.35 0.11 180);

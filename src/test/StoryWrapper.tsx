@@ -12,6 +12,8 @@ import {
   TASK_PRIORITIES,
   TASK_STATUSES,
 } from "@/components/atomic-crm/providers/fakerest/dataGenerator/taskCatalogues";
+import { DEMO_QUOTE_DISCOUNT_RULES } from "@/components/atomic-crm/providers/fakerest/dataGenerator/quoteDiscountRules";
+import { DEMO_QUOTE_TRANSITIONS } from "@/components/atomic-crm/providers/fakerest/dataGenerator/quoteTransitions";
 import { defaultTaskTypes } from "@/components/atomic-crm/root/defaultConfiguration";
 import { CRM } from "@/components/atomic-crm/root/CRM";
 import { testI18nProvider } from "@/components/atomic-crm/providers/commons/i18nProvider";
@@ -70,6 +72,25 @@ export const createCrmDb = (overrides: Partial<Db> = {}): Db =>
     task_checklist_items: [],
     task_dependencies: [],
     notification_preferences: [],
+    // Quotes. Present and empty rather than absent: a screen that reads a
+    // collection FakeRest has never heard of fails, and `EntityQuotesPanel`
+    // renders on every deal.
+    quote_statuses: [],
+    // The status machine and its ceilings: seeded rather than empty, because
+    // every quote action reads the graph to decide what to offer and the mirror
+    // reads it again to decide what to allow. An empty graph is a screen with
+    // no buttons, which is not a scenario any test means to set up.
+    quote_transitions: DEMO_QUOTE_TRANSITIONS,
+    quote_discount_rules: DEMO_QUOTE_DISCOUNT_RULES,
+    quotes: [],
+    quote_versions: [],
+    quote_lines: [],
+    quote_status_changes: [],
+    quote_access_tokens: [],
+    products: [],
+    price_lists: [],
+    price_list_items: [],
+    tax_rates: [],
     task_statuses: TASK_STATUSES,
     task_priorities: TASK_PRIORITIES,
     task_types: defaultTaskTypes.map((taskType, index) => ({

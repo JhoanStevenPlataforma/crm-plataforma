@@ -15,6 +15,12 @@ create extension if not exists "btree_gist" with schema "extensions";
 -- about and helpfully generates `drop extension pg_cron`, which silently kills
 -- every reminder in the product.
 create extension if not exists "pg_cron";
+-- `gen_random_bytes()`, which mints the portal access tokens (quotes §6.2).
+-- Declared here for the same reason pg_cron is: an extension present in the
+-- database but absent from the declarative schema makes `supabase db diff`
+-- helpfully generate `drop extension pgcrypto`, which would take every future
+-- token with it.
+create extension if not exists "pgcrypto" with schema "extensions";
 
 -- Private schema (used by sales policies migration)
 create schema if not exists "private";
@@ -198,6 +204,11 @@ create table public.deal_stage_changes (
     sales_id bigint references public.sales(id),
     changed_at timestamp with time zone not null default now(),
     attachments jsonb[],
+    -- Why an admin was allowed to move this deal without meeting the completed
+    -- task requirement. Null on every move that satisfied the rule normally, so
+    -- "which moves skipped the gate" is one `is not null` away. An override
+    -- with no trace would put the backdoor straight back.
+    override_reason text,
     constraint deal_stage_changes_to_stage_not_blank check (btrim(to_stage) <> ''),
     constraint deal_stage_changes_stages_differ check (from_stage is distinct from to_stage)
 );
@@ -207,6 +218,37 @@ create index deal_stage_changes_deal_id_idx
     on public.deal_stage_changes (deal_id, changed_at desc);
 create index deal_stage_changes_sales_id_idx
     on public.deal_stage_changes (sales_id);
+
+--
+-- How much work a deal must show before it may enter a stage.
+--
+-- The pipeline rule this backs: a deal only advances once something was
+-- actually done on it. Encoded as a table rather than an `if` inside
+-- `move_deal_stage()` for two reasons. `deals.stage` is free text and the stage
+-- list is frontend configuration, so a function full of literal 'won' /
+-- 'proposal-sent' would be wrong for the first customer who renames a column;
+-- and a rule that can only be changed by shipping a migration is a rule nobody
+-- can tune while a quarter is running.
+--
+-- A stage with no row here has no requirement. That is deliberate: `dealStages`
+-- is customer-configurable, and a stage added to the frontend config with no
+-- row here would otherwise freeze that column of the board with an error nobody
+-- can act on.
+--
+create table public.deal_stage_requirements (
+    to_stage text primary key,
+    -- 0 disables the rule for this stage without deleting the row, which keeps
+    -- the intent readable ("we decided not to gate this one").
+    min_completed_tasks smallint not null default 0
+        check (min_completed_tasks >= 0),
+    -- Null means "not enforced". When set, it is compared against the moment
+    -- the deal entered its CURRENT stage, not against now(): a deal that has
+    -- been sitting in a stage since before the rule existed gets its next move
+    -- for free, and is governed from then on. Without that, switching the rule
+    -- on freezes every deal in flight on the day of the deploy.
+    enforced_from timestamp with time zone,
+    updated_at timestamp with time zone not null default now()
+);
 
 --
 -- Leads: prospects that have not been qualified yet.
@@ -571,7 +613,11 @@ create table public.task_events (
     primary key (id, occurred_at)
 ) partition by range (occurred_at);
 
--- Monthly partitions, created ahead of time by a scheduled job.
+-- Monthly partitions. The five below are the ones the module shipped with;
+-- every later month is created by `ensure_task_events_partitions()`, which
+-- pg_cron runs on the 1st (see the task_events_partition_maintenance
+-- migration). The comment used to promise that job without it existing, and
+-- the first symptom would have been every task write failing on 2027-01-01.
 create table public.task_events_2026_08 partition of public.task_events
     for values from ('2026-08-01') to ('2026-09-01');
 create table public.task_events_2026_09 partition of public.task_events
@@ -582,6 +628,12 @@ create table public.task_events_2026_11 partition of public.task_events
     for values from ('2026-11-01') to ('2026-12-01');
 create table public.task_events_2026_12 partition of public.task_events
     for values from ('2026-12-01') to ('2027-01-01');
+
+-- The safety net, never the mechanism: anything landing here is outside the
+-- pruning the monthly layout exists to give. It is here so a month the
+-- scheduler missed degrades into slower reads rather than an outage, because
+-- a partition miss on this table aborts the task write that triggered it.
+create table public.task_events_default partition of public.task_events default;
 
 create index task_events_task_seq on public.task_events (task_id, seq desc);
 create index task_events_actor    on public.task_events (actor_sales_id, occurred_at desc);
@@ -1131,3 +1183,885 @@ create index leads_sales_id_idx on public.leads using btree (sales_id);
 create index leads_created_at_idx on public.leads using btree (created_at desc);
 create index leads_company_id_idx on public.leads using btree (company_id);
 create index leads_converted_contact_id_idx on public.leads using btree (converted_contact_id);
+
+-- ---------------------------------------------------------------------------
+-- The one index this module ships
+-- ---------------------------------------------------------------------------
+--
+-- Backs every period-scoped deal figure: the won/lost branch of
+-- `deal_flow_stats` and the decided counters on `deal_owner_stats`, both of
+-- which range-filter `expected_closing_date`.
+--
+-- MEASURED, because an index that does not change a plan is pure write cost.
+-- 200k deals, 40 owners, three years, local Postgres 15, three runs each:
+--
+--   12-month window:  50.5 / 49.0 / 51.5 ms  ->  43.0 / 42.6 / 45.8 ms  (-12%)
+--    1-month window:  34.5 / 33.3 / 35.5 ms  ->  24.0 / 24.3 / 26.1 ms  (-28%)
+--
+-- The planner switches from a parallel sequential scan to a bitmap index scan
+-- in both cases, and the narrower the window the more it wins -- which is the
+-- shape of the period presets the UI actually offers.
+--
+-- Two candidates were measured and REJECTED rather than shipped on intuition:
+--   * `deals (created_at)` -- never chosen by the planner. A 12-month window is
+--     a third of the table, so the creation branch stays a sequential scan.
+--   * `leads (created_at)` -- moved `lead_flow_stats` from 17.2 ms to 17.0 ms,
+--     which is noise.
+--
+create index if not exists deals_expected_closing_date_idx
+    on public.deals (expected_closing_date)
+    where archived_at is null;
+
+--
+-- Reports module (§ reports): the catalogue, and the saved reports.
+--
+-- `/analytics` answers a fixed set of questions with eight purpose-built
+-- aggregate functions. This module answers questions nobody wrote a function
+-- for: pick an entity, some metrics, one or two dimensions, filters, a period.
+-- That is dynamic SQL, and dynamic SQL built from client input is the single
+-- most dangerous thing this schema could grow -- so the shape below exists to
+-- make the dangerous version unrepresentable.
+--
+-- THE RULE: the client never sends SQL. It sends KEYS. Every key is resolved
+-- against `report_fields`, whose `sql_expr` values are authored in migrations
+-- and can only be written by `service_role`. A key that is not in the
+-- catalogue raises an exception, so the set of programs `run_report()` can be
+-- persuaded to run is exactly the set this table describes.
+--
+-- The catalogue is also what the builder UI renders itself from
+-- (`report_catalog()`), so the picker cannot offer a field the executor would
+-- refuse. One source of truth, no drift possible -- the same reason
+-- `deal_stage_requirements` is a table rather than an `if`.
+--
+
+--
+-- One row per reportable entity.
+--
+create table public.report_datasets (
+    key   text primary key,
+    label text not null,
+    --
+    -- The FROM clause, authored here. Every join is LEFT and every join key is
+    -- the target's primary key, which lets Postgres drop the ones a given
+    -- report does not reference (join elimination) -- so the wide base costs
+    -- nothing when a report groups by stage alone.
+    --
+    from_sql text not null,
+    --
+    -- Rows no report on this dataset may ever see: soft deletes, archives.
+    -- Applied before any user filter, so "deleted" is not something a report
+    -- can be built to reveal.
+    --
+    base_where text not null default 'true',
+    -- Which date field the period filter uses when the report does not say.
+    default_date_field text,
+    rank smallint not null default 0
+);
+
+--
+-- One row per selectable field.
+--
+-- `role` splits the two things a field can be. A dimension is something to
+-- GROUP BY; a metric is an aggregate. `stage` is a dimension, `amount_sum` is
+-- a metric, and the executor will not let them swap places.
+--
+create table public.report_fields (
+    dataset_key text not null
+        references public.report_datasets(key) on delete cascade,
+    key   text not null,
+    label text not null,
+    role  text not null check (role in ('dimension', 'metric')),
+    --
+    -- Drives the operators the filter builder offers and how the value is
+    -- cast. `month` is a date already truncated by `sql_expr`; it exists so the
+    -- UI knows to format it as a month label rather than a day.
+    --
+    data_type text not null
+        check (data_type in ('text', 'number', 'money', 'date', 'month')),
+    --
+    -- THE TRUSTED STRING. Interpolated into the generated statement verbatim,
+    -- which is safe for exactly one reason: it is written in a migration and
+    -- no role but `service_role` may write this table. Never build a row here
+    -- from user input, and never expose a write path to it.
+    --
+    sql_expr text not null,
+    --
+    -- Metrics only. For everything but `raw`, `sql_expr` is the ARGUMENT and
+    -- this names the function wrapped around it. `raw` means `sql_expr` is
+    -- already a complete aggregate expression -- the escape hatch that lets a
+    -- ratio like win rate be one field instead of two plus arithmetic in the
+    -- browser, where it would be computed over whatever page happened to load.
+    --
+    aggregate text
+        check (aggregate in ('sum', 'count', 'count_distinct', 'avg', 'raw')),
+    -- Whether this field may appear in a `filters[]` entry.
+    filterable boolean not null default true,
+    --
+    -- Names a frontend configuration list (`dealStages`, `leadSources`,
+    -- `taskTypes`) that resolves this dimension's raw key to a human label.
+    -- Resolved in the browser, not here: `deals.stage` is free text and its
+    -- vocabulary lives in application configuration, so a join to a labels
+    -- table would be wrong for the first customer who renames a stage.
+    --
+    label_source text,
+    rank smallint not null default 0,
+    primary key (dataset_key, key),
+    -- A dimension with an aggregate, or a metric without one, is a catalogue
+    -- bug that would surface as malformed SQL at run time instead of here.
+    constraint report_fields_aggregate_matches_role check (
+        (role = 'metric'    and aggregate is not null) or
+        (role = 'dimension' and aggregate is null)
+    )
+);
+
+--
+-- A saved report: the definition, never the data.
+--
+-- `spec` is the same jsonb the builder produces, the URL carries and
+-- `run_report()` consumes. Storing the definition rather than a result is what
+-- makes sharing safe: two people opening one shared report each execute it
+-- under their own row level security, so a rep with whom a manager shared the
+-- company pipeline sees their own pipeline, not the manager's. It also means
+-- the two see different numbers under one title, which the UI has to say out
+-- loud.
+--
+create table public.reports (
+    id bigint generated by default as identity primary key,
+    name text not null,
+    description text,
+    spec jsonb not null,
+    --
+    -- Author and owner. Null only for the seeded library reports, which belong
+    -- to the installation rather than to a person.
+    --
+    -- Set by the CLIENT from the signed-in identity, not by a column default.
+    -- `default public.current_sale_id()` would read better, but this file is
+    -- applied before `02_functions.sql` in the declarative schema, so the
+    -- default would reference a function that does not exist yet and a clean
+    -- `supabase db reset` would fail. No other table here uses a function
+    -- default, and this is not the place to become the first.
+    --
+    -- Forging it is still impossible: the insert policy requires
+    -- `sales_id = current_sale_id()`, so passing somebody else's id is refused
+    -- rather than accepted.
+    --
+    sales_id bigint references public.sales(id) on delete cascade,
+    --
+    -- 'private'  -- only the owner (and admins/managers) may read it
+    -- 'shared'   -- any authenticated user may read it
+    --
+    -- Deliberately two values and not an ACL. A per-user share list is a
+    -- permission system, and this schema already has one; a report that could
+    -- be shared with a subset would invite the reading that the SUBSET sees the
+    -- same numbers, which is exactly what row level security guarantees they do
+    -- not.
+    --
+    visibility text not null default 'private'
+        check (visibility in ('private', 'shared')),
+    -- True for the reports the migration seeds. They cannot be edited or
+    -- deleted, only duplicated -- so the library always has a working example
+    -- of every visualisation, whatever users do to their own copies.
+    is_builtin boolean not null default false,
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now(),
+    constraint reports_name_not_blank check (btrim(name) <> ''),
+    -- A built-in has no owner; a user report must have one. Without this a
+    -- personal report could be written with a null owner and become readable
+    -- by everyone through the built-in branch of the read policy.
+    constraint reports_builtin_has_no_owner check (
+        (is_builtin and sales_id is null) or (not is_builtin and sales_id is not null)
+    )
+);
+
+-- The library lists a user's own reports plus the shared ones, newest first.
+create index reports_sales_id_idx on public.reports (sales_id, updated_at desc);
+create index reports_visibility_idx on public.reports (visibility)
+    where visibility = 'shared';
+
+
+--
+-- How each person left a report they cannot edit.
+--
+-- The library's built-ins belong to the installation, not to anybody, and a
+-- report somebody shared belongs to its author. Neither can be written by the
+-- reader -- which used to mean that adjusting one and coming back tomorrow lost
+-- the adjustment, or forced a duplicate into the library for what was really
+-- just "I prefer to look at this by month".
+--
+-- So the report keeps its definition and the READER keeps their view of it.
+-- The rule is one line: if you cannot edit a report, your changes to it are
+-- remembered as yours. That covers the built-ins and other people's shared
+-- reports with the same mechanism, and it leaves the original permanently
+-- recoverable -- deleting the preference row restores it, which is what makes
+-- the built-in library still able to guarantee a working example of every
+-- visualisation.
+--
+-- Per user and NEVER shared, exactly like `notification_preferences`. A global
+-- "last configuration wins" was the alternative: one rep regrouping the team's
+-- pipeline report would silently rewrite what their director opens, and the
+-- director would have no way to know it changed or who did it.
+--
+create table public.report_preferences (
+    sales_id  bigint not null references public.sales(id) on delete cascade,
+    report_id bigint not null references public.reports(id) on delete cascade,
+    -- The same jsonb shape as `reports.spec`. Deliberately a full spec rather
+    -- than a diff against the original: a diff would have to be re-applied
+    -- against a built-in that a later migration may have amended, and the two
+    -- would silently disagree about what the user actually asked to see.
+    spec jsonb not null,
+    updated_at timestamp with time zone not null default now(),
+    primary key (sales_id, report_id)
+);
+
+-- ===========================================================================
+-- Quotes / CPQ module (docs/proposals/quotes-cpq-module.md, Phase 2)
+-- ===========================================================================
+--
+-- THE GUIDING RULE, and the reason half of what follows looks like extra work:
+-- the catalogue is CURRENT information and a quote is a HISTORICAL SNAPSHOT.
+-- A quote the customer accepted must render identically in a year, after the
+-- price list has been rewritten twice. Every freeze guard, every frozen column
+-- on `quote_lines` and the whole version chain exist to keep those two things
+-- from becoming the same thing.
+--
+-- Section references below (§2.1, §6.2, …) point at that proposal.
+
+--
+-- Catalogues (§2.1)
+--
+
+-- Tax rates are a TABLE and units of measure are not, and the difference is not
+-- taste: a tax rate is referenced by a foreign key and frozen onto a quote line,
+-- whereas a unit is a label. Units and product categories live as arrays in the
+-- `configuration` singleton, editable from the settings screen exactly as
+-- `taskTypes` and `noteStatuses` already are -- parametrisable at zero schema
+-- cost.
+--
+-- `exento` and `excluido` are both 0.000 and legally distinct in Colombia,
+-- which is why they are two rows and not one rate.
+create table public.tax_rates (
+    id         bigint generated by default as identity primary key,
+    code       extensions.citext not null unique,
+    label      text not null,
+    rate       numeric(6,3) not null check (rate >= 0 and rate <= 100),
+    is_default boolean not null default false,
+    active     boolean not null default true,
+    rank       smallint not null default 0,
+    is_system  boolean not null default false,
+    constraint tax_rates_label_not_blank check (btrim(label) <> '')
+);
+
+-- "Which rate applies when nobody picked one" must resolve to exactly one row,
+-- or the answer changes between page loads.
+create unique index tax_rates_one_default
+    on public.tax_rates (is_default) where is_default and active;
+
+-- The `task_statuses` shape (see that table above), with `counts_as_won` in
+-- place of `counts_as_done`: for a quote the terminal state worth reporting on
+-- is the one that produced revenue.
+create table public.quote_statuses (
+    id            bigint generated by default as identity primary key,
+    key           text not null unique,
+    label         text not null,
+    color         text not null default 'gray',
+    rank          smallint not null,
+    is_open       boolean not null default true,
+    is_terminal   boolean not null default false,
+    counts_as_won boolean not null default false,
+    is_system     boolean not null default false
+);
+
+-- The legal edges of the status machine, as DATA -- the same argument
+-- `deal_stage_requirements` makes above: a graph that needs a migration to
+-- change is one nobody tunes, and a function full of literal status names is
+-- wrong for the first customer who renames one.
+--
+-- `allowed_actor` is the security piece and the one column `task_transitions`
+-- does not have. `viewed`, `accepted` and `rejected` are customer-driven;
+-- `approved` and `sent` are internal; `expired` is the sweeper's. Without this
+-- column the public portal function would be one parameter away from driving
+-- `draft -> approved`.
+create table public.quote_transitions (
+    id                      bigint generated by default as identity primary key,
+    from_status_key         text not null
+        references public.quote_statuses(key) on update cascade,
+    to_status_key           text not null
+        references public.quote_statuses(key) on update cascade,
+    label                   text,
+    requires_reason         boolean not null default false,
+    -- "You cannot send what you never issued." Checked against the existence of
+    -- an issued version, not against a status, so it stays true whichever path
+    -- reached the transition.
+    requires_issued_version boolean not null default false,
+    allowed_actor           text not null default 'internal'
+        check (allowed_actor in ('internal', 'customer', 'system', 'any')),
+    is_system               boolean not null default false,
+    unique (from_status_key, to_status_key),
+    constraint quote_transitions_differ check (from_status_key <> to_status_key)
+);
+
+--
+-- Commercial catalogue (§2.2)
+--
+
+-- `sku` is citext for the same reason `sales.email` is: `ABC-1` and `abc-1` are
+-- the same SKU to every human who will ever type one, and a case-sensitive
+-- unique index lets both exist.
+--
+-- `internal_notes` is the one column on this table that must never reach the
+-- public portal (§6.3). `quote_portal.test.sql` asserts its absence once the
+-- portal exists.
+create table public.products (
+    id             bigint generated by default as identity primary key,
+    sku            extensions.citext not null unique,
+    name           text not null,
+    description    text,
+    internal_notes text,
+    kind           text not null default 'product'
+        check (kind in ('product', 'service', 'plan', 'subscription', 'concept')),
+    category       text,
+    unit           text not null default 'unit',
+    list_price     numeric(14,2) not null default 0 check (list_price >= 0),
+    -- No default. `defaultConfiguration.currency` is "USD" and a Colombian
+    -- catalogue silently inheriting it is exactly the bug F3 describes, so the
+    -- currency is always stated rather than assumed.
+    currency       character(3) not null check (currency ~ '^[A-Z]{3}$'),
+    tax_rate_id    bigint references public.tax_rates(id),
+    image          jsonb,
+    is_active      boolean not null default true,
+    sales_id       bigint references public.sales(id),
+    created_at     timestamp with time zone not null default now(),
+    updated_at     timestamp with time zone not null default now(),
+    -- The `tasks.search_tsv` idiom: an explicit 'simple' configuration, so the
+    -- expression is immutable and the column may be STORED.
+    search_tsv tsvector generated always as (
+        setweight(to_tsvector('simple', coalesce((sku)::text, '')), 'A') ||
+        setweight(to_tsvector('simple', coalesce(name, '')), 'A') ||
+        setweight(to_tsvector('simple', coalesce(description, '')), 'B')
+    ) stored,
+    constraint products_name_not_blank check (btrim(name) <> '')
+);
+
+create index products_active_name on public.products (name) where is_active;
+create index products_search on public.products using gin (search_tsv);
+create index products_active_category on public.products (category) where is_active;
+create index products_sales_id_idx on public.products (sales_id);
+
+-- "Consult the change history" for the catalogue, one row per watched field --
+-- the `log_task_changes()` idiom applied to a much smaller table.
+--
+-- A SEPARATE table from the quote history on purpose: mixing a catalogue's
+-- edits with a negotiation's events makes both harder to read, and they answer
+-- different questions ("who changed this price" vs "why did this deal move").
+create table public.product_events (
+    id          bigint generated by default as identity primary key,
+    product_id  bigint not null references public.products(id) on delete cascade,
+    event_type  text not null
+        check (event_type in ('product.created', 'product.updated',
+                              'product.deactivated', 'product.reactivated')),
+    occurred_at timestamp with time zone not null default clock_timestamp(),
+    sales_id    bigint references public.sales(id),
+    field       text,
+    old_value   jsonb,
+    new_value   jsonb
+);
+
+create index product_events_product
+    on public.product_events (product_id, occurred_at desc);
+
+create table public.price_lists (
+    id         bigint generated by default as identity primary key,
+    code       extensions.citext not null unique,
+    name       text not null,
+    currency   character(3) not null check (currency ~ '^[A-Z]{3}$'),
+    is_default boolean not null default false,
+    is_active  boolean not null default true,
+    valid_from date,
+    valid_to   date,
+    notes      text,
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now(),
+    constraint price_lists_name_not_blank check (btrim(name) <> ''),
+    constraint price_lists_period_order
+        check (valid_from is null or valid_to is null or valid_to >= valid_from),
+    -- Foreign-key target for `quotes`, so a quote cannot point at a price list
+    -- in another currency. Same trick as `team_budgets_id_team_id_key`.
+    constraint price_lists_id_currency_key unique (id, currency)
+);
+
+-- One default per CURRENCY, not one globally. With multi-currency (D3) a single
+-- global default would make "which price applies" answerable only by guessing
+-- which currency the reader meant.
+create unique index price_lists_one_default_per_currency
+    on public.price_lists (currency) where is_default and is_active;
+
+create table public.price_list_items (
+    id            bigint generated by default as identity primary key,
+    price_list_id bigint not null references public.price_lists(id) on delete cascade,
+    -- `restrict`, not `cascade`: a product that has been priced is deactivated,
+    -- never deleted. Losing the price row silently would change what a list
+    -- means without anybody editing it.
+    product_id    bigint not null references public.products(id) on delete restrict,
+    unit_price    numeric(14,2) not null check (unit_price >= 0),
+    -- Overrides the product's own rate for this list (an export list may be
+    -- exempt where the domestic one is not).
+    tax_rate_id   bigint references public.tax_rates(id),
+    -- Volume tiers. Only "highest tier that fits" resolution is used; a real
+    -- tier editor is named out of scope in §12.
+    min_quantity  numeric(14,3) not null default 1 check (min_quantity > 0),
+    unique (price_list_id, product_id, min_quantity)
+);
+
+create index price_list_items_product on public.price_list_items (product_id);
+
+--
+-- Quotes (§2.3)
+--
+-- Human-facing document numbers. A sequence rather than `max(quote_number) + 1`:
+-- the latter takes a lock on the whole table and still collides under
+-- concurrency, and a gap in a quote number is not a problem worth a lock.
+create sequence public.quote_number_seq as bigint;
+
+-- The header and the current state. Three deliberate absences:
+--
+--   * No `current_version_id`. A `quotes.current_version_id -> quote_versions.id`
+--     foreign key alongside `quote_versions.quote_id -> quotes.id` is a cycle,
+--     which forces deferrable constraints and an insertion order. The current
+--     version is derived with the repo's `left join lateral (… order by
+--     version_number desc limit 1)` idiom in `quotes_summary`.
+--   * No totals. They live on the version -- one source -- and `quotes_summary`
+--     surfaces them for lists and boards.
+--   * No global discount amount. A generated column cannot see the other rows,
+--     so a pro-rata header discount would be impossible to compute locally and
+--     per-line tax would stop reconciling. See `quote_lines` below.
+--
+-- `status_key` is TEXT referencing `quote_statuses(key)`, not `status_id
+-- bigint`. Three reasons, all verifiable in this schema: `quote_transitions` is
+-- keyed on keys, so a bigint header would force a lookup on both sides of every
+-- legality check (which is exactly what `transition_task()` has to do);
+-- `quotes_summary` then needs no join to render a badge, keeping it in the
+-- scalar-subquery-only shape the view file demands; and Realtime
+-- `postgres_changes` delivers raw column values, so a client receiving
+-- `status_id: 7` has learned nothing where `status_key: 'accepted'` is
+-- self-describing. The cost is that renaming a key is a foreign-key cascade,
+-- which `on update cascade` handles.
+create table public.quotes (
+    id             bigint generated by default as identity primary key,
+    quote_number   text not null unique,
+    title          text,
+    -- The deal is provenance, not ownership: a quote outlives the opportunity
+    -- it was raised against.
+    deal_id        bigint references public.deals(id) on delete set null,
+    company_id     bigint not null references public.companies(id) on delete restrict,
+    contact_id     bigint references public.contacts(id) on delete set null,
+    -- The owner, and what drives RLS.
+    sales_id       bigint not null references public.sales(id),
+    price_list_id  bigint,
+    currency       character(3) not null check (currency ~ '^[A-Z]{3}$'),
+    status_key     text not null default 'draft'
+        references public.quote_statuses(key) on update cascade,
+    -- A MIRROR of the current version's, kept by `quote_versions_sync_header`.
+    -- A client writes them on insert only, where they seed version 1; after
+    -- that they are edited on the draft version (`quotes_header_guard`). The
+    -- copy is here for `quotes_expiring_idx` and for the list.
+    valid_until    date,
+    terms          text,
+    internal_notes text,
+    created_by     bigint references public.sales(id),
+    created_at     timestamp with time zone not null default now(),
+    updated_at     timestamp with time zone not null default now(),
+    -- A quote priced from a list in another currency is a document whose
+    -- totals mean nothing. The composite key makes it unrepresentable rather
+    -- than merely discouraged.
+    constraint quotes_price_list_currency_fkey
+        foreign key (price_list_id, currency)
+        references public.price_lists (id, currency),
+    -- Foreign-key target for `quote_versions` and `quote_comments`, so a
+    -- version cannot carry a currency its quote does not.
+    constraint quotes_id_currency_key unique (id, currency),
+    constraint quotes_number_not_blank check (btrim(quote_number) <> '')
+);
+
+-- The quotes panel on a deal, rendered on every deal open.
+create index quotes_deal_id_idx on public.quotes (deal_id) where deal_id is not null;
+-- "My quotes by status" -- the list's default, and the hottest query here.
+create index quotes_sales_status_idx on public.quotes (sales_id, status_key);
+create index quotes_company_id_idx on public.quotes (company_id);
+
+-- The expiry sweeper's ONLY query. Partial, so it stays the size of the pending
+-- work rather than the size of the quote history -- the `task_reminders_due`
+-- idiom.
+create index quotes_expiring_idx on public.quotes (valid_until)
+    where valid_until is not null
+      and status_key in ('sent', 'viewed', 'under_review');
+
+-- One row per document the customer was (or will be) shown.
+--
+-- `issued_at is null` means THIS IS THE WORKING DRAFT. `issued_at is not null`
+-- means THIS IS A DOCUMENT A CUSTOMER WAS SHOWN, and it is immutable forever
+-- (see the freeze guards in 02_functions.sql). Revising copies rather than
+-- edits, which is what makes the customer's copy still byte-identical to what
+-- they were shown -- the same thing Odoo and Salesforce CPQ do, for the same
+-- reason: a commercial commitment you can edit is not one.
+--
+-- `party_snapshot` is the ONLY jsonb blob in this module, and the exception is
+-- argued rather than assumed: the relational lines carry the prices (D6),
+-- but "the customer's address on the day we sent it" is not a queryable
+-- dimension, and normalising it would mean versioning `companies`.
+create table public.quote_versions (
+    id                  bigint generated by default as identity primary key,
+    quote_id            bigint not null,
+    -- Carrier for the composite foreign key below. Never edited on its own.
+    currency            character(3) not null,
+    version_number      smallint not null check (version_number > 0),
+    issued_at           timestamp with time zone,
+    issued_by           bigint references public.sales(id),
+    superseded_at       timestamp with time zone,
+    valid_until         date,
+    terms               text,
+    party_snapshot      jsonb,
+    -- A RECORD OF INTENT ONLY. The discount that actually applies is on each
+    -- line; this is the figure somebody asked for. Keeping both is what lets
+    -- the document stay honest about where the discount landed.
+    discount_percent    numeric(5,2)
+        check (discount_percent is null
+               or (discount_percent >= 0 and discount_percent <= 100)),
+    subtotal            numeric(14,2) not null default 0,
+    discount_total      numeric(14,2) not null default 0,
+    tax_total           numeric(14,2) not null default 0,
+    total               numeric(14,2) not null default 0,
+    accepted_at         timestamp with time zone,
+    accepted_by_name    text,
+    accepted_by_email   extensions.citext,
+    accepted_ip         inet,
+    -- `otp_email` and `esign` are listed here DELIBERATELY, before either
+    -- exists: adding OTP is then one table plus one route plus one branch, and
+    -- e-signature is a webhook plus `acceptance_evidence` -- neither needs a
+    -- schema change to this table (§6.4).
+    acceptance_method   text
+        check (acceptance_method in ('portal_click', 'otp_email', 'esign', 'offline')),
+    acceptance_evidence jsonb,
+    rejected_at         timestamp with time zone,
+    rejected_reason     text,
+    rejected_reason_code text
+        check (rejected_reason_code in ('price', 'terms', 'delivery_time',
+                                        'product', 'other')),
+    created_at          timestamp with time zone not null default now(),
+    constraint quote_versions_quote_fkey
+        foreign key (quote_id, currency)
+        references public.quotes (id, currency) on delete cascade,
+    unique (quote_id, version_number),
+    -- Foreign-key target for `quote_lines`, `quote_comments` and
+    -- `quote_access_tokens`.
+    constraint quote_versions_id_quote_key unique (id, quote_id),
+    -- "Issued" without who issued it is the exact hole this module exists to
+    -- close.
+    constraint quote_versions_issued_consistency
+        check ((issued_at is null) = (issued_by is null)),
+    -- A draft cannot be superseded: there is nothing it replaced.
+    constraint quote_versions_superseded_requires_issue
+        check (superseded_at is null or issued_at is not null),
+    constraint quote_versions_acceptance_consistency
+        check ((accepted_at is null) = (acceptance_method is null)),
+    -- One terminal answer per document. A version both accepted and rejected is
+    -- not a state this negotiation can be in.
+    constraint quote_versions_one_outcome
+        check (accepted_at is null or rejected_at is null)
+);
+
+-- THE index the whole design rests on. Without it, two browser tabs produce two
+-- drafts and the "current version" lateral picks one arbitrarily.
+create unique index quote_versions_one_draft
+    on public.quote_versions (quote_id) where issued_at is null;
+
+-- "The issued versions of this quote, newest first" -- the version history
+-- panel, and the lookup `issue_quote_version()` makes to supersede the previous
+-- one.
+create index quote_versions_issued_idx
+    on public.quote_versions (quote_id, version_number desc)
+    where issued_at is not null;
+
+-- The snapshot, as COLUMNS rather than a jsonb blob (D6): the reports module
+-- has to be able to answer "what did we sell, at what price", and a jsonb
+-- snapshot is invisible to `run_report()`.
+--
+-- ROUNDING POLICY: round per line, then sum. That is what the printed document
+-- shows and what every LATAM invoicing system expects. Summing unrounded values
+-- and rounding once produces a total that contradicts its own visible line
+-- amounts by cents -- the kind of discrepancy a customer notices and a
+-- salesperson cannot explain.
+create table public.quote_lines (
+    id               bigint generated by default as identity primary key,
+    version_id       bigint not null,
+    -- Carrier for the composite foreign key below.
+    quote_id         bigint not null,
+    -- Provenance only. `on delete set null` is correct because the frozen
+    -- columns below ARE the record; the UI still never offers to delete a
+    -- product that has been quoted, it deactivates.
+    product_id       bigint references public.products(id) on delete set null,
+    sku              text,
+    name             text not null,
+    description      text,
+    unit             text,
+    quantity         numeric(14,3) not null check (quantity > 0),
+    unit_price       numeric(14,2) not null check (unit_price >= 0),
+    discount_percent numeric(5,2) not null default 0
+        check (discount_percent >= 0 and discount_percent <= 100),
+    -- Provenance …
+    tax_rate_id      bigint references public.tax_rates(id),
+    -- … and the record, frozen. The rate that applied on the day, whatever the
+    -- catalogue says now.
+    --
+    -- NO DEFAULT, on purpose. `default 0` made an omitted percentage
+    -- indistinguishable from an explicit 0%, so a line posted with a
+    -- `tax_rate_id` and no percentage was taxed at zero -- silently, which is
+    -- the worst way for a document to be wrong (§13.6 #10).
+    -- `quote_lines_snapshot_defaults` fills it from the rate instead: a line
+    -- naming neither still lands at 0, and one that somehow reaches the table
+    -- with a null percentage fails loudly rather than under-taxing.
+    tax_rate_percent numeric(5,2) not null
+        check (tax_rate_percent >= 0 and tax_rate_percent <= 100),
+    position         smallint not null default 0,
+    --
+    -- Each column is computed from BASE columns: a generated column may not
+    -- reference another generated column, which is why round() is repeated
+    -- rather than chained. round(numeric, int) is immutable, so all four are
+    -- legal STORED -- and being STORED is what makes the totals the server's
+    -- (D8). A total computed in the browser is a negotiable total.
+    --
+    line_gross    numeric(14,2) generated always as
+        (round(quantity * unit_price, 2)) stored,
+    line_discount numeric(14,2) generated always as
+        (round(round(quantity * unit_price, 2) * discount_percent / 100, 2)) stored,
+    line_tax      numeric(14,2) generated always as
+        (round((round(quantity * unit_price, 2)
+                - round(round(quantity * unit_price, 2) * discount_percent / 100, 2))
+               * tax_rate_percent / 100, 2)) stored,
+    line_total    numeric(14,2) generated always as
+        (round(quantity * unit_price, 2)
+         - round(round(quantity * unit_price, 2) * discount_percent / 100, 2)
+         + round((round(quantity * unit_price, 2)
+                  - round(round(quantity * unit_price, 2) * discount_percent / 100, 2))
+                 * tax_rate_percent / 100, 2)) stored,
+    --
+    -- The `team_member_budgets` trick. With a plain `references
+    -- quote_versions(id)`, quote A's version paired with quote B's id is
+    -- accepted, and that row sums into one quote's total while appearing in
+    -- neither document -- so the first symptom is a total that contradicts its
+    -- own breakdown.
+    --
+    constraint quote_lines_version_fkey
+        foreign key (version_id, quote_id)
+        references public.quote_versions (id, quote_id) on delete cascade,
+    constraint quote_lines_name_not_blank check (btrim(name) <> '')
+);
+
+-- A version's lines in document order -- every document render.
+create index quote_lines_version_position
+    on public.quote_lines (version_id, "position");
+-- "What did we sell, at what price" -- the reports query D6 exists to enable.
+create index quote_lines_product_idx
+    on public.quote_lines (product_id) where product_id is not null;
+
+-- The negotiation thread, both sides of it (§2.5).
+--
+-- `visibility` defaults to 'internal', because a shared-by-default field turns
+-- an internal remark about a customer's budget into a message to that customer.
+create table public.quote_comments (
+    id                  bigint generated by default as identity primary key,
+    quote_id            bigint not null,
+    -- Carrier for the composite foreign key below.
+    currency            character(3) not null,
+    -- Which document the remark is about. Null for a comment on the quote as a
+    -- whole.
+    version_id          bigint,
+    parent_id           bigint references public.quote_comments(id) on delete cascade,
+    author_sales_id     bigint references public.sales(id),
+    author_kind         text not null default 'internal'
+        check (author_kind in ('internal', 'customer')),
+    author_name         text,
+    author_email        extensions.citext,
+    visibility          text not null default 'internal'
+        check (visibility in ('internal', 'shared')),
+    body                text not null,
+    -- Drives the "customer wrote and nobody answered" badge on the list. Not
+    -- derivable from `created_at`: somebody reading the thread is the fact, and
+    -- nothing else records it.
+    read_by_internal_at timestamp with time zone,
+    created_at          timestamp with time zone not null default now(),
+    edited_at           timestamp with time zone,
+    deleted_at          timestamp with time zone,
+    constraint quote_comments_quote_fkey
+        foreign key (quote_id, currency)
+        references public.quotes (id, currency) on delete cascade,
+    constraint quote_comments_version_fkey
+        foreign key (version_id, quote_id)
+        references public.quote_versions (id, quote_id) on delete cascade,
+    constraint quote_comments_body_length
+        check (char_length(body) between 1 and 8000),
+    --
+    -- The illegal combinations, made UNREPRESENTABLE. A customer comment marked
+    -- internal would be invisible to the person who wrote it; a customer
+    -- comment attributed to a `sales` row is a forgery. The constraint means a
+    -- bug in the portal function CANNOT produce either one.
+    --
+    constraint quote_comments_author check (
+        (author_kind = 'internal' and author_sales_id is not null)
+     or (author_kind = 'customer'  and author_sales_id is null
+         and visibility = 'shared' and btrim(coalesce(author_name, '')) <> ''))
+);
+
+-- The shared thread -- every portal load.
+create index quote_comments_shared
+    on public.quote_comments (quote_id, created_at)
+    where visibility = 'shared' and deleted_at is null;
+-- "Customer wrote and nobody answered" -- the attention badge on the list.
+create index quote_comments_unanswered
+    on public.quote_comments (quote_id)
+    where author_kind = 'customer' and read_by_internal_at is null
+      and deleted_at is null;
+create index quote_comments_thread
+    on public.quote_comments (parent_id, created_at) where deleted_at is null;
+
+-- What the public portal authenticates with (§6.2).
+--
+-- ONLY THE sha256 OF THE TOKEN IS STORED, NEVER THE TOKEN. `sha256(bytea)` is
+-- core PostgreSQL, no extension needed. The raw token exists exactly once, as
+-- the return value of `issue_quote_version()`.
+--
+-- The UX consequence is real and the UI has to say it out loud: "copy link"
+-- only works at the moment of issue. Afterwards the action is "generate a new
+-- link", which mints a fresh token; older ones keep working until revoked.
+-- Since tokens are per recipient and carry a `label`, that is coherent -- but
+-- it differs from the stable-forever link HubSpot offers.
+--
+-- The token is bound to THE VERSION it was minted for, which is what makes
+-- "you are looking at a superseded quote" detectable at accept time.
+create table public.quote_access_tokens (
+    id           bigint generated by default as identity primary key,
+    quote_id     bigint not null,
+    version_id   bigint not null,
+    token_hash   bytea not null unique,
+    label        text,
+    created_by   bigint references public.sales(id),
+    created_at   timestamp with time zone not null default now(),
+    expires_at   timestamp with time zone not null,
+    revoked_at   timestamp with time zone,
+    revoked_by   bigint references public.sales(id),
+    last_seen_at timestamp with time zone,
+    view_count   integer not null default 0 check (view_count >= 0),
+    constraint quote_access_tokens_version_fkey
+        foreign key (version_id, quote_id)
+        references public.quote_versions (id, quote_id) on delete cascade,
+    -- A 32-byte digest. A shorter value here means somebody stored something
+    -- that is not a sha256, and the only thing that could be is the token.
+    constraint quote_access_tokens_hash_length
+        check (octet_length(token_hash) = 32)
+);
+
+create index quote_access_tokens_quote
+    on public.quote_access_tokens (quote_id, created_at desc);
+
+--
+-- Audit trail (§5)
+--
+-- TWO append-only tables rather than one event log, because internal moves and
+-- customer actions answer different questions and carry different columns.
+--
+-- Both get the DOUBLE BLINDFOLD the repo already applies to
+-- `deal_stage_changes`: no insert/update/delete policy AND the privileges
+-- revoked in 06_grants.sql, plus a `reject_quote_history_mutation()` trigger.
+-- Both halves are needed: an UPDATE or DELETE that matches no row SUCCEEDS
+-- SILENTLY, and TRUNCATE ignores RLS entirely.
+--
+
+-- Who moved the quote, when, and why.
+create table public.quote_status_changes (
+    id            bigint generated by default as identity primary key,
+    quote_id      bigint not null
+        references public.quotes(id) on update cascade on delete cascade,
+    -- Null for the first transition of a quote created straight into a
+    -- non-default status: there is no previous status to name.
+    from_status   text,
+    to_status     text not null,
+    reason        text,
+    -- Null when the actor has no `sales` row (the sweeper, the portal), never
+    -- silently attributed to somebody else.
+    sales_id      bigint references public.sales(id),
+    actor_kind    text not null default 'internal'
+        check (actor_kind in ('internal', 'customer', 'system')),
+    changed_at    timestamp with time zone not null default now(),
+    attachments   jsonb[],
+    -- Why an admin was allowed to issue past the discount rule. Null on every
+    -- move that satisfied it, so `where override_reason is not null` is the
+    -- list of moves that skipped the gate.
+    override_reason text,
+    -- Per-quote monotonic counter, computed as `emit_task_event()` computes
+    -- its own. `changed_at` alone cannot order two moves in one transaction:
+    -- `now()` is the transaction timestamp and would be identical.
+    seq           bigint not null,
+    unique (quote_id, seq),
+    constraint quote_status_changes_to_not_blank check (btrim(to_status) <> ''),
+    constraint quote_status_changes_differ
+        check (from_status is distinct from to_status)
+);
+
+create index quote_status_changes_quote
+    on public.quote_status_changes (quote_id, changed_at desc);
+create index quote_status_changes_sales_id
+    on public.quote_status_changes (sales_id);
+
+-- What the customer did, and from where.
+--
+-- `ip_address` lives HERE and appears in no timeline payload: it belongs in the
+-- audit table, not on a screen a whole sales team reads.
+create table public.quote_portal_events (
+    id          bigint generated by default as identity primary key,
+    quote_id    bigint not null references public.quotes(id) on delete cascade,
+    version_id  bigint references public.quote_versions(id) on delete set null,
+    token_id    bigint references public.quote_access_tokens(id) on delete set null,
+    event_type  text not null
+        check (event_type in ('viewed', 'downloaded', 'commented', 'accepted',
+                              'rejected', 'throttled', 'token_invalid')),
+    occurred_at timestamp with time zone not null default clock_timestamp(),
+    -- Passed as EXPLICIT PARAMETERS by the portal function, never read from
+    -- `request_context()`: a service-role RPC has no request headers at all,
+    -- and silently receiving nulls would produce an audit trail that looks
+    -- complete and is not.
+    ip_address  inet,
+    user_agent  text,
+    actor_name  text,
+    actor_email extensions.citext,
+    payload     jsonb not null default '{}'::jsonb,
+    seq         bigint not null,
+    unique (quote_id, seq)
+);
+
+create index quote_portal_events_quote
+    on public.quote_portal_events (quote_id, occurred_at desc);
+-- The portal throttle, once per portal request.
+create index quote_portal_events_token
+    on public.quote_portal_events (token_id, occurred_at desc);
+
+--
+-- Discount approval, as data (§3.1)
+--
+-- The ceiling each role may grant without an admin's written override. Keyed on
+-- `sales_role`, so the rule is three rows and not three `if` branches.
+--
+-- `enforced_from is null` means NOT ENFORCED -- the same escape valve
+-- `deal_stage_requirements` uses, so switching the rule on does not freeze
+-- every quote in flight on deploy day.
+create table public.quote_discount_rules (
+    role                  public.sales_role primary key,
+    max_discount_percent  numeric(5,2) not null
+        check (max_discount_percent >= 0 and max_discount_percent <= 100),
+    -- Below the ceiling but above this, the issue still needs a written reason
+    -- (`issue_quote_version(p_reason)`), stored on the `sent` history row. A
+    -- written approval already is one. Null means no such band.
+    requires_reason_above numeric(5,2)
+        check (requires_reason_above is null
+               or (requires_reason_above >= 0 and requires_reason_above <= 100)),
+    enforced_from         timestamp with time zone,
+    updated_at            timestamp with time zone not null default now()
+);

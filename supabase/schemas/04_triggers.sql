@@ -20,6 +20,12 @@ create or replace trigger set_deal_sales_id_trigger
     before insert on public.deals
     for each row execute function public.set_sales_id_default();
 
+-- Deals are edited over time like leads are, and nothing moved this column
+-- until now: `updated_at` equalled `created_at` on every pre-existing row.
+create or replace trigger set_deal_updated_at_trigger
+    before update on public.deals
+    for each row execute function public.set_updated_at();
+
 create or replace trigger set_deal_notes_sales_id_trigger
     before insert on public.deal_notes
     for each row execute function public.set_sales_id_default();
@@ -340,3 +346,149 @@ create or replace trigger deals_log_stage_change
     for each row
     when (old.stage is distinct from new.stage)
     execute function public.deals_log_stage_change();
+
+-- The requirements table is edited from a settings screen like any other
+-- user-editable row, so it carries an updated_at that maintains itself.
+create or replace trigger deal_stage_requirements_set_updated_at
+    before update on public.deal_stage_requirements
+    for each row execute function public.set_updated_at();
+
+--
+-- `reports.updated_at` maintains itself, like every other user-editable row.
+--
+-- The library sorts on this column, so without the trigger a report edited
+-- today would keep sitting wherever its creation date put it -- the list would
+-- look sorted and be wrong, which is the failure mode `deals.updated_at` spent
+-- a whole migration fixing.
+--
+create or replace trigger reports_set_updated_at
+    before update on public.reports
+    for each row execute function public.set_updated_at();
+
+--
+-- Preferences carry an updated_at like every other user-editable row.
+--
+create or replace trigger report_preferences_set_updated_at
+    before update on public.report_preferences
+    for each row execute function public.set_updated_at();
+
+--
+-- Quotes / CPQ module (docs/proposals/quotes-cpq-module.md, Phase 2)
+--
+
+-- The catalogue carries an updated_at like every other user-editable row.
+create or replace trigger products_set_updated_at
+    before update on public.products
+    for each row execute function public.set_updated_at();
+
+create or replace trigger price_lists_set_updated_at
+    before update on public.price_lists
+    for each row execute function public.set_updated_at();
+
+create or replace trigger quote_discount_rules_set_updated_at
+    before update on public.quote_discount_rules
+    for each row execute function public.set_updated_at();
+
+-- "Who changed this price" has an answer.
+create or replace trigger products_audit
+    after insert or update on public.products
+    for each row execute function public.products_audit();
+
+create or replace trigger product_events_immutable
+    before update or delete on public.product_events
+    for each row execute function public.reject_quote_history_mutation();
+
+-- Quote header: owner, number, author, and the working draft.
+create or replace trigger set_quote_sales_id_trigger
+    before insert on public.quotes
+    for each row execute function public.set_sales_id_default();
+
+create or replace trigger quotes_set_defaults
+    before insert on public.quotes
+    for each row execute function public.quotes_set_defaults();
+
+create or replace trigger quotes_set_updated_at
+    before update on public.quotes
+    for each row execute function public.set_updated_at();
+
+create or replace trigger quotes_seed_first_version
+    after insert on public.quotes
+    for each row execute function public.quotes_seed_first_version();
+
+-- `valid_until` / `terms` on the header mirror the current version and are
+-- edited there, never here.
+create or replace trigger quotes_header_guard
+    before update on public.quotes
+    for each row
+    when (old.valid_until is distinct from new.valid_until
+          or old.terms is distinct from new.terms)
+    execute function public.quotes_header_guard();
+
+-- Status changes may only come through `transition_quote()` / the functions
+-- that delegate to `apply_quote_status()`.
+create or replace trigger quotes_status_guard
+    before update on public.quotes
+    for each row
+    when (old.status_key is distinct from new.status_key)
+    execute function public.quotes_status_guard();
+
+-- Every status change is recorded, whichever function wrote it.
+create or replace trigger quotes_log_status_change
+    after update of status_key on public.quotes
+    for each row
+    when (old.status_key is distinct from new.status_key)
+    execute function public.quotes_log_status_change();
+
+-- Versions: carriers on the way in, immutability once issued.
+create or replace trigger quote_versions_before_insert
+    before insert on public.quote_versions
+    for each row execute function public.quote_versions_before_insert();
+
+-- The header's `valid_until` / `terms` follow the current version.
+create or replace trigger quote_versions_sync_header
+    after insert or update of valid_until, terms on public.quote_versions
+    for each row execute function public.quote_versions_sync_header();
+
+create or replace trigger quote_versions_freeze_guard
+    before update or delete on public.quote_versions
+    for each row execute function public.quote_versions_freeze_guard();
+
+-- Lines: never under a frozen document, and the totals follow them.
+create or replace trigger quote_lines_freeze_guard
+    before insert or update or delete on public.quote_lines
+    for each row execute function public.quote_lines_freeze_guard();
+
+create or replace trigger quote_lines_set_carrier
+    before insert on public.quote_lines
+    for each row execute function public.quote_lines_set_carrier();
+
+-- Named to sort AFTER the carrier: triggers of one kind fire in name order, and
+-- the snapshot reads the product the carrier has nothing to do with, so the
+-- order is incidental -- but a snapshot that ran first would be one rename away
+-- from mattering.
+create or replace trigger quote_lines_snapshot_defaults
+    before insert on public.quote_lines
+    for each row execute function public.quote_lines_snapshot_defaults();
+
+create or replace trigger quote_lines_refresh_totals
+    after insert or update or delete on public.quote_lines
+    for each row execute function public.quote_lines_refresh_totals();
+
+-- Authorship from the session, the thread one level deep, the server's clock.
+create or replace trigger quote_comments_before_insert
+    before insert on public.quote_comments
+    for each row execute function public.quote_comments_before_insert();
+
+-- What a written comment still accepts: an edit, a soft delete, a read mark.
+create or replace trigger quote_comments_before_update
+    before update on public.quote_comments
+    for each row execute function public.quote_comments_before_update();
+
+-- The audit trail is append-only (§5).
+create or replace trigger quote_status_changes_immutable
+    before update or delete on public.quote_status_changes
+    for each row execute function public.reject_quote_history_mutation();
+
+create or replace trigger quote_portal_events_immutable
+    before update or delete on public.quote_portal_events
+    for each row execute function public.reject_quote_history_mutation();

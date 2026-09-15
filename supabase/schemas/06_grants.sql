@@ -155,6 +155,15 @@ grant all on function public.task_assignments_before_write() to service_role;
 grant all on function public.task_assignments_audit() to service_role;
 grant all on function public.tasks_sync_owner_assignment() to service_role;
 
+-- Deal visibility predicate, read by the deal-attachments storage policy.
+grant all on function public.can_see_deal(bigint) to authenticated;
+grant all on function public.can_see_deal(bigint) to service_role;
+
+-- Partition maintenance (§5.1). The scheduler's and an operator's; a browser
+-- session has no reason to create tables.
+revoke all on function public.ensure_task_events_partitions(integer) from public, anon, authenticated;
+grant all on function public.ensure_task_events_partitions(integer) to service_role;
+
 -- The delivery worker's claim/settle pair (§9.3). Service role only: these
 -- bypass RLS by design, so no browser session may reach them.
 revoke all on function public.claim_task_notifications(public.reminder_channel[], integer) from public, anon, authenticated;
@@ -460,8 +469,345 @@ grant all on function public.tasks_soft_delete() to service_role;
 -- Deal stage history. Read-only for users: the rows come from the trigger, and
 -- `move_deal_stage()` is the only way to add the reason and the files to one.
 grant select on table public.deal_stage_changes to authenticated;
+-- The default privileges on `public` already granted every DML verb to `anon`
+-- and `authenticated` when the table was created, so the grant above narrows
+-- nothing on its own. Row level security blocks the writes, but an UPDATE or
+-- DELETE matching no row succeeds silently and TRUNCATE ignores RLS entirely.
+revoke insert, update, delete, truncate on table public.deal_stage_changes
+    from anon, authenticated;
 grant all on table public.deal_stage_changes to service_role;
 revoke all on function public.deals_log_stage_change() from public, anon, authenticated;
 grant all on function public.deals_log_stage_change() to service_role;
-revoke all on function public.move_deal_stage(bigint, text, text, integer, jsonb) from public, anon;
-grant execute on function public.move_deal_stage(bigint, text, text, integer, jsonb) to authenticated, service_role;
+revoke all on function public.move_deal_stage(bigint, text, text, integer, jsonb, text) from public, anon;
+grant execute on function public.move_deal_stage(bigint, text, text, integer, jsonb, text) to authenticated, service_role;
+
+-- The completed-task rule. Read-only for users on the table, and the gate
+-- itself is executable by everyone: the kanban dialog calls it to show what is
+-- missing before the move is attempted, and it is the same call the RPC makes
+-- to decide, so the two can never disagree.
+-- The write privileges are granted to `authenticated` and then narrowed to
+-- admins by the policy, the same shape every other tunable table uses: the
+-- privilege alone is not the authorisation.
+grant select, insert, update, delete on table public.deal_stage_requirements to authenticated;
+grant all on table public.deal_stage_requirements to service_role;
+revoke all on function public.deal_stage_gate(bigint, text) from public, anon;
+grant execute on function public.deal_stage_gate(bigint, text) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- Grants
+-- ---------------------------------------------------------------------------
+--
+-- PostgreSQL grants EXECUTE to PUBLIC by default, which would reach `anon`.
+-- RLS would still return nothing to an anonymous caller (every policy on these
+-- tables is `to authenticated`), but revoking first is the same defence in
+-- depth the rest of this schema applies.
+--
+revoke all on function public.deal_stage_stats(bigint, bigint) from public, anon;
+revoke all on function public.deal_flow_stats(date, date, bigint, bigint) from public, anon;
+revoke all on function public.deal_owner_stats(date, date, bigint) from public, anon;
+revoke all on function public.lead_flow_stats(date, date, bigint) from public, anon;
+revoke all on function public.lead_breakdown_stats(date, date, bigint) from public, anon;
+revoke all on function public.task_flow_stats(date, date, bigint) from public, anon;
+revoke all on function public.task_stock_stats(bigint) from public, anon;
+revoke all on function public.task_type_stats(date, date, bigint) from public, anon;
+
+grant execute on function public.deal_stage_stats(bigint, bigint) to authenticated, service_role;
+grant execute on function public.deal_flow_stats(date, date, bigint, bigint) to authenticated, service_role;
+grant execute on function public.deal_owner_stats(date, date, bigint) to authenticated, service_role;
+grant execute on function public.lead_flow_stats(date, date, bigint) to authenticated, service_role;
+grant execute on function public.lead_breakdown_stats(date, date, bigint) to authenticated, service_role;
+grant execute on function public.task_flow_stats(date, date, bigint) to authenticated, service_role;
+grant execute on function public.task_stock_stats(bigint) to authenticated, service_role;
+grant execute on function public.task_type_stats(date, date, bigint) to authenticated, service_role;
+
+--
+-- Reports module
+--
+-- The catalogue is read-only for users at the PRIVILEGE level, not only at the
+-- policy level. `report_fields.sql_expr` reaches the statement `run_report()`
+-- executes, so write access to this table is write access to the database
+-- under your own identity. Two independent mechanisms withhold it.
+--
+grant select on table public.report_datasets to authenticated;
+grant select on table public.report_fields to authenticated;
+
+revoke insert, update, delete, truncate on table public.report_datasets
+    from authenticated, anon;
+revoke insert, update, delete, truncate on table public.report_fields
+    from authenticated, anon;
+
+grant all on table public.report_datasets to service_role;
+grant all on table public.report_fields to service_role;
+
+-- Saved reports are ordinary user data: the policies do the scoping.
+grant select, insert, update, delete on table public.reports to authenticated;
+grant usage, select on sequence public.reports_id_seq to authenticated;
+grant all on table public.reports to service_role;
+
+grant execute on function public.report_catalog() to authenticated;
+grant execute on function public.run_report(jsonb) to authenticated;
+
+-- Granted, and it HAS to be: `run_report()` is SECURITY INVOKER, so its body
+-- runs with the caller's privileges and an internal call to a function the
+-- caller may not execute fails at run time. Withholding this grant would break
+-- every report while looking like a tightening.
+--
+-- Exposing it costs nothing. It is immutable, it executes no SQL, and it
+-- returns a string: a user calling it directly gets back a predicate they still
+-- have no way to run.
+grant execute on function
+    public.report_filter_sql(text, text, text, jsonb) to authenticated;
+
+grant select, insert, update, delete
+    on table public.report_preferences to authenticated;
+grant all on table public.report_preferences to service_role;
+
+-- ===========================================================================
+-- Quotes / CPQ module (docs/proposals/quotes-cpq-module.md, Phase 2, §7)
+-- ===========================================================================
+--
+-- The `alter default privileges` block above hands `anon` AND `authenticated`
+-- every privilege on every new table, view, sequence and function at creation
+-- time -- including TRUNCATE, which ignores row level security entirely. So
+-- every object below starts from `revoke all` and grants back exactly what it
+-- needs. Narrowing by `grant` alone narrows nothing.
+--
+-- `quotes_anon_grants.test.sql` asserts `anon` holds no privilege on any table,
+-- view or function in this module. That single test is what catches this trap
+-- on the next table somebody adds.
+--
+
+-- Catalogue and tunables: readable by every user, written through the policies
+-- (managers for the catalogue, admins for the status machine and the discount
+-- ceiling). The privilege alone is not the authorisation.
+revoke all on table public.tax_rates from anon, authenticated;
+grant select, insert, update, delete on table public.tax_rates to authenticated;
+grant all on table public.tax_rates to service_role;
+
+revoke all on table public.quote_statuses from anon, authenticated;
+grant select, insert, update, delete on table public.quote_statuses to authenticated;
+grant all on table public.quote_statuses to service_role;
+
+revoke all on table public.quote_transitions from anon, authenticated;
+grant select, insert, update, delete on table public.quote_transitions to authenticated;
+grant all on table public.quote_transitions to service_role;
+
+revoke all on table public.quote_discount_rules from anon, authenticated;
+grant select, insert, update, delete on table public.quote_discount_rules to authenticated;
+grant all on table public.quote_discount_rules to service_role;
+
+revoke all on table public.products from anon, authenticated;
+grant select, insert, update, delete on table public.products to authenticated;
+grant all on table public.products to service_role;
+
+revoke all on table public.price_lists from anon, authenticated;
+grant select, insert, update, delete on table public.price_lists to authenticated;
+grant all on table public.price_lists to service_role;
+
+revoke all on table public.price_list_items from anon, authenticated;
+grant select, insert, update, delete on table public.price_list_items to authenticated;
+grant all on table public.price_list_items to service_role;
+
+-- Catalogue history: written by `products_audit()` only.
+revoke all on table public.product_events from anon, authenticated;
+grant select on table public.product_events to authenticated;
+grant all on table public.product_events to service_role;
+
+-- Quotes and their editable children. The policies scope the rows; the freeze
+-- guards decide which of them are still writable.
+--
+-- No DELETE on `quotes`: a quote ends as `canceled`, and `purge_quotes()` is the
+-- only way one is removed.
+revoke all on table public.quotes from anon, authenticated;
+grant select, insert, update on table public.quotes to authenticated;
+grant all on table public.quotes to service_role;
+
+-- No insert, no delete: see the policies. `update` stays table-level rather than
+-- per column because react-admin posts the whole record back; the column rule
+-- lives in `quote_versions_freeze_guard()`, which compares values instead of
+-- refusing the column name.
+revoke all on table public.quote_versions from anon, authenticated;
+grant select, update on table public.quote_versions to authenticated;
+grant all on table public.quote_versions to service_role;
+
+revoke all on table public.quote_lines from anon, authenticated;
+grant select, insert, update, delete on table public.quote_lines to authenticated;
+grant all on table public.quote_lines to service_role;
+
+-- No delete: a comment is deleted softly (see the policies).
+revoke all on table public.quote_comments from anon, authenticated;
+grant select, insert, update on table public.quote_comments to authenticated;
+grant all on table public.quote_comments to service_role;
+
+-- Tokens: nothing at all for users. Reads through the summary view, writes
+-- through the functions.
+revoke all on table public.quote_access_tokens from anon, authenticated;
+grant all on table public.quote_access_tokens to service_role;
+
+-- The audit trail: read-only for users, the double blindfold of §5.
+revoke all on table public.quote_status_changes from anon, authenticated;
+grant select on table public.quote_status_changes to authenticated;
+grant all on table public.quote_status_changes to service_role;
+
+revoke all on table public.quote_portal_events from anon, authenticated;
+grant select on table public.quote_portal_events to authenticated;
+grant all on table public.quote_portal_events to service_role;
+
+-- Views: read-only projections.
+revoke all on table public.quotes_summary from anon, authenticated;
+grant select on table public.quotes_summary to authenticated;
+grant select on table public.quotes_summary to service_role;
+
+revoke all on table public.quote_access_tokens_summary from anon, authenticated;
+grant select on table public.quote_access_tokens_summary to authenticated;
+grant select on table public.quote_access_tokens_summary to service_role;
+
+revoke all on table public.price_book from anon, authenticated;
+grant select on table public.price_book to authenticated;
+grant select on table public.price_book to service_role;
+
+-- Sequences: `authenticated` only where a client inserts the row itself.
+revoke all on sequence public.tax_rates_id_seq from anon;
+revoke all on sequence public.quote_statuses_id_seq from anon;
+revoke all on sequence public.quote_transitions_id_seq from anon;
+revoke all on sequence public.products_id_seq from anon;
+revoke all on sequence public.price_lists_id_seq from anon;
+revoke all on sequence public.price_list_items_id_seq from anon;
+revoke all on sequence public.quotes_id_seq from anon;
+revoke all on sequence public.quote_lines_id_seq from anon;
+revoke all on sequence public.quote_comments_id_seq from anon;
+revoke all on sequence public.product_events_id_seq from anon, authenticated;
+revoke all on sequence public.quote_versions_id_seq from anon, authenticated;
+revoke all on sequence public.quote_access_tokens_id_seq from anon, authenticated;
+revoke all on sequence public.quote_status_changes_id_seq from anon, authenticated;
+revoke all on sequence public.quote_portal_events_id_seq from anon, authenticated;
+revoke all on sequence public.quote_number_seq from anon, authenticated;
+
+grant usage, select on sequence public.tax_rates_id_seq to authenticated;
+grant usage, select on sequence public.quote_statuses_id_seq to authenticated;
+grant usage, select on sequence public.quote_transitions_id_seq to authenticated;
+grant usage, select on sequence public.products_id_seq to authenticated;
+grant usage, select on sequence public.price_lists_id_seq to authenticated;
+grant usage, select on sequence public.price_list_items_id_seq to authenticated;
+grant usage, select on sequence public.quotes_id_seq to authenticated;
+grant usage, select on sequence public.quote_lines_id_seq to authenticated;
+grant usage, select on sequence public.quote_comments_id_seq to authenticated;
+
+grant all on sequence public.tax_rates_id_seq to service_role;
+grant all on sequence public.quote_statuses_id_seq to service_role;
+grant all on sequence public.quote_transitions_id_seq to service_role;
+grant all on sequence public.products_id_seq to service_role;
+grant all on sequence public.price_lists_id_seq to service_role;
+grant all on sequence public.price_list_items_id_seq to service_role;
+grant all on sequence public.quotes_id_seq to service_role;
+grant all on sequence public.quote_lines_id_seq to service_role;
+grant all on sequence public.quote_comments_id_seq to service_role;
+grant all on sequence public.product_events_id_seq to service_role;
+grant all on sequence public.quote_versions_id_seq to service_role;
+grant all on sequence public.quote_access_tokens_id_seq to service_role;
+grant all on sequence public.quote_status_changes_id_seq to service_role;
+grant all on sequence public.quote_portal_events_id_seq to service_role;
+grant all on sequence public.quote_number_seq to service_role;
+
+-- Functions. PostgreSQL grants EXECUTE to PUBLIC by default and the default
+-- privileges above add `anon` explicitly, so every function is revoked from both
+-- first.
+
+-- Callable by users. Each one restates the quote visibility rule internally,
+-- because SECURITY DEFINER bypasses the policies that would otherwise apply.
+-- `can_see_quote` must stay executable: the storage policies and
+-- `quote_access_tokens_summary` call it with the reader's privileges.
+revoke all on function public.can_see_quote(bigint) from public, anon;
+revoke all on function public.transition_quote(bigint, text, text, jsonb) from public, anon;
+revoke all on function public.quote_discount_gate(bigint) from public, anon;
+revoke all on function public.issue_quote_version(bigint, integer, text, text, text) from public, anon;
+revoke all on function public.revise_quote(bigint, text) from public, anon;
+revoke all on function public.create_quote_link(bigint, integer, text) from public, anon;
+revoke all on function public.revoke_quote_token(bigint) from public, anon;
+revoke all on function public.mark_quote_comments_read(bigint) from public, anon;
+
+grant execute on function public.can_see_quote(bigint) to authenticated, service_role;
+grant execute on function public.transition_quote(bigint, text, text, jsonb) to authenticated, service_role;
+grant execute on function public.quote_discount_gate(bigint) to authenticated, service_role;
+grant execute on function public.issue_quote_version(bigint, integer, text, text, text) to authenticated, service_role;
+grant execute on function public.revise_quote(bigint, text) to authenticated, service_role;
+grant execute on function public.create_quote_link(bigint, integer, text) to authenticated, service_role;
+grant execute on function public.revoke_quote_token(bigint) to authenticated, service_role;
+grant execute on function public.mark_quote_comments_read(bigint) to authenticated, service_role;
+
+-- `service_role` only. `apply_quote_status` above all: it trusts its
+-- `p_actor_kind` argument, so a user able to call it could simply declare
+-- themselves the customer. `mint_quote_token` likewise trusts its caller to have
+-- decided who may share the quote. The functions users may call reach both as
+-- the owner.
+revoke all on function public.apply_quote_status(bigint, text, text, text, bigint, jsonb, text) from public, anon, authenticated;
+revoke all on function public.mint_quote_token(bigint, integer, text) from public, anon, authenticated;
+revoke all on function public.purge_quotes(bigint[], boolean) from public, anon, authenticated;
+revoke all on function public.sweep_expired_quotes() from public, anon, authenticated;
+revoke all on function public.refresh_quote_version_totals(bigint) from public, anon, authenticated;
+revoke all on function public.quote_party_snapshot(bigint) from public, anon, authenticated;
+
+grant execute on function public.apply_quote_status(bigint, text, text, text, bigint, jsonb, text) to service_role;
+grant execute on function public.mint_quote_token(bigint, integer, text) to service_role;
+grant execute on function public.purge_quotes(bigint[], boolean) to service_role;
+grant execute on function public.sweep_expired_quotes() to service_role;
+grant execute on function public.refresh_quote_version_totals(bigint) to service_role;
+grant execute on function public.quote_party_snapshot(bigint) to service_role;
+
+-- Trigger functions: never called directly by anybody.
+revoke all on function public.quotes_set_defaults() from public, anon, authenticated;
+revoke all on function public.quotes_seed_first_version() from public, anon, authenticated;
+revoke all on function public.quote_versions_before_insert() from public, anon, authenticated;
+revoke all on function public.quote_versions_sync_header() from public, anon, authenticated;
+revoke all on function public.quotes_header_guard() from public, anon, authenticated;
+revoke all on function public.quote_lines_set_carrier() from public, anon, authenticated;
+revoke all on function public.quote_lines_snapshot_defaults() from public, anon, authenticated;
+revoke all on function public.quote_comments_before_insert() from public, anon, authenticated;
+revoke all on function public.quote_comments_before_update() from public, anon, authenticated;
+revoke all on function public.quote_lines_refresh_totals() from public, anon, authenticated;
+revoke all on function public.quote_lines_freeze_guard() from public, anon, authenticated;
+revoke all on function public.quote_versions_freeze_guard() from public, anon, authenticated;
+revoke all on function public.reject_quote_history_mutation() from public, anon, authenticated;
+revoke all on function public.products_audit() from public, anon, authenticated;
+revoke all on function public.quotes_status_guard() from public, anon, authenticated;
+revoke all on function public.quotes_log_status_change() from public, anon, authenticated;
+
+grant execute on function public.quotes_set_defaults() to service_role;
+grant execute on function public.quotes_seed_first_version() to service_role;
+grant execute on function public.quote_versions_before_insert() to service_role;
+grant execute on function public.quote_versions_sync_header() to service_role;
+grant execute on function public.quotes_header_guard() to service_role;
+grant execute on function public.quote_lines_set_carrier() to service_role;
+grant execute on function public.quote_lines_snapshot_defaults() to service_role;
+grant execute on function public.quote_comments_before_insert() to service_role;
+grant execute on function public.quote_comments_before_update() to service_role;
+grant execute on function public.quote_lines_refresh_totals() to service_role;
+grant execute on function public.quote_lines_freeze_guard() to service_role;
+grant execute on function public.quote_versions_freeze_guard() to service_role;
+grant execute on function public.reject_quote_history_mutation() to service_role;
+grant execute on function public.products_audit() to service_role;
+grant execute on function public.quotes_status_guard() to service_role;
+grant execute on function public.quotes_log_status_change() to service_role;
+
+-- The customer portal (Phase 7): `service_role` only, which only the
+-- `quote-portal` edge function holds. Not `anon` -- the portal is not a
+-- PostgREST client (F2, D1) -- and not `authenticated` either: these functions
+-- take the token hash as the WHOLE authorisation, so a user able to call them
+-- would be one hash away from answering for a customer.
+revoke all on function public.quote_portal_log(bigint, bigint, bigint, text, inet, text, text, text, jsonb) from public, anon, authenticated;
+revoke all on function public.quote_portal_resolve(bytea, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_document(bigint) from public, anon, authenticated;
+revoke all on function public.quote_portal_view(bytea, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_begin_answer(bytea, text, text, boolean, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_accept(bytea, text, text, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_reject(bytea, text, text, text, text, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_comment(bytea, text, text, text, inet, text) from public, anon, authenticated;
+
+grant execute on function public.quote_portal_log(bigint, bigint, bigint, text, inet, text, text, text, jsonb) to service_role;
+grant execute on function public.quote_portal_resolve(bytea, inet, text) to service_role;
+grant execute on function public.quote_portal_document(bigint) to service_role;
+grant execute on function public.quote_portal_view(bytea, inet, text) to service_role;
+grant execute on function public.quote_portal_begin_answer(bytea, text, text, boolean, inet, text) to service_role;
+grant execute on function public.quote_portal_accept(bytea, text, text, inet, text) to service_role;
+grant execute on function public.quote_portal_reject(bytea, text, text, text, text, inet, text) to service_role;
+grant execute on function public.quote_portal_comment(bytea, text, text, text, inet, text) to service_role;

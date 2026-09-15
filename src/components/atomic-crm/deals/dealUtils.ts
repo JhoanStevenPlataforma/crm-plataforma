@@ -7,6 +7,20 @@ export const findDealLabel = (dealStages: DealStage[], dealValue: string) => {
   return dealStage?.label;
 };
 
+/**
+ * How much of a deal in this stage counts towards a weighted forecast, 0..1.
+ *
+ * Null when the configuration says nothing, and callers must skip those rather
+ * than default them: treating an unconfigured stage as 0 quietly shrinks the
+ * forecast, and treating it as 1 quietly inflates it. Both are worse than
+ * leaving the stage out and saying so.
+ */
+export const findDealProbability = (
+  dealStages: DealStage[],
+  dealValue: string,
+): number | null =>
+  dealStages.find((stage) => stage.value === dealValue)?.probability ?? null;
+
 export function getRelativeTimeString(
   dateString: string,
   locale = "en",

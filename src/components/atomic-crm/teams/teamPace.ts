@@ -116,22 +116,8 @@ export const pipelineCoverage = (
   return (team.pipeline_amount ?? 0) / remaining;
 };
 
-/**
- * Won against everything that reached a decision.
- *
- * Open deals are excluded from the denominator on purpose: counting them as
- * not-yet-won drags every rate towards zero early in a period and makes the
- * number say more about the calendar than about the selling. Null when nothing
- * has closed either way.
- */
-export const winRate = (
-  nbWon: number | null | undefined,
-  nbLost: number | null | undefined,
-): number | null => {
-  const won = nbWon ?? 0;
-  const decided = won + (nbLost ?? 0);
-  return decided === 0 ? null : won / decided;
-};
+/** Moved to `misc/reporting.ts`; re-exported so this folder's imports stand. */
+export { winRate } from "../misc/reporting";
 
 /** `2.4` -> `"2.4x"`, and `null` -> an em dash. */
 export const formatCoverage = (coverage: number | null) =>
