@@ -1,6 +1,6 @@
 import { render } from "vitest-browser-react";
 
-import { WithQuotes } from "./QuoteList.stories";
+import { WithQuotes, WithUnansweredCustomer } from "./QuoteList.stories";
 
 describe("QuoteList", () => {
   it("shows the company, the status and the exact total of the current version", async () => {
@@ -13,6 +13,17 @@ describe("QuoteList", () => {
     await expect.element(table.getByText("Draft")).toBeVisible();
     // Exact, never the dashboard's compact `$642.6K` (quotes F4).
     await expect.element(table.getByText("$642,600.00")).toBeVisible();
+  });
+
+  it("flags the quote whose customer wrote and nobody has read it yet", async () => {
+    const screen = await render(<WithUnansweredCustomer />);
+
+    const table = screen.getByRole("table");
+    await expect.element(table.getByText("Q-2026-00002")).toBeVisible();
+    // One unread question on quote 1; the deleted and internal comments do not
+    // count, and quote 2 has nothing waiting.
+    await expect.element(table.getByText("1 unread")).toBeVisible();
+    expect(table.getByText(/unread/).all()).toHaveLength(1);
   });
 
   it("filters on the status key without blanking the filter it applied", async () => {

@@ -8,7 +8,7 @@
  * other door.
  *
  * They are collected here rather than inlined in `dataProvider.ts` for the
- * reason the phase plan gives: the demo mirror has to implement the same six
+ * reason the phase plan gives: the demo mirror has to implement the same
  * methods, and two lists in two files drift. The contract is this module's
  * exported types, and `fakerest/quoteMethods.ts` satisfies it.
  *
@@ -73,7 +73,7 @@ export type CreateQuoteLinkOptions = {
   tokenLabel?: string | null;
 };
 
-/** The six methods a data provider must offer for the quote screens to work. */
+/** The methods a data provider must offer for the quote screens to work. */
 export type QuoteMethods = {
   getQuoteDiscountGate(quoteId: Identifier): Promise<QuoteDiscountGate>;
   transitionQuote(
@@ -91,6 +91,7 @@ export type QuoteMethods = {
   ): Promise<QuoteLink>;
   reviseQuote(quoteId: Identifier, reason: string): Promise<QuoteVersion>;
   revokeQuoteToken(tokenId: Identifier): Promise<void>;
+  markQuoteCommentsRead(quoteId: Identifier): Promise<number>;
 };
 
 export const createQuoteMethods = (
@@ -204,5 +205,20 @@ export const createQuoteMethods = (
         "Failed to revoke the link",
       );
     },
+
+    /**
+     * Somebody on the team has read what the customer wrote. Returns how many
+     * comments it marked; a thread already read is 0, not an error.
+     *
+     * A function and not an update, because no policy can say it: a comment
+     * update belongs to its author, and a customer's comment has no author on
+     * this side (§13.6 #6).
+     */
+    markQuoteCommentsRead: (quoteId) =>
+      call<number>(
+        "mark_quote_comments_read",
+        { p_quote_id: quoteId },
+        "Failed to mark the comments as read",
+      ),
   };
 };

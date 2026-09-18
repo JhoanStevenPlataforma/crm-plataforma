@@ -44,12 +44,12 @@ const Portal = ({
   );
 };
 
-/** A payload the status machine offers no answer on. */
+/** A payload the status machine offers no answer, and no thread, on. */
 const unanswerable = (
   overrides: Partial<QuotePortalPayload>,
 ): QuotePortalPayload => ({
   ...portalPayload,
-  actions: { can_accept: false, can_reject: false },
+  actions: { can_accept: false, can_reject: false, can_comment: false },
   ...overrides,
 });
 
@@ -96,6 +96,16 @@ export const Canceled = () => (
       }),
     }}
   />
+);
+
+/** Nobody has written yet. */
+export const NoComments = () => (
+  <Portal options={{ payload: { ...portalPayload, comments: [] } }} />
+);
+
+/** The link has written as much as it may this hour. */
+export const CommentRefused = () => (
+  <Portal options={{ refuseCommentWith: "quote_portal_comment_limit" }} />
 );
 
 /** The answer arrives after a newer version was issued. */

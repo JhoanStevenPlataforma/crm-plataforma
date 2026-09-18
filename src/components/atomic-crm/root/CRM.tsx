@@ -361,6 +361,8 @@ const DesktopAdmin = (
       </Resource>
       <Resource name="quote_versions" />
       <Resource name="quote_lines" />
+      {/* The negotiation thread (Phase 8), rendered on the quote's page. */}
+      <Resource name="quote_comments" />
       <Resource name="quote_statuses" recordRepresentation="label" />
       {/* The status machine as data (Phase 5): the quote toolbar reads the
           legal edges from it instead of hardcoding which button a status

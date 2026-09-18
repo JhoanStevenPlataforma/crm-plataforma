@@ -697,6 +697,21 @@ export const spanishCrmMessages = {
           "Esta cotización ya no se puede responder en línea. Comuníquese con %{name}.",
         closed_anonymous:
           "Esta cotización ya no se puede responder en línea. Comuníquese con quien se la envió.",
+        comments: {
+          title: "Preguntas y comentarios",
+          empty:
+            "Aún no hay mensajes. Escriba aquí si algo de esta cotización necesita aclaración.",
+          closed: "La conversación sobre esta cotización está cerrada.",
+          team: "Equipo comercial",
+          edited: "editado",
+          message: "Su mensaje",
+          name: "Su nombre",
+          email: "Correo electrónico (opcional)",
+          privacy:
+            "Solo el equipo que preparó esta cotización ve su correo electrónico; no aparece en la conversación.",
+          submit: "Enviar mensaje",
+          sent: "Su mensaje fue enviado.",
+        },
         accept_dialog: {
           title: "Aceptar la cotización %{number}",
           description:
@@ -744,6 +759,11 @@ export const spanishCrmMessages = {
           quote_portal_email_invalid: "Escriba un correo electrónico válido.",
           quote_portal_reason_code_invalid: "Elija el motivo principal.",
           quote_portal_input_too_long: "Uno de los campos es demasiado largo.",
+          quote_portal_body_required: "Escriba un mensaje.",
+          quote_portal_comments_closed:
+            "La conversación sobre esta cotización está cerrada.",
+          quote_portal_comment_limit:
+            "Demasiados mensajes desde este enlace. Inténtelo más tarde.",
         },
       },
       document: {
@@ -797,6 +817,31 @@ export const spanishCrmMessages = {
         again: "Imprimir de nuevo",
         version_missing:
           "Esa versión no pertenece a esta cotización, así que no hay nada que imprimir.",
+      },
+      comments: {
+        title: "Conversación",
+        empty:
+          "Aún no hay comentarios. Las notas internas quedan en el equipo; las compartidas las ve el cliente en el enlace de la cotización.",
+        placeholder: "Escriba un comentario…",
+        share: "Compartir con el cliente",
+        share_on:
+          "El cliente lo leerá en el enlace de la cotización. Después no se podrá volver interno.",
+        share_off: "Solo el equipo ve este comentario.",
+        send: "Comentar",
+        send_shared: "Enviar al cliente",
+        reply: "Responder",
+        internal: "Interno",
+        shared: "Compartido con el cliente",
+        from_customer: "Cliente",
+        unread: "Sin leer",
+        edited: "editado",
+        on_version: "sobre la versión %{number}",
+        deleted: "Este comentario fue eliminado.",
+        mark_read:
+          "Marcar %{smart_count} comentario del cliente como leído |||| Marcar %{smart_count} comentarios del cliente como leídos",
+        unread_count: "%{smart_count} sin leer |||| %{smart_count} sin leer",
+        error: "No se pudo actualizar la conversación",
+        load_error: "No se pudieron cargar los comentarios de esta cotización",
       },
       links: {
         title: "Enlaces para el cliente",

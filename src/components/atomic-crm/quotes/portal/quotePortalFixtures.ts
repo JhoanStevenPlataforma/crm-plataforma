@@ -11,6 +11,7 @@ import {
   QuotePortalError,
   type QuotePortalAcceptance,
   type QuotePortalClient,
+  type QuotePortalComment,
   type QuotePortalErrorKey,
   type QuotePortalPayload,
   type QuotePortalRejection,
@@ -85,12 +86,30 @@ export const portalPayload: QuotePortalPayload = {
     total: 3427200,
   },
   terms: "Payment 30 days after invoice.",
+  comments: [
+    {
+      author_kind: "customer",
+      author_name: "Lucía Gómez",
+      body: "Could the onboarding\nstart in October?",
+      created_at: "2026-09-11T14:00:00.000Z",
+      edited_at: null,
+    },
+    {
+      author_kind: "internal",
+      author_name: "Jane Doe",
+      body: "Yes, the first week of October works for us.",
+      created_at: "2026-09-11T16:30:00.000Z",
+      edited_at: "2026-09-11T16:45:00.000Z",
+    },
+  ],
   branding: { title: "Acme CRM", logo_url: null },
-  actions: { can_accept: true, can_reject: true },
+  actions: { can_accept: true, can_reject: true, can_comment: true },
   acceptance: { accepted_at: null, accepted_by_name: null, rejected_at: null },
 };
 
 export const ANSWERED_AT = "2026-09-14T15:00:00.000Z";
+
+export const COMMENTED_AT = "2026-09-15T09:00:00.000Z";
 
 export type FakeQuotePortal = {
   client: QuotePortalClient;
@@ -100,17 +119,19 @@ export type FakeQuotePortal = {
 
 /**
  * A portal with no server behind it. It keeps the document, counts the opens
- * the way the server records views, closes both answers once one is given, and
- * refuses with the server's keys.
+ * the way the server records views, closes both answers and the thread once an
+ * answer is given, and refuses with the server's keys.
  */
 export const createFakeQuotePortal = ({
   payload = portalPayload,
   refuseViewWith,
   refuseAnswerWith,
+  refuseCommentWith,
 }: {
   payload?: QuotePortalPayload;
   refuseViewWith?: QuotePortalErrorKey;
   refuseAnswerWith?: QuotePortalErrorKey;
+  refuseCommentWith?: QuotePortalErrorKey;
 } = {}): FakeQuotePortal => {
   let current = payload;
   let viewCount = 0;
@@ -128,7 +149,7 @@ export const createFakeQuotePortal = ({
     current = {
       ...current,
       quote: { ...current.quote, status },
-      actions: { can_accept: false, can_reject: false },
+      actions: { can_accept: false, can_reject: false, can_comment: false },
       acceptance:
         status === "accepted"
           ? {
@@ -161,6 +182,26 @@ export const createFakeQuotePortal = ({
       reject: async (token, _rejection: QuotePortalRejection) => {
         open(token);
         return answer("rejected", null);
+      },
+      comment: async (token, { body, name }: QuotePortalComment) => {
+        open(token);
+        if (refuseCommentWith) throw new QuotePortalError(refuseCommentWith);
+        if (!current.actions.can_comment)
+          throw new QuotePortalError("quote_portal_comments_closed");
+        current = {
+          ...current,
+          comments: [
+            ...current.comments,
+            {
+              author_kind: "customer",
+              author_name: name,
+              body,
+              created_at: COMMENTED_AT,
+              edited_at: null,
+            },
+          ],
+        };
+        return current;
       },
     },
   };

@@ -7,6 +7,7 @@ import { List } from "@/components/admin/list";
 import { ReferenceInput } from "@/components/admin/reference-input";
 import { SearchInput } from "@/components/admin/search-input";
 import { SelectInput } from "@/components/admin/select-input";
+import { Badge } from "@/components/ui/badge";
 
 import { TopToolbar } from "../layout/TopToolbar";
 import { formatMoneyExact } from "../misc/reporting";
@@ -80,7 +81,30 @@ export const QuoteList = () => {
       sort={{ field: "created_at", order: "DESC" }}
     >
       <DataTable rowClick="show" bulkActionButtons={false}>
-        <DataTable.Col source="quote_number" />
+        {/* "The customer wrote and nobody answered" rides on the number, so it
+            is seen where the row is read first (§11's attention badge). */}
+        <DataTable.Col<QuoteSummary>
+          source="quote_number"
+          render={(quote) => (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              {quote.quote_number}
+              {quote.nb_unanswered_customer_comments ? (
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 font-normal whitespace-nowrap"
+                >
+                  <span
+                    className="size-1.5 shrink-0 rounded-full bg-warning"
+                    aria-hidden="true"
+                  />
+                  {translate("resources.quotes.comments.unread_count", {
+                    smart_count: quote.nb_unanswered_customer_comments,
+                  })}
+                </Badge>
+              ) : null}
+            </span>
+          )}
+        />
         <DataTable.Col source="title" />
         <DataTable.Col source="company_name" />
         <DataTable.Col<QuoteSummary>

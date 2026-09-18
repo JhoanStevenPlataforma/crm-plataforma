@@ -30,6 +30,7 @@ import type {
   PriceListItem,
   Product,
   Quote,
+  QuoteComment,
   QuoteLine,
   QuoteStatus,
   QuoteSummary,
@@ -80,6 +81,7 @@ const summaryOf = (
     statuses: QuoteStatus[];
     versions: QuoteVersion[];
     lines: QuoteLine[];
+    comments: QuoteComment[];
   },
 ): QuoteSummary => {
   const version = currentVersionOf(context.versions, quote.id);
@@ -115,6 +117,19 @@ const summaryOf = (
     nb_lines: context.lines.filter((line) =>
       sameId(line.version_id, version?.id),
     ).length,
+    nb_shared_comments: context.comments.filter(
+      (comment) =>
+        sameId(comment.quote_id, quote.id) &&
+        comment.visibility === "shared" &&
+        comment.deleted_at == null,
+    ).length,
+    nb_unanswered_customer_comments: context.comments.filter(
+      (comment) =>
+        sameId(comment.quote_id, quote.id) &&
+        comment.author_kind === "customer" &&
+        comment.read_by_internal_at == null &&
+        comment.deleted_at == null,
+    ).length,
   };
 };
 
@@ -124,7 +139,7 @@ export const decorateQuotes = async (
 ): Promise<QuoteSummary[]> => {
   if (quotes.length === 0) return [];
 
-  const [companies, deals, sales, statuses, versions, lines] =
+  const [companies, deals, sales, statuses, versions, lines, comments] =
     await Promise.all([
       listAll<Company>(dataProvider, "companies"),
       listAll<Deal>(dataProvider, "deals"),
@@ -132,9 +147,18 @@ export const decorateQuotes = async (
       listAll<QuoteStatus>(dataProvider, "quote_statuses"),
       listAll<QuoteVersion>(dataProvider, "quote_versions"),
       listAll<QuoteLine>(dataProvider, "quote_lines"),
+      listAll<QuoteComment>(dataProvider, "quote_comments"),
     ]);
 
-  const context = { companies, deals, sales, statuses, versions, lines };
+  const context = {
+    companies,
+    deals,
+    sales,
+    statuses,
+    versions,
+    lines,
+    comments,
+  };
   return quotes.map((quote) => summaryOf(quote, context));
 };
 

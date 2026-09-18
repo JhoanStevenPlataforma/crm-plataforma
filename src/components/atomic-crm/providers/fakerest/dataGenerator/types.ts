@@ -33,6 +33,7 @@ import type {
   Product,
   Quote,
   QuoteAccessToken,
+  QuoteComment,
   QuoteDiscountRule,
   QuoteLine,
   QuoteStatus,
@@ -119,6 +120,8 @@ export interface Db {
   quotes: Quote[];
   quote_versions: QuoteVersion[];
   quote_lines: QuoteLine[];
+  // The negotiation thread (Phase 8). Empty, for the reason the documents are.
+  quote_comments: QuoteComment[];
   // The audit trail and the portal links a Phase 5 move writes. Empty to start
   // with, because both are records of something that happened.
   quote_status_changes: QuoteStatusChange[];

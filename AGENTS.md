@@ -147,6 +147,14 @@ declines. The function holds the service role and calls seven `quote_portal_*`
 SQL functions granted to `service_role` alone
 (`20260917120000_quote_portal.sql`): every key `quote_portal_document()` builds
 reaches anybody holding a link, and `quote_portal.test.sql` pins each one.
+Phase 8 is done: the negotiation thread
+(`20260918120000_quote_comments.sql`). The team writes on `QuoteShow`
+(`QuoteComments`), internal by default and shared by choice, the audience fixed
+at creation; the customer reads the shared part under the document and writes
+back through `quote_portal_comment()`. Bodies are plain text on both sides,
+deletion is soft, nobody rewrites a customer's words, and "read" is marked by
+`mark_quote_comments_read()` or by a shared answer, which clears the unread
+badge on the list.
 Status changes go through `transition_quote()` / `issue_quote_version()` /
 `revise_quote()` or a portal function, never a column write, and an issued
 version is immutable. **§13 of the proposal is the as-built contract** — which

@@ -684,6 +684,21 @@ export const englishCrmMessages = {
           "This quotation can no longer be answered online. Please contact %{name}.",
         closed_anonymous:
           "This quotation can no longer be answered online. Please contact whoever sent it to you.",
+        comments: {
+          title: "Questions and comments",
+          empty:
+            "No messages yet. Write here if anything in this quotation needs clarifying.",
+          closed: "The conversation on this quotation is closed.",
+          team: "Sales team",
+          edited: "edited",
+          message: "Your message",
+          name: "Your name",
+          email: "Email address (optional)",
+          privacy:
+            "Only the team that prepared this quotation sees your email address; it is not shown in the conversation.",
+          submit: "Send message",
+          sent: "Your message has been sent.",
+        },
         accept_dialog: {
           title: "Accept quotation %{number}",
           description:
@@ -730,6 +745,11 @@ export const englishCrmMessages = {
           quote_portal_email_invalid: "Enter a valid email address.",
           quote_portal_reason_code_invalid: "Choose the main reason.",
           quote_portal_input_too_long: "One of the fields is too long.",
+          quote_portal_body_required: "Write a message.",
+          quote_portal_comments_closed:
+            "The conversation on this quotation is closed.",
+          quote_portal_comment_limit:
+            "Too many messages from this link. Try again later.",
         },
       },
       document: {
@@ -783,6 +803,31 @@ export const englishCrmMessages = {
         again: "Print again",
         version_missing:
           "That version does not belong to this quote, so there is nothing to print.",
+      },
+      comments: {
+        title: "Conversation",
+        empty:
+          "No comments yet. Internal notes stay with the team; shared ones are shown to the customer on the quotation's link.",
+        placeholder: "Write a comment…",
+        share: "Share with the customer",
+        share_on:
+          "The customer will read this on the quotation's link. It cannot be made internal afterwards.",
+        share_off: "Only the team sees this comment.",
+        send: "Comment",
+        send_shared: "Send to the customer",
+        reply: "Reply",
+        internal: "Internal",
+        shared: "Shared with the customer",
+        from_customer: "Customer",
+        unread: "Unread",
+        edited: "edited",
+        on_version: "on version %{number}",
+        deleted: "This comment was deleted.",
+        mark_read:
+          "Mark %{smart_count} customer comment as read |||| Mark %{smart_count} customer comments as read",
+        unread_count: "%{smart_count} unread |||| %{smart_count} unread",
+        error: "The conversation could not be updated",
+        load_error: "The comments of this quote could not be loaded",
       },
       links: {
         title: "Customer links",

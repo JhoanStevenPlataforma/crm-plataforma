@@ -123,6 +123,7 @@ export default (): Db => {
   db.quotes = [];
   db.quote_versions = [];
   db.quote_lines = [];
+  db.quote_comments = [];
   db.quote_status_changes = [];
   db.quote_access_tokens = [];
   db.configuration = [

@@ -11,11 +11,14 @@
 
 import { isIP } from "node:net";
 
-export const PORTAL_ACTIONS = ["view", "accept", "reject"] as const;
+export const PORTAL_ACTIONS = ["view", "accept", "reject", "comment"] as const;
 
 export type PortalAction = (typeof PORTAL_ACTIONS)[number];
 
-/** An answer is a name, an email address and a paragraph: 16 KB is generous. */
+/**
+ * An answer or a comment is a name, an email address and a paragraph: 16 KB is
+ * generous. A comment body is capped at 4000 characters by the database.
+ */
 export const MAX_BODY_BYTES = 16 * 1024;
 
 /** What `mint_quote_token()` hands out: 32 random bytes, hex-encoded. */
@@ -37,6 +40,13 @@ export type PortalCall =
       token: string;
       reasonCode: string | null;
       reason: string | null;
+      name: string | null;
+      email: string | null;
+    }
+  | {
+      action: "comment";
+      token: string;
+      body: string | null;
       name: string | null;
       email: string | null;
     };
@@ -146,6 +156,14 @@ export const parsePortalCall = (
         name: cleanLine(fields.name),
         email: cleanLine(fields.email),
       };
+    case "comment":
+      return {
+        action,
+        token,
+        body: cleanParagraph(fields.body),
+        name: cleanLine(fields.name),
+        email: cleanLine(fields.email),
+      };
   }
 };
 
@@ -235,6 +253,16 @@ export const rpcCallFor = (
           p_email: call.email,
         },
       };
+    case "comment":
+      return {
+        fn: "quote_portal_comment",
+        args: {
+          ...origin,
+          p_body: call.body,
+          p_name: call.name,
+          p_email: call.email,
+        },
+      };
   }
 };
 
@@ -252,6 +280,9 @@ const STATUS_BY_KEY: Record<string, number> = {
   quote_portal_email_invalid: 422,
   quote_portal_reason_code_invalid: 422,
   quote_portal_input_too_long: 422,
+  quote_portal_body_required: 422,
+  quote_portal_comments_closed: 409,
+  quote_portal_comment_limit: 429,
   quote_version_superseded: 409,
   quote_version_answered: 409,
   quote_validity_elapsed: 409,

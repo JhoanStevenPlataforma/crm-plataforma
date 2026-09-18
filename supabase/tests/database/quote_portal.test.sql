@@ -3,8 +3,10 @@
 --
 --   * the payload discloses exactly its named keys, and nothing the team keeps
 --     to itself: the internal notes of the quote and of its products, internal
---     comments, the deal, the team's email, the customer's address, the token
---     and its hash;
+--     and deleted comments, the deal, the team's email, the email a customer
+--     signed a comment with, the customer's address, the token and its hash;
+--   * the thread is the shared comments, oldest first, and stays open while the
+--     live version is negotiable;
 --   * opening the live document records a view and moves `sent` to `viewed`
 --     once; opening a superseded version moves nothing;
 --   * accepting and declining write the version, the status and both trails in
@@ -21,7 +23,7 @@
 --
 begin;
 
-select plan(38);
+select plan(40);
 
 create function public.quotes_test_error_of(p_sql text) returns text
     language plpgsql
@@ -134,6 +136,10 @@ values (1, '{"title": "Plataforma Portal", "lightModeLogo": {"src": "data:image/
 on conflict (id) do update set config = excluded.config;
 
 set local role service_role;
+-- The customer writes before the page is opened again. The email they sign
+-- with stays with the team.
+select public.quote_portal_comment(public.quotes_test_hash_of('portal_test.accept'),
+    'Could you start in September?', 'Lucia Gomez', 'lucia.private@portal.test');
 select set_config('portal_test.view',
     public.quote_portal_view(public.quotes_test_hash_of('portal_test.accept'),
                              '203.0.113.7', 'PortalTest/1.0')::text,
@@ -145,7 +151,7 @@ reset role;
 --
 select is(
     public.quotes_test_keys_of(current_setting('portal_test.view')::jsonb),
-    'acceptance,actions,branding,lines,parties,quote,terms,totals',
+    'acceptance,actions,branding,comments,lines,parties,quote,terms,totals',
     'the payload has exactly the groups of the document');
 
 select is(
@@ -175,19 +181,33 @@ select is(
                 public.quotes_test_keys_of(v -> 'actions'),
                 public.quotes_test_keys_of(v -> 'acceptance'))
        from (select current_setting('portal_test.view')::jsonb as v) p),
-    'discount_total,subtotal,tax_total,total | logo_url,title | can_accept,can_reject | accepted_at,accepted_by_name,rejected_at',
+    'discount_total,subtotal,tax_total,total | logo_url,title | can_accept,can_comment,can_reject | accepted_at,accepted_by_name,rejected_at',
     'the totals, branding, actions and acceptance groups carry exactly their keys');
+
+select is(
+    public.quotes_test_keys_of(current_setting('portal_test.view')::jsonb -> 'comments' -> 0),
+    'author_kind,author_name,body,created_at,edited_at',
+    'a comment carries what the thread prints: no id, no audience, no email');
+
+select is(
+    (select string_agg(c ->> 'author_kind' || ':' || (c ->> 'author_name') || ':' || (c ->> 'body'),
+                       ' | ' order by n)
+       from jsonb_array_elements(current_setting('portal_test.view')::jsonb -> 'comments')
+            with ordinality as t(c, n)),
+    'internal:Paula Portal:We can start in October. | customer:Lucia Gomez:Could you start in September?',
+    'the thread is the shared comments, oldest first, each signed with a display name');
 
 select is(
     (select coalesce(array_agg(s order by s), '{}')
        from unnest(array[
             'SECRET-QUOTE-NOTE', 'SECRET-PRODUCT-NOTE', 'SECRET-INTERNAL-COMMENT',
-            'SECRET-DEAL-NAME', 'quotes.portal.owner@test.local', '203.0.113.7',
+            'SECRET-DELETED-COMMENT', 'SECRET-DEAL-NAME', 'quotes.portal.owner@test.local',
+            'lucia.private@portal.test', '203.0.113.7',
             current_setting('portal_test.accept')::jsonb ->> 'token',
             encode(public.quotes_test_hash_of('portal_test.accept'), 'hex')]) as s
       where strpos(current_setting('portal_test.view'), s) > 0),
     '{}'::text[],
-    'nothing the team keeps to itself is in it: notes, comments, the deal, the team''s email, the address, the token or its hash');
+    'nothing the team keeps to itself is in it: notes, internal or deleted comments, the deal, the team''s email, a commenter''s email, the address, the token or its hash');
 
 select is(
     (select (v -> 'totals' ->> 'total') || '/' || jsonb_array_length(v -> 'lines')
@@ -211,10 +231,10 @@ select is(
 
 select is(
     (select concat_ws('/', v -> 'actions' ->> 'can_accept', v -> 'actions' ->> 'can_reject',
-                      v -> 'quote' ->> 'is_superseded')
+                      v -> 'actions' ->> 'can_comment', v -> 'quote' ->> 'is_superseded')
        from (select current_setting('portal_test.view')::jsonb as v) p),
-    'true/true/false',
-    'the live document offers both answers');
+    'true/true/true/false',
+    'the live document offers both answers, and the thread');
 
 --
 -- 2. Opening the link.
@@ -283,10 +303,10 @@ select is(
     (select concat_ws('/', v -> 'acceptance' ->> 'accepted_by_name',
                       ((v -> 'acceptance' ->> 'accepted_at') is not null)::text,
                       v -> 'actions' ->> 'can_accept', v -> 'actions' ->> 'can_reject',
-                      v -> 'quote' ->> 'status')
+                      v -> 'actions' ->> 'can_comment', v -> 'quote' ->> 'status')
        from (select current_setting('portal_test.accepted')::jsonb as v) p),
-    'Lucia Gomez/true/false/false/accepted',
-    'the answer returns the document as it now stands, with nothing left to answer');
+    'Lucia Gomez/true/false/false/false/accepted',
+    'the answer returns the document as it now stands, with nothing left to answer or to say');
 
 select is(
     (select concat_ws('/', accepted_by_name, accepted_by_email, host(accepted_ip), acceptance_method,
@@ -379,10 +399,10 @@ reset role;
 
 select is(
     (select concat_ws('/', v -> 'quote' ->> 'is_superseded', v -> 'actions' ->> 'can_accept',
-                      v -> 'actions' ->> 'can_reject')
+                      v -> 'actions' ->> 'can_reject', v -> 'actions' ->> 'can_comment')
        from (select current_setting('portal_test.superseded_view')::jsonb as v) p),
-    'true/false/false',
-    'an old version still opens, says it was superseded, and offers no answer');
+    'true/false/false/false',
+    'an old version still opens, says it was superseded, and offers no answer and no thread');
 
 select is(
     (select q.status_key || '/' || (select count(*) from public.quote_status_changes sc

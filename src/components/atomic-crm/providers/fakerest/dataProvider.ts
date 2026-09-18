@@ -60,6 +60,7 @@ import {
   quoteCallbacks,
   quoteLineCallbacks,
 } from "./quotes";
+import { quoteCommentCallbacks } from "./quoteCommentCallbacks";
 import { createDemoQuoteMethods, decorateQuoteTokens } from "./quoteMethods";
 import { taskChecklistCallbacks } from "./taskChecklistCallbacks";
 import { taskCommentCallbacks } from "./taskCommentCallbacks";
@@ -453,7 +454,7 @@ export const createDataProvider = ({
     ): Promise<DealStageGate> =>
       computeDealStageGate(dataProvider, dealId, toStage),
     /**
-     * The six quote RPCs (quotes §13.4), demo-side. Spread in from the mirror
+     * The quote RPCs (quotes §13.4), demo-side. Spread in from the mirror
      * so this provider satisfies the same `QuoteMethods` contract the Supabase
      * one does — a screen calls the same method against either backend.
      *
@@ -981,6 +982,9 @@ export const createDataProvider = ({
       // insert, and the line snapshot, amounts and totals (quotes §2.4, D8).
       quoteCallbacks(),
       quoteLineCallbacks(),
+      // ... and for the comment thread's (Phase 8): authorship, depth, the
+      // clock, and the three changes a written comment still accepts.
+      quoteCommentCallbacks(getIdentity),
       {
         // `teams_summary.nb_members` has no view here, so the counter is kept
         // on the team row — the same approach as `nb_tasks` / `nb_contacts`.

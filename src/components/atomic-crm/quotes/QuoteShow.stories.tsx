@@ -5,7 +5,9 @@ import { StoryWrapper } from "@/test/StoryWrapper";
 import type { Db } from "../providers/fakerest/dataGenerator/types";
 import type { Company, QuoteLine, QuoteVersion } from "../types";
 import {
+  commentAuthors,
   companies,
+  quoteComments,
   quoteLines,
   quoteStatuses,
   quoteVersions,
@@ -104,6 +106,22 @@ const revisedDb = {
 /** The routes are the real ones: the page is reached the way a row reaches it. */
 export const Issued = () => (
   <StoryWrapper data={issuedDb} initialEntries={["/quotes/1/show"]}>
+    {null}
+  </StoryWrapper>
+);
+
+/** Sent, and being negotiated: every kind of comment the thread holds. */
+export const Conversation = () => (
+  <StoryWrapper
+    data={
+      {
+        ...issuedDb,
+        sales: commentAuthors,
+        quote_comments: quoteComments,
+      } as Partial<Db>
+    }
+    initialEntries={["/quotes/1/show"]}
+  >
     {null}
   </StoryWrapper>
 );

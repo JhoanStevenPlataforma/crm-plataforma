@@ -56,8 +56,23 @@ const payloadSchema = z.object({
     total: z.number(),
   }),
   terms: nullableText,
+  // The shared thread, oldest first. No ids and no emails: the page prints a
+  // name, a date and the words, and that is all the server discloses.
+  comments: z.array(
+    z.object({
+      author_kind: z.enum(["internal", "customer"]),
+      author_name: nullableText,
+      body: z.string(),
+      created_at: z.string(),
+      edited_at: nullableText,
+    }),
+  ),
   branding: z.object({ title: nullableText, logo_url: nullableText }),
-  actions: z.object({ can_accept: z.boolean(), can_reject: z.boolean() }),
+  actions: z.object({
+    can_accept: z.boolean(),
+    can_reject: z.boolean(),
+    can_comment: z.boolean(),
+  }),
   acceptance: z.object({
     accepted_at: nullableText,
     accepted_by_name: nullableText,
@@ -66,6 +81,8 @@ const payloadSchema = z.object({
 });
 
 export type QuotePortalPayload = z.infer<typeof payloadSchema>;
+
+export type QuotePortalThreadComment = QuotePortalPayload["comments"][number];
 
 const responseSchema = z.union([
   z.object({ data: payloadSchema }),
@@ -100,6 +117,9 @@ export const QUOTE_PORTAL_ERRORS = [
   "quote_portal_email_invalid",
   "quote_portal_reason_code_invalid",
   "quote_portal_input_too_long",
+  "quote_portal_body_required",
+  "quote_portal_comments_closed",
+  "quote_portal_comment_limit",
   "quote_version_superseded",
   "quote_version_answered",
   "quote_validity_elapsed",
@@ -136,6 +156,13 @@ export type QuotePortalRejection = {
   email: string | null;
 };
 
+/** A customer comment: signed with a name, the email optional. */
+export type QuotePortalComment = {
+  body: string;
+  name: string;
+  email: string | null;
+};
+
 export type QuotePortalClient = {
   /** Opens the document. The server records a view for every call. */
   view: (token: string) => Promise<QuotePortalPayload>;
@@ -146,6 +173,11 @@ export type QuotePortalClient = {
   reject: (
     token: string,
     answer: QuotePortalRejection,
+  ) => Promise<QuotePortalPayload>;
+  /** Resolves with the document, its thread now carrying the comment. */
+  comment: (
+    token: string,
+    comment: QuotePortalComment,
   ) => Promise<QuotePortalPayload>;
 };
 
@@ -161,7 +193,7 @@ export const createQuotePortalClient = ({
   fetchImpl?: FetchLike;
 }): QuotePortalClient => {
   const call = async (
-    action: "view" | "accept" | "reject",
+    action: "view" | "accept" | "reject" | "comment",
     body: Record<string, unknown>,
   ): Promise<QuotePortalPayload> => {
     let response: Response;
@@ -201,6 +233,7 @@ export const createQuotePortalClient = ({
     view: (token) => call("view", { token }),
     accept: (token, answer) => call("accept", { token, ...answer }),
     reject: (token, answer) => call("reject", { token, ...answer }),
+    comment: (token, comment) => call("comment", { token, ...comment }),
   };
 };
 

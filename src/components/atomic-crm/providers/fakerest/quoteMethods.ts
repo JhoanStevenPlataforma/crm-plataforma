@@ -1,5 +1,5 @@
 /**
- * Demo-mode stand-ins for the six quote RPCs (quotes §13.4).
+ * Demo-mode stand-ins for the quote RPCs (quotes §13.4).
  *
  * `quotes.ts` mirrors what the schema COMPUTES — the views, the generated
  * columns, the line triggers. This file mirrors what the schema DECIDES: the
@@ -26,6 +26,7 @@ import type {
   Contact,
   Quote,
   QuoteAccessToken,
+  QuoteComment,
   QuoteDiscountGate,
   QuoteDiscountRule,
   QuoteLine,
@@ -757,5 +758,33 @@ export const createDemoQuoteMethods = (
       },
       previousData: token,
     });
+  },
+
+  /**
+   * `mark_quote_comments_read()`. The write goes through the `quote_comments`
+   * callbacks like any other, and the read mark is the one change they let a
+   * customer comment take.
+   */
+  markQuoteCommentsRead: async (quoteId) => {
+    const dataProvider = getDataProvider();
+    await quoteOf(dataProvider, quoteId);
+    const unread = (
+      await listAll<QuoteComment>(dataProvider, "quote_comments")
+    ).filter(
+      (comment) =>
+        sameId(comment.quote_id, quoteId) &&
+        comment.author_kind === "customer" &&
+        comment.read_by_internal_at == null &&
+        comment.deleted_at == null,
+    );
+    const readAt = new Date().toISOString();
+    for (const comment of unread) {
+      await dataProvider.update("quote_comments", {
+        id: comment.id,
+        data: { read_by_internal_at: readAt },
+        previousData: comment,
+      });
+    }
+    return unread.length;
   },
 });

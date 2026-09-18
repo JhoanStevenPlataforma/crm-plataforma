@@ -21,9 +21,11 @@ import type {
   PriceListItem,
   Product,
   Quote,
+  QuoteComment,
   QuoteLine,
   QuoteStatus,
   QuoteVersion,
+  Sale,
   TaxRate,
 } from "../types";
 import type { QuoteLineDraft } from "./quoteMath";
@@ -311,5 +313,71 @@ export const quoteLines: QuoteLine[] = [
     tax_rate_id: 1,
     tax_rate_percent: 19,
     position: 1,
+  },
+];
+
+/**
+ * The team a thread is written by: the signed-in user of the stories (id 0,
+ * as the demo's default user) and a colleague who does not own the quote.
+ */
+export const commentAuthors: Sale[] = [
+  { id: 0, first_name: "Jane", last_name: "Doe", role: "admin" } as Sale,
+  { id: 7, first_name: "Carlos", last_name: "Ruiz", role: "rep" } as Sale,
+];
+
+/**
+ * A negotiation on quote 1, one of each kind: the owner's internal note, the
+ * customer's question from the link to version 1 (unread), a colleague's
+ * internal reply to it, and a shared message its author deleted.
+ */
+export const quoteComments: QuoteComment[] = [
+  {
+    id: 1,
+    quote_id: 1,
+    currency: "COP",
+    parent_id: null,
+    author_sales_id: 0,
+    author_kind: "internal",
+    visibility: "internal",
+    body: "Purchasing confirms stock for October.",
+    created_at: "2026-09-11T09:00:00.000Z",
+  },
+  {
+    id: 2,
+    quote_id: 1,
+    currency: "COP",
+    version_id: 10,
+    parent_id: null,
+    author_sales_id: null,
+    author_kind: "customer",
+    author_name: "Lucía Gómez",
+    author_email: "lucia@acme.example",
+    visibility: "shared",
+    body: "Could the onboarding\nstart in October?",
+    read_by_internal_at: null,
+    created_at: "2026-09-11T14:00:00.000Z",
+  },
+  {
+    id: 3,
+    quote_id: 1,
+    currency: "COP",
+    parent_id: 2,
+    author_sales_id: 7,
+    author_kind: "internal",
+    visibility: "internal",
+    body: "I will check the delivery calendar.",
+    created_at: "2026-09-11T15:00:00.000Z",
+  },
+  {
+    id: 4,
+    quote_id: 1,
+    currency: "COP",
+    parent_id: null,
+    author_sales_id: 0,
+    author_kind: "internal",
+    visibility: "shared",
+    body: "A message taken back",
+    created_at: "2026-09-11T16:00:00.000Z",
+    deleted_at: "2026-09-11T16:05:00.000Z",
   },
 ];

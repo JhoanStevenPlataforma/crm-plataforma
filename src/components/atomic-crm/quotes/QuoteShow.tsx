@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import type { QuoteSummary } from "../types";
 import { QuoteActions } from "./QuoteActions";
+import { QuoteComments } from "./QuoteComments";
 import { QuoteDocument } from "./QuoteDocument";
 import { QuoteLinksPanel } from "./QuoteLinksPanel";
 import { QuoteVersionsPanel } from "./QuoteVersionsPanel";
@@ -20,8 +21,8 @@ import { useQuoteDocument } from "./useQuoteDocument";
 import "./quotePrint.css";
 
 /**
- * A quotation's own page: the document, its versions, its moves and its links
- * (quotes §9).
+ * A quotation's own page: the document, its versions, its moves, its links and
+ * the negotiation thread (quotes §9).
  *
  * A PAGE, not a dialog — a deliberate departure from `deals/DealShow.tsx`. The
  * print styles are scoped under `.quote-print-root`, and that class has to sit
@@ -100,7 +101,7 @@ const QuoteShowContent = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-6">
           {isUnknown ? (
             <p className="text-sm text-destructive">
               {translate("resources.quotes.show.load_error")}
@@ -110,6 +111,7 @@ const QuoteShowContent = () => {
           ) : (
             <QuoteDocument data={document} />
           )}
+          <QuoteComments quoteId={quote.id} versions={versions} />
         </div>
         <aside className="quote-print-hide flex flex-col gap-6">
           <QuoteVersionsPanel

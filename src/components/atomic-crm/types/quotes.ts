@@ -265,6 +265,38 @@ export type QuoteAccessToken = {
   is_active: boolean;
 };
 
+/**
+ * One message of the negotiation thread (§2.5, Phase 8).
+ *
+ * A client writes `quote_id`, `body`, `visibility` and, for a reply,
+ * `parent_id` — and only ever an INTERNAL comment: a customer's arrives through
+ * the portal. The author, the currency, the dates and the read mark are the
+ * server's (`quote_comments_before_insert`). Afterwards the author may change
+ * the body (stamped `edited_at`) or set `deleted_at` (a soft delete, stamped);
+ * the audience is fixed at creation, and a customer comment is changed only by
+ * `mark_quote_comments_read()`.
+ */
+export type QuoteComment = {
+  id: Identifier;
+  quote_id: Identifier;
+  currency?: string;
+  /** The version the customer's link opened; null for the quote as a whole. */
+  version_id?: Identifier | null;
+  /** Always a root: a reply to a reply is re-parented by the server. */
+  parent_id?: Identifier | null;
+  author_sales_id?: Identifier | null;
+  author_kind: "internal" | "customer";
+  /** A customer's signature. Null on an internal comment. */
+  author_name?: string | null;
+  author_email?: string | null;
+  visibility: "internal" | "shared";
+  body: string;
+  read_by_internal_at?: string | null;
+  created_at: string;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+};
+
 /** One move of the status machine, as `quote_status_changes` records it (§5). */
 export type QuoteStatusChange = {
   id: Identifier;

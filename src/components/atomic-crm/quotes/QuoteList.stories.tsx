@@ -8,6 +8,7 @@ import { QuoteList } from "./QuoteList";
 import {
   companies,
   deals,
+  quoteComments,
   quoteLines,
   quoteStatuses,
   quoteVersions,
@@ -41,6 +42,25 @@ export const WithQuotes = () => (
       quotes: [...quotes, accepted],
       quote_versions: quoteVersions,
       quote_lines: quoteLines,
+    }}
+  >
+    <ResourceContextProvider value="quotes">
+      <QuoteList />
+    </ResourceContextProvider>
+  </StoryWrapper>
+);
+
+/** The customer of quote 1 asked something on the link, and nobody has read it. */
+export const WithUnansweredCustomer = () => (
+  <StoryWrapper
+    data={{
+      companies,
+      deals,
+      quote_statuses: quoteStatuses,
+      quotes: [...quotes, accepted],
+      quote_versions: quoteVersions,
+      quote_lines: quoteLines,
+      quote_comments: quoteComments,
     }}
   >
     <ResourceContextProvider value="quotes">

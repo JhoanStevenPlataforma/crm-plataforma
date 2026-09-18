@@ -85,6 +85,7 @@ export const createCrmDb = (overrides: Partial<Db> = {}): Db =>
     quotes: [],
     quote_versions: [],
     quote_lines: [],
+    quote_comments: [],
     quote_status_changes: [],
     quote_access_tokens: [],
     products: [],

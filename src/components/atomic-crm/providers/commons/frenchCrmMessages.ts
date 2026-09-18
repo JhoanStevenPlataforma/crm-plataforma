@@ -698,6 +698,21 @@ export const frenchCrmMessages = {
           "Ce devis ne peut plus recevoir de réponse en ligne. Veuillez contacter %{name}.",
         closed_anonymous:
           "Ce devis ne peut plus recevoir de réponse en ligne. Veuillez contacter la personne qui vous l’a envoyé.",
+        comments: {
+          title: "Questions et commentaires",
+          empty:
+            "Aucun message pour l’instant. Écrivez ici si un point de ce devis mérite d’être précisé.",
+          closed: "La conversation sur ce devis est close.",
+          team: "Équipe commerciale",
+          edited: "modifié",
+          message: "Votre message",
+          name: "Votre nom",
+          email: "Adresse e-mail (facultatif)",
+          privacy:
+            "Seule l’équipe qui a préparé ce devis voit votre adresse e-mail ; elle n’apparaît pas dans la conversation.",
+          submit: "Envoyer le message",
+          sent: "Votre message a été envoyé.",
+        },
         accept_dialog: {
           title: "Accepter le devis %{number}",
           description:
@@ -745,6 +760,11 @@ export const frenchCrmMessages = {
           quote_portal_email_invalid: "Saisissez une adresse e-mail valide.",
           quote_portal_reason_code_invalid: "Choisissez le motif principal.",
           quote_portal_input_too_long: "L’un des champs est trop long.",
+          quote_portal_body_required: "Écrivez un message.",
+          quote_portal_comments_closed:
+            "La conversation sur ce devis est close.",
+          quote_portal_comment_limit:
+            "Trop de messages depuis ce lien. Réessayez plus tard.",
         },
       },
       document: {
@@ -799,6 +819,31 @@ export const frenchCrmMessages = {
         again: "Imprimer à nouveau",
         version_missing:
           "Cette version n’appartient pas à ce devis : il n’y a rien à imprimer.",
+      },
+      comments: {
+        title: "Conversation",
+        empty:
+          "Aucun commentaire pour l’instant. Les notes internes restent dans l’équipe ; les commentaires partagés sont visibles par le client sur le lien du devis.",
+        placeholder: "Écrire un commentaire…",
+        share: "Partager avec le client",
+        share_on:
+          "Le client le lira sur le lien du devis. Il ne pourra plus redevenir interne.",
+        share_off: "Seule l’équipe voit ce commentaire.",
+        send: "Commenter",
+        send_shared: "Envoyer au client",
+        reply: "Répondre",
+        internal: "Interne",
+        shared: "Partagé avec le client",
+        from_customer: "Client",
+        unread: "Non lu",
+        edited: "modifié",
+        on_version: "sur la version %{number}",
+        deleted: "Ce commentaire a été supprimé.",
+        mark_read:
+          "Marquer %{smart_count} commentaire du client comme lu |||| Marquer %{smart_count} commentaires du client comme lus",
+        unread_count: "%{smart_count} non lu |||| %{smart_count} non lus",
+        error: "La conversation n’a pas pu être mise à jour",
+        load_error: "Les commentaires de ce devis n’ont pas pu être chargés",
       },
       links: {
         title: "Liens client",

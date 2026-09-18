@@ -4,12 +4,18 @@ import { render } from "vitest-browser-react";
 import { StoryWrapper } from "@/test/StoryWrapper";
 
 import { QuotePortalClientProvider } from "./quotePortalClient";
-import { createFakeQuotePortal, PORTAL_TOKEN } from "./quotePortalFixtures";
+import {
+  createFakeQuotePortal,
+  PORTAL_TOKEN,
+  portalPayload,
+} from "./quotePortalFixtures";
 import {
   Accepted,
   AnswerRefused,
   Canceled,
+  CommentRefused,
   DeadLink,
+  NoComments,
   Open,
   Superseded,
   Unreachable,
@@ -161,6 +167,116 @@ describe("QuotePortalPage", () => {
     await expect.element(screen.getByRole("article")).not.toBeInTheDocument();
     await expect
       .element(screen.getByRole("button", { name: "Try again" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("shows the conversation, and marks the team's replies and their edits as such", async () => {
+    const screen = await render(<Open />);
+
+    const thread = screen.getByRole("region", {
+      name: "Questions and comments",
+    });
+    await expect
+      .element(thread.getByText(/Could the onboarding\s+start in October\?/))
+      .toBeVisible();
+    const reply = thread.getByRole("listitem").nth(1);
+    await expect.element(reply.getByText("Jane Doe")).toBeVisible();
+    await expect
+      .element(reply.getByText("Sales team", { exact: true }))
+      .toBeVisible();
+    await expect
+      .element(reply.getByText("edited", { exact: true }))
+      .toBeVisible();
+  });
+
+  it("renders a message as the words typed, never as markup", async () => {
+    const hostile = '<img src="x" alt="injected"> <b>bold</b>';
+    const portal = createFakeQuotePortal({
+      payload: {
+        ...portalPayload,
+        comments: [
+          {
+            author_kind: "customer",
+            author_name: "Lucía Gómez",
+            body: hostile,
+            created_at: "2026-09-11T14:00:00.000Z",
+            edited_at: null,
+          },
+        ],
+      },
+    });
+    const screen = await render(
+      <QuotePortalClientProvider value={portal.client}>
+        <StoryWrapper initialEntries={[`/quote#${PORTAL_TOKEN}`]}>
+          {null}
+        </StoryWrapper>
+      </QuotePortalClientProvider>,
+    );
+
+    const thread = screen.getByRole("region", {
+      name: "Questions and comments",
+    });
+    await expect.element(thread.getByText(hostile)).toBeVisible();
+    expect(thread.element().querySelector("img, b")).toBeNull();
+  });
+
+  it("takes a comment signed by the addressee, and it joins the thread", async () => {
+    const screen = await render(<NoComments />);
+
+    const thread = screen.getByRole("region", {
+      name: "Questions and comments",
+    });
+    await expect.element(thread.getByText(/No messages yet/)).toBeVisible();
+    await expect
+      .element(thread.getByLabelText("Your name"))
+      .toHaveValue("Lucía Gómez");
+    const send = thread.getByRole("button", { name: "Send message" });
+    await expect.element(send).toBeDisabled();
+
+    await thread
+      .getByLabelText("Your message")
+      .fill("Can we pay in two instalments?");
+    await send.click();
+
+    await expect
+      .element(thread.getByText("Can we pay in two instalments?"))
+      .toBeVisible();
+    await expect
+      .element(thread.getByText("Your message has been sent."))
+      .toBeVisible();
+    await expect.element(thread.getByLabelText("Your message")).toHaveValue("");
+  });
+
+  it("says in the thread why the server refused a comment", async () => {
+    const screen = await render(<CommentRefused />);
+
+    const thread = screen.getByRole("region", {
+      name: "Questions and comments",
+    });
+    await thread.getByLabelText("Your message").fill("One more thing");
+    await thread.getByRole("button", { name: "Send message" }).click();
+
+    await expect
+      .element(thread.getByRole("alert"))
+      .toHaveTextContent(/Too many messages from this link/);
+  });
+
+  it("keeps the conversation readable, and closed, once the quotation is answered", async () => {
+    const screen = await render(<Accepted />);
+
+    const thread = screen.getByRole("region", {
+      name: "Questions and comments",
+    });
+    await expect
+      .element(thread.getByText(/Could the onboarding/))
+      .toBeVisible();
+    await expect
+      .element(
+        thread.getByText("The conversation on this quotation is closed."),
+      )
+      .toBeVisible();
+    await expect
+      .element(thread.getByRole("button", { name: "Send message" }))
       .not.toBeInTheDocument();
   });
 

@@ -881,7 +881,7 @@ const getDataProviderWithCustomMethods = () => {
       return data as Identifier;
     },
     /**
-     * The six quote RPCs (quotes §13.4), spread in rather than restated: the
+     * The quote RPCs (quotes §13.4), spread in rather than restated: the
      * demo mirror implements the same `QuoteMethods` contract, and a method
      * listed in two places is a method that drifts in one of them.
      */

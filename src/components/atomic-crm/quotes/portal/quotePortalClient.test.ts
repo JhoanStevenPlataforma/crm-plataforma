@@ -51,10 +51,16 @@ describe("createQuotePortalClient", () => {
       name: null,
       email: null,
     });
+    await client.comment(PORTAL_TOKEN, {
+      body: "Can we pay in two instalments?",
+      name: "Lucía Gómez",
+      email: null,
+    });
 
     expect(received.map(({ url }) => url.split("/").pop())).toEqual([
       "accept",
       "reject",
+      "comment",
     ]);
     expect(received.map(({ init }) => JSON.parse(String(init.body)))).toEqual([
       { token: PORTAL_TOKEN, name: "Lucía Gómez", email: "lucia@acme.example" },
@@ -63,6 +69,12 @@ describe("createQuotePortalClient", () => {
         reason_code: "price",
         reason: null,
         name: null,
+        email: null,
+      },
+      {
+        token: PORTAL_TOKEN,
+        body: "Can we pay in two instalments?",
+        name: "Lucía Gómez",
         email: null,
       },
     ]);

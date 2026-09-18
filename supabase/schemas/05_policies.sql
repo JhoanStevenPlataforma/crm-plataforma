@@ -1243,10 +1243,6 @@ create policy "Quote comments are edited by their author"
     using (author_sales_id = (select public.current_sale_id()))
     with check (author_sales_id = (select public.current_sale_id()));
 
-create policy "Quote comments are deleted by their author"
-    on public.quote_comments for delete to authenticated
-    using (author_sales_id = (select public.current_sale_id()));
-
 --
 -- Access tokens: row level security ON and NO POLICY AT ALL, on purpose.
 --

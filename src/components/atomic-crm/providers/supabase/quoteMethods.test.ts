@@ -131,4 +131,14 @@ describe("quote data-provider methods", () => {
 
     await expect(methods.revokeQuoteToken(3)).resolves.toBeUndefined();
   });
+
+  it("marks the customer's comments read through the one function that may", async () => {
+    const { calls, methods, answers } = recorder();
+    answers({ data: 2 });
+
+    await expect(methods.markQuoteCommentsRead(7)).resolves.toBe(2);
+    expect(calls).toEqual([
+      { fn: "mark_quote_comments_read", args: { p_quote_id: 7 } },
+    ]);
+  });
 });

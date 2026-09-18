@@ -14,10 +14,12 @@ import { QuoteDocument } from "../QuoteDocument";
 import { fromPortalPayload } from "../quoteDocumentData";
 import "../quotePrint.css";
 import { QuotePortalAcceptDialog } from "./QuotePortalAcceptDialog";
+import { QuotePortalComments } from "./QuotePortalComments";
 import { QuotePortalRejectDialog } from "./QuotePortalRejectDialog";
 import {
   portalErrorKeyOf,
   useQuotePortalClient,
+  type QuotePortalComment,
   type QuotePortalErrorKey,
   type QuotePortalPayload,
 } from "./quotePortalClient";
@@ -221,6 +223,12 @@ export const QuotePortalPage = () => {
     setDialog(null);
   };
 
+  /** A comment answers with the document too: its thread now carries it. */
+  const comment = async (message: QuotePortalComment) => {
+    const next = await client.comment(token, message);
+    setState({ key: current.key, status: "loaded", payload: next, answered });
+  };
+
   return (
     <PortalShell>
       <div className="quote-print-hide flex flex-wrap items-center justify-end gap-2">
@@ -264,6 +272,14 @@ export const QuotePortalPage = () => {
       ) : null}
 
       <QuoteDocument data={data} />
+
+      <QuotePortalComments
+        comments={payload.comments}
+        canComment={payload.actions.can_comment}
+        defaultName={data.parties.contact?.name ?? ""}
+        defaultEmail={data.parties.contact?.email ?? ""}
+        onSubmit={comment}
+      />
 
       <QuotePortalAcceptDialog
         open={dialog === "accept"}
