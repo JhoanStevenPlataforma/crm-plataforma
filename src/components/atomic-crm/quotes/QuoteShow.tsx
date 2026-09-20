@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import type { QuoteSummary } from "../types";
 import { QuoteActions } from "./QuoteActions";
+import { QuoteAnswerPanel } from "./QuoteAnswerPanel";
 import { QuoteComments } from "./QuoteComments";
 import { QuoteDocument } from "./QuoteDocument";
 import { QuoteLinksPanel } from "./QuoteLinksPanel";
@@ -119,6 +120,10 @@ const QuoteShowContent = () => {
           <QuoteComments quoteId={quote.id} versions={versions} />
         </div>
         <aside className="quote-print-hide flex flex-col gap-6">
+          {/* Above the versions, because it is about the one on screen — and
+              beside the document rather than inside it: what the team keeps is
+              not what the customer signed (§6.4). */}
+          <QuoteAnswerPanel version={version} />
           <QuoteVersionsPanel
             versions={versions}
             selectedId={version?.id}

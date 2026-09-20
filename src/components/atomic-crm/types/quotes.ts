@@ -25,6 +25,25 @@ export type QuoteStatusKey =
   | "expired"
   | "canceled";
 
+/**
+ * The reasons a refusal can carry (`quote_versions.rejected_reason_code`), in
+ * the order the portal's form offers them.
+ *
+ * Here rather than beside the form that collects them: the list is the check
+ * constraint's, `quote_portal_reject()` restates it to refuse a bad code with a
+ * key the portal can explain, and BOTH sides now read it — the customer picks
+ * one, the CRM labels it on the quotation and groups the pipeline by it.
+ */
+export const QUOTE_REJECTION_REASONS = [
+  "price",
+  "terms",
+  "delivery_time",
+  "product",
+  "other",
+] as const;
+
+export type QuoteRejectionReason = (typeof QUOTE_REJECTION_REASONS)[number];
+
 export type QuoteStatus = {
   id: Identifier;
   key: QuoteStatusKey;
@@ -91,6 +110,9 @@ export type QuoteSummary = Quote & {
   nb_views?: number | null;
   last_portal_activity_at?: string | null;
   nb_active_tokens?: number | null;
+  /** The current version's answer, when it was a refusal (§6.4). */
+  rejected_at?: string | null;
+  rejected_reason_code?: QuoteRejectionReason | null;
 };
 
 /**
@@ -117,11 +139,44 @@ export type QuoteVersion = {
   discount_total: number;
   tax_total: number;
   total: number;
+  /**
+   * The answer, and the evidence of it (§6.4). Every column below is written
+   * by `quote_portal_accept()` / `quote_portal_reject()` alone, through the
+   * per-version unfreeze hole; a client may never write one.
+   */
   accepted_at?: string | null;
   accepted_by_name?: string | null;
+  accepted_by_email?: string | null;
+  accepted_ip?: string | null;
+  acceptance_method?: QuoteAcceptanceMethod | null;
+  /** The version, the figure and the browser as they stood at the click. */
+  acceptance_evidence?: QuoteAcceptanceEvidence | null;
   rejected_at?: string | null;
   rejected_reason?: string | null;
+  rejected_reason_code?: QuoteRejectionReason | null;
   created_at?: string;
+};
+
+/** `quote_versions.acceptance_method`. Only the first is built (§6.4). */
+export type QuoteAcceptanceMethod =
+  | "portal_click"
+  | "otp_email"
+  | "esign"
+  | "offline";
+
+/**
+ * `quote_versions.acceptance_evidence`, as `quote_portal_accept()` builds it.
+ *
+ * Every field is optional to READ: the column is `jsonb`, an older row or one
+ * written by a future acceptance method may hold another shape, and a panel
+ * that throws on an unexpected key would lose the evidence it exists to show.
+ */
+export type QuoteAcceptanceEvidence = {
+  token_id?: number | null;
+  version_number?: number | null;
+  currency?: string | null;
+  total?: number | string | null;
+  user_agent?: string | null;
 };
 
 /**
@@ -263,6 +318,35 @@ export type QuoteAccessToken = {
   last_seen_at?: string | null;
   view_count: number;
   is_active: boolean;
+};
+
+/**
+ * One act on the customer's page (§5). Append-only for everybody: the portal
+ * functions write these rows as the service role and nothing revises them.
+ *
+ * `actor_name` / `actor_email` are what the customer TYPED, not an identity —
+ * the portal has no session, by design — and `ip_address` is evidence rather
+ * than authentication (§13.6 #15).
+ */
+export type QuotePortalEvent = {
+  id: Identifier;
+  quote_id: Identifier;
+  version_id?: Identifier | null;
+  token_id?: Identifier | null;
+  event_type:
+    | "viewed"
+    | "downloaded"
+    | "commented"
+    | "accepted"
+    | "rejected"
+    | "throttled"
+    | "token_invalid";
+  occurred_at: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  actor_name?: string | null;
+  actor_email?: string | null;
+  payload?: Record<string, unknown> | null;
 };
 
 /**

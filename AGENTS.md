@@ -161,6 +161,14 @@ listens through `dataProvider.subscribeToQuoteChanges` (Supabase Realtime on
 in demo mode) and refetches what it reads; the portal polls
 `quote_portal_version()`, which writes nothing, and reopens the document only
 when its `etag` — the hash of the payload itself — changes.
+Phase 10 is done: the answer, where the team can read it
+(`20260920120000_quotes_answer_evidence.sql`). The SQL was already there —
+`quote_portal_accept()` / `quote_portal_reject()` serialise on the QUOTE, so
+two links to one version cannot both answer — and this phase proved it with two
+concurrent sessions and a mutation, then built the screens: `QuoteAnswerPanel`
+on `QuoteShow` shows who answered, when, from where, how and at what figure
+(internal, never printed), and `quotes_summary` gained `rejected_reason_code`
+so the list says why we lost it.
 Status changes go through `transition_quote()` / `issue_quote_version()` /
 `revise_quote()` or a portal function, never a column write, and an issued
 version is immutable. **§13 of the proposal is the as-built contract** — which

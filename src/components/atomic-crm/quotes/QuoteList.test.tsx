@@ -1,6 +1,10 @@
 import { render } from "vitest-browser-react";
 
-import { WithQuotes, WithUnansweredCustomer } from "./QuoteList.stories";
+import {
+  WithLostQuote,
+  WithQuotes,
+  WithUnansweredCustomer,
+} from "./QuoteList.stories";
 
 describe("QuoteList", () => {
   it("shows the company, the status and the exact total of the current version", async () => {
@@ -24,6 +28,21 @@ describe("QuoteList", () => {
     // count, and quote 2 has nothing waiting.
     await expect.element(table.getByText("1 unread")).toBeVisible();
     expect(table.getByText(/unread/).all()).toHaveLength(1);
+  });
+
+  it("says why we lost it, beside the status that says we lost it", async () => {
+    const screen = await render(<WithLostQuote />);
+
+    const table = screen.getByRole("table");
+    await expect.element(table.getByText("Rejected")).toBeVisible();
+    await expect.element(table.getByText("Delivery time")).toBeVisible();
+    // The reason belongs to the one quote that was refused, not to the others.
+    expect(table.getByText("Delivery time").all()).toHaveLength(1);
+    // The customer's own words stay on the quotation: the list carries the
+    // code, which is what groups a pipeline.
+    await expect
+      .element(table.getByText("Necesitamos la entrega en agosto."))
+      .not.toBeInTheDocument();
   });
 
   it("filters on the status key without blanking the filter it applied", async () => {

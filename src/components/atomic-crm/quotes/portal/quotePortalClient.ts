@@ -1,6 +1,11 @@
 import { createContext, useContext, useMemo } from "react";
 import { z } from "zod";
 
+import {
+  QUOTE_REJECTION_REASONS,
+  type QuoteRejectionReason,
+} from "../../types/quotes";
+
 /**
  * How the customer portal page talks to the `quote-portal` edge function
  * (docs/proposals/quotes-cpq-module.md §6).
@@ -92,18 +97,13 @@ const versionSchema = z.object({ etag: z.string() });
 type PortalAction = "view" | "accept" | "reject" | "comment" | "version";
 
 /**
- * The reasons a version can record (`quote_versions.rejected_reason_code`), in
- * the order the form offers them.
+ * The reasons a version can record. Re-exported, not redeclared: the list moved
+ * to `types/quotes.ts` in Phase 10, when the CRM started labelling a refusal
+ * too, so the check constraint has ONE copy on this side. That module is types
+ * plus this frozen array — no data provider, no Supabase client, nothing this
+ * page's independence depends on.
  */
-export const QUOTE_REJECTION_REASONS = [
-  "price",
-  "terms",
-  "delivery_time",
-  "product",
-  "other",
-] as const;
-
-export type QuoteRejectionReason = (typeof QUOTE_REJECTION_REASONS)[number];
+export { QUOTE_REJECTION_REASONS, type QuoteRejectionReason };
 
 /**
  * The refusals the edge function answers with. The values are the database's

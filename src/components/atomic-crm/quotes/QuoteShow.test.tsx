@@ -3,6 +3,8 @@ import { page } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
 import {
+  Accepted,
+  Declined,
   Issued,
   PrintFirstVersion,
   PrintForeignVersion,
@@ -61,6 +63,54 @@ describe("QuoteShow", () => {
       .element(sheet.getByRole("note"))
       .toHaveTextContent(/Superseded/);
     await expect.element(sheet.getByText("Calle 1 # 2-3")).toBeVisible();
+  });
+
+  it("shows what the customer agreed to, and how the acceptance arrived", async () => {
+    const screen = await render(<Accepted />);
+    const answer = screen.getByRole("region", { name: "Customer's answer" });
+
+    await expect.element(answer.getByText("Accepted")).toBeVisible();
+    await expect.element(answer.getByText("Lucía Gómez")).toBeVisible();
+    await expect
+      .element(answer.getByText("lucia@acme-andina.test"))
+      .toBeVisible();
+    // Which document, at what figure — read off the frozen version the answer
+    // belongs to.
+    await expect
+      .element(answer.getByText("Version 1, $642,600.00"))
+      .toBeVisible();
+    await expect
+      .element(answer.getByText("Clicked on the customer page"))
+      .toBeVisible();
+    await expect.element(answer.getByText("203.0.113.7")).toBeVisible();
+    // The browser is the one fact only `acceptance_evidence` holds.
+    await expect.element(answer.getByText(/PortalTest\/1\.0/)).toBeVisible();
+
+    // The evidence is the team's record, so it stays off the document the
+    // customer was sent: the paper says who accepted and when, nothing more.
+    const sheet = screen.getByRole("article");
+    await expect
+      .element(sheet.getByText("203.0.113.7"))
+      .not.toBeInTheDocument();
+  });
+
+  it("names why a quote was declined, in the code and in the customer's own words", async () => {
+    const screen = await render(<Declined />);
+    const answer = screen.getByRole("region", { name: "Customer's answer" });
+
+    await expect.element(answer.getByText("Declined")).toBeVisible();
+    await expect.element(answer.getByText("Delivery time")).toBeVisible();
+    await expect
+      .element(answer.getByText("Necesitamos la entrega en agosto."))
+      .toBeVisible();
+  });
+
+  it("shows no answer panel on a quote nobody has answered", async () => {
+    const screen = await render(<Issued />);
+
+    await expect
+      .element(screen.getByRole("region", { name: "Customer's answer" }))
+      .not.toBeInTheDocument();
   });
 
   it("sends Print to the print route for the version on screen, not for the newest one", async () => {

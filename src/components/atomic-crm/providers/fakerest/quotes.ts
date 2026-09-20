@@ -110,6 +110,8 @@ const summaryOf = (
     tax_total: version?.tax_total ?? null,
     total: version?.total ?? null,
     accepted_at: version?.accepted_at ?? null,
+    rejected_at: version?.rejected_at ?? null,
+    rejected_reason_code: version?.rejected_reason_code ?? null,
     party_snapshot: version?.party_snapshot ?? null,
     nb_issued_versions: context.versions.filter(
       (row) => sameId(row.quote_id, quote.id) && row.issued_at != null,

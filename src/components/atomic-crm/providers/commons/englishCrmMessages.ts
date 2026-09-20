@@ -553,6 +553,7 @@ export const englishCrmMessages = {
         internal_notes: "Internal notes",
         current_version_number: "Version",
         total: "Total",
+        rejected_reason_code: "Loss reason",
       },
       version_short: "v%{number}",
       action: {
@@ -796,6 +797,29 @@ export const englishCrmMessages = {
         accepted: "accepted",
         rejected: "declined",
         load_error: "The versions of this quote could not be loaded",
+      },
+      answer: {
+        title: "Customer's answer",
+        accepted: "Accepted",
+        rejected: "Declined",
+        when: "When",
+        who: "Signed by",
+        email: "Email",
+        reason: "Reason",
+        reason_detail: "In their words",
+        agreed: "Agreed to",
+        agreed_value: "Version %{version}, %{total}",
+        method: "How",
+        methods: {
+          portal_click: "Clicked on the customer page",
+          otp_email: "Confirmed by emailed code",
+          esign: "Electronic signature",
+          offline: "Recorded by the team",
+        },
+        address: "From",
+        browser: "Browser",
+        evidence_note:
+          "The address and the browser record how the answer arrived. They are evidence, not proof of who sent it.",
       },
       show: {
         edit: "Edit",

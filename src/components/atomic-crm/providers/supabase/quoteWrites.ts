@@ -43,6 +43,8 @@ const QUOTE_VIRTUAL_FIELDS = [
   "tax_total",
   "total",
   "accepted_at",
+  "rejected_at",
+  "rejected_reason_code",
   "party_snapshot",
   "nb_issued_versions",
   "nb_lines",

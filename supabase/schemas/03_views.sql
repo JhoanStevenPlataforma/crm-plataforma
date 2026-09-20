@@ -949,7 +949,20 @@ select
     -- Through the summary view, not the table: the table has no select policy,
     -- so under `security_invoker = on` it would count zero for everybody.
     (select count(*) from public.quote_access_tokens_summary t
-      where t.quote_id = q.id and t.is_active) as nb_active_tokens
+      where t.quote_id = q.id and t.is_active) as nb_active_tokens,
+
+    -- Why we lost it (§6.4, Phase 10). Beside `accepted_at` in meaning, at the
+    -- END of the select list in fact: `create or replace view` accepts appended
+    -- columns and refuses inserted ones, so a column added here costs a plain
+    -- replace instead of a drop -- and a dropped view comes back carrying the
+    -- schema's default ACL, which on this stack includes `anon`. Anything added
+    -- later goes below this, for the same reason.
+    --
+    -- The CODE only. The free text is read on the quotation's own page, from
+    -- the version; it is the code that groups a pipeline by loss reason, and
+    -- PostgREST asks this view for `select=*` on every list page.
+    cv.rejected_at,
+    cv.rejected_reason_code
 from public.quotes q
     left join public.companies c on c.id = q.company_id
     left join public.deals d on d.id = q.deal_id
@@ -957,7 +970,8 @@ from public.quotes q
     left join public.quote_statuses st on st.key = q.status_key
     left join lateral (
         select v.id, v.version_number, v.issued_at, v.subtotal, v.discount_total,
-               v.tax_total, v.total, v.accepted_at, v.party_snapshot
+               v.tax_total, v.total, v.accepted_at, v.party_snapshot,
+               v.rejected_at, v.rejected_reason_code
           from public.quote_versions v
          where v.quote_id = q.id
          order by v.version_number desc

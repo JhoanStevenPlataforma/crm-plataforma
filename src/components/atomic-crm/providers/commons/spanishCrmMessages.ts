@@ -561,6 +561,7 @@ export const spanishCrmMessages = {
         internal_notes: "Notas internas",
         current_version_number: "Versión",
         total: "Total",
+        rejected_reason_code: "Motivo de pérdida",
       },
       version_short: "v%{number}",
       action: {
@@ -810,6 +811,29 @@ export const spanishCrmMessages = {
         accepted: "aceptada",
         rejected: "rechazada",
         load_error: "No se pudieron cargar las versiones de esta cotización",
+      },
+      answer: {
+        title: "Respuesta del cliente",
+        accepted: "Aceptada",
+        rejected: "Rechazada",
+        when: "Cuándo",
+        who: "Firmada por",
+        email: "Correo electrónico",
+        reason: "Motivo",
+        reason_detail: "En sus palabras",
+        agreed: "Aceptó",
+        agreed_value: "Versión %{version}, %{total}",
+        method: "Cómo",
+        methods: {
+          portal_click: "Clic en la página del cliente",
+          otp_email: "Confirmada con un código por correo",
+          esign: "Firma electrónica",
+          offline: "Registrada por el equipo",
+        },
+        address: "Desde",
+        browser: "Navegador",
+        evidence_note:
+          "La dirección y el navegador registran cómo llegó la respuesta. Son evidencia, no prueba de quién la envió.",
       },
       show: {
         edit: "Editar",

@@ -11,7 +11,11 @@ import { Badge } from "@/components/ui/badge";
 
 import { TopToolbar } from "../layout/TopToolbar";
 import { formatMoneyExact } from "../misc/reporting";
-import type { QuoteStatus, QuoteSummary } from "../types";
+import {
+  QUOTE_REJECTION_REASONS,
+  type QuoteStatus,
+  type QuoteSummary,
+} from "../types";
 import { QuoteStatusBadge } from "./QuoteStatusBadge";
 
 const QuoteListActions = () => {
@@ -70,6 +74,18 @@ export const QuoteList = () => {
         optionText={(sale) => `${sale.first_name} ${sale.last_name}`}
       />
     </ReferenceInput>,
+    // Offered, not `alwaysOn`: it answers "what are we losing on", which is a
+    // question asked deliberately, not the one the list opens on.
+    <SelectInput
+      source="rejected_reason_code"
+      label="resources.quotes.fields.rejected_reason_code"
+      choices={QUOTE_REJECTION_REASONS.map((reason) => ({
+        id: reason,
+        name: translate(
+          `resources.quotes.portal.reject_dialog.reasons.${reason}`,
+        ),
+      }))}
+    />,
   ];
 
   return (
@@ -107,13 +123,25 @@ export const QuoteList = () => {
         />
         <DataTable.Col source="title" />
         <DataTable.Col source="company_name" />
+        {/* Why we lost it rides on the status, not in a column of its own: it
+            is only ever set on a rejected quote, so a column would be blank on
+            every other row (§6.4). */}
         <DataTable.Col<QuoteSummary>
           source="status_key"
           render={(quote) => (
-            <QuoteStatusBadge
-              statusKey={quote.status_key}
-              label={quote.status_label}
-            />
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <QuoteStatusBadge
+                statusKey={quote.status_key}
+                label={quote.status_label}
+              />
+              {quote.rejected_reason_code ? (
+                <span className="text-xs text-muted-foreground">
+                  {translate(
+                    `resources.quotes.portal.reject_dialog.reasons.${quote.rejected_reason_code}`,
+                  )}
+                </span>
+              ) : null}
+            </span>
           )}
         />
         <DataTable.Col<QuoteSummary>

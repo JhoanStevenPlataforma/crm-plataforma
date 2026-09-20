@@ -12,7 +12,7 @@
 --
 begin;
 
-select plan(18);
+select plan(21);
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('97880000-0000-0000-0000-000000000001', 'quotes.summary@test.local', '{"first_name":"Sofia","last_name":"Summary"}'::jsonb),
@@ -202,6 +202,61 @@ select ok(
     not exists (select 1 from public.price_book
                  where price_list_id = 9781 and sku = 'TST-9781-P1'),
     'a deactivated product leaves the price book');
+
+--
+-- 7. Why we lost it (§6.4, Phase 10).
+--
+-- `quote_portal_reject()` has required a reason code since Phase 7 so the
+-- refusal would be reportable, and for three phases no reader could reach it.
+-- The refusal is made the way a customer makes it -- through the portal
+-- function, with the link the issue minted -- never by writing the column.
+--
+insert into public.quotes (id, company_id, sales_id, currency, valid_until)
+values (9783, 9781, 9781, 'COP', current_date + 10);
+
+insert into public.quote_lines (version_id, name, quantity, unit_price, tax_rate_percent)
+select v.id, 'Implementacion', 1, 1000, 0
+  from public.quote_versions v where v.quote_id = 9783;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"97880000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('summary_test.rejected', public.issue_quote_version(9783)::text, true);
+reset role;
+
+set local role service_role;
+select public.quote_portal_reject(
+    sha256(decode(current_setting('summary_test.rejected')::jsonb ->> 'token', 'hex')),
+    'delivery_time', 'Necesitamos entrega en agosto', 'Lucia Compras', null,
+    '203.0.113.9', 'pgTAP/1.0');
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"97880000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+select is(
+    (select rejected_reason_code || '/' || (rejected_at is not null)::text
+       from public.quotes_summary where id = 9783),
+    'delivery_time/true',
+    'the summary reports why the current version was refused');
+
+select ok(
+    (select rejected_at is null and rejected_reason_code is null
+       from public.quotes_summary where id = 9781),
+    'a quote nobody refused reports neither a refusal nor a reason');
+
+-- The decision of §6.4, pinned: the CODE groups a pipeline, the customer's own
+-- words are read on the quotation. PostgREST asks this view for `select=*` on
+-- every list page, so a free-text column here is paid for by every reader.
+select ok(
+    not exists (select 1 from information_schema.columns
+                 where table_schema = 'public'
+                   and table_name = 'quotes_summary'
+                   and column_name = 'rejected_reason'),
+    'the summary carries the reason code, never the free text');
+
+reset role;
 
 select * from finish();
 rollback;

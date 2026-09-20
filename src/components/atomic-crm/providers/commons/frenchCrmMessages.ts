@@ -563,6 +563,7 @@ export const frenchCrmMessages = {
         internal_notes: "Notes internes",
         current_version_number: "Version",
         total: "Total",
+        rejected_reason_code: "Motif de perte",
       },
       version_short: "v%{number}",
       action: {
@@ -811,6 +812,29 @@ export const frenchCrmMessages = {
         accepted: "accepté",
         rejected: "refusé",
         load_error: "Les versions de ce devis n’ont pas pu être chargées",
+      },
+      answer: {
+        title: "Réponse du client",
+        accepted: "Accepté",
+        rejected: "Refusé",
+        when: "Quand",
+        who: "Signé par",
+        email: "Courriel",
+        reason: "Motif",
+        reason_detail: "Dans ses mots",
+        agreed: "A accepté",
+        agreed_value: "Version %{version}, %{total}",
+        method: "Comment",
+        methods: {
+          portal_click: "Clic sur la page client",
+          otp_email: "Confirmé par un code envoyé par courriel",
+          esign: "Signature électronique",
+          offline: "Enregistré par l’équipe",
+        },
+        address: "Depuis",
+        browser: "Navigateur",
+        evidence_note:
+          "L’adresse et le navigateur indiquent comment la réponse est arrivée. Ce sont des éléments de preuve, pas la preuve de qui l’a envoyée.",
       },
       show: {
         edit: "Modifier",
