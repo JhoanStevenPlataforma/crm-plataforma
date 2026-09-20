@@ -18,6 +18,7 @@ import { QuoteLinksPanel } from "./QuoteLinksPanel";
 import { QuoteVersionsPanel } from "./QuoteVersionsPanel";
 import { quoteEditPath, quotePrintPath } from "./quotePaths";
 import { useQuoteDocument } from "./useQuoteDocument";
+import { useQuoteRealtime } from "./useQuoteRealtime";
 import "./quotePrint.css";
 
 /**
@@ -34,6 +35,9 @@ import "./quotePrint.css";
  * the print route rather than calling `window.print()` here, because that route
  * is the one place that waits for the logo to decode before the dialog opens —
  * one print path, not two that fail differently.
+ *
+ * Live while open (§6.5): what the customer does on the portal and what a
+ * colleague does to the quote reach this page without a reload.
  */
 export const QuoteShow = () => (
   <ShowBase>
@@ -54,6 +58,7 @@ const QuoteShowContent = () => {
     isPending: isDocumentPending,
     isUnknown,
   } = useQuoteDocument(quote, selectedId);
+  useQuoteRealtime(quote?.id);
 
   if (isPending) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (!quote) return null;

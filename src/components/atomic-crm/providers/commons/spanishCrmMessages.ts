@@ -689,6 +689,13 @@ export const spanishCrmMessages = {
         accept: "Aceptar",
         reject: "Rechazar",
         retry: "Reintentar",
+        live: {
+          link_closed:
+            "Este enlace ya no está activo: la cotización puede haber sido revisada o retirada. Lo que ve abajo es la copia que estaba leyendo; pida un enlace nuevo a quien se la envió.",
+          check_failed:
+            "En este momento no podemos comprobar si esta cotización cambió, así que lo que ve puede no estar al día.",
+          check_now: "Comprobar ahora",
+        },
         accepted_notice:
           "Gracias. Su aceptación quedó registrada y la cotización de abajo ya la refleja.",
         rejected_notice:

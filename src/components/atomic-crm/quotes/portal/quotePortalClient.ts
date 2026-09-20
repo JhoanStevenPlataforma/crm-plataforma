@@ -20,6 +20,8 @@ const snapshotObject = z.record(z.string(), z.unknown()).nullable();
 
 /** `quote_portal_document()`, group for group (02_functions.sql). */
 const payloadSchema = z.object({
+  // The hash of everything else here, and what the poll compares (§6.5).
+  etag: z.string(),
   quote: z.object({
     number: z.string(),
     title: nullableText,
@@ -84,10 +86,10 @@ export type QuotePortalPayload = z.infer<typeof payloadSchema>;
 
 export type QuotePortalThreadComment = QuotePortalPayload["comments"][number];
 
-const responseSchema = z.union([
-  z.object({ data: payloadSchema }),
-  z.object({ error: z.string() }),
-]);
+/** `quote_portal_version()`: the poll's whole answer. */
+const versionSchema = z.object({ etag: z.string() });
+
+type PortalAction = "view" | "accept" | "reject" | "comment" | "version";
 
 /**
  * The reasons a version can record (`quote_versions.rejected_reason_code`), in
@@ -166,6 +168,11 @@ export type QuotePortalComment = {
 export type QuotePortalClient = {
   /** Opens the document. The server records a view for every call. */
   view: (token: string) => Promise<QuotePortalPayload>;
+  /**
+   * The document's `etag` as it stands on the server. Records nothing: it is
+   * what the page asks every few seconds to learn whether to open it again.
+   */
+  version: (token: string) => Promise<string>;
   accept: (
     token: string,
     answer: QuotePortalAcceptance,
@@ -192,10 +199,11 @@ export const createQuotePortalClient = ({
   apiKey: string;
   fetchImpl?: FetchLike;
 }): QuotePortalClient => {
-  const call = async (
-    action: "view" | "accept" | "reject" | "comment",
+  const call = async <T>(
+    action: PortalAction,
     body: Record<string, unknown>,
-  ): Promise<QuotePortalPayload> => {
+    data: z.ZodType<T>,
+  ): Promise<T> => {
     let response: Response;
     try {
       response = await fetchImpl(
@@ -215,9 +223,9 @@ export const createQuotePortalClient = ({
       throw new QuotePortalError("quote_portal_unavailable");
     }
 
-    const parsed = responseSchema.safeParse(
-      await response.json().catch(() => null),
-    );
+    const parsed = z
+      .union([z.object({ data }), z.object({ error: z.string() })])
+      .safeParse(await response.json().catch(() => null));
     if (!parsed.success) throw new QuotePortalError("quote_portal_unavailable");
     if ("error" in parsed.data) {
       throw new QuotePortalError(
@@ -230,10 +238,15 @@ export const createQuotePortalClient = ({
   };
 
   return {
-    view: (token) => call("view", { token }),
-    accept: (token, answer) => call("accept", { token, ...answer }),
-    reject: (token, answer) => call("reject", { token, ...answer }),
-    comment: (token, comment) => call("comment", { token, ...comment }),
+    view: (token) => call("view", { token }, payloadSchema),
+    version: async (token) =>
+      (await call("version", { token }, versionSchema)).etag,
+    accept: (token, answer) =>
+      call("accept", { token, ...answer }, payloadSchema),
+    reject: (token, answer) =>
+      call("reject", { token, ...answer }, payloadSchema),
+    comment: (token, comment) =>
+      call("comment", { token, ...comment }, payloadSchema),
   };
 };
 

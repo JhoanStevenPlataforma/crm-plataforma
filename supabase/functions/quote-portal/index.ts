@@ -25,11 +25,12 @@ import {
  * policy anywhere grants `anon`, and this function is why none has to (F2).
  * See adr/ADR-7dcff21a-PHASE-7-quote-portal-no-anon-rls.md.
  *
- * `POST /quote-portal/{view|accept|reject|comment}` with `{ "token": … }`.
- * POST for the read as well, on purpose: opening the document RECORDS a view,
- * so it is not a safe GET, and a token in a URL is a token in every access log
- * and cache that URL passes through. (That is also why `_shared/cors.ts`
- * needed no GET.)
+ * `POST /quote-portal/{view|accept|reject|comment|version}` with
+ * `{ "token": … }`. POST for the reads as well, on purpose: opening the
+ * document RECORDS a view, so it is not a safe GET, and a token in a URL is a
+ * token in every access log and cache that URL passes through. (That is also
+ * why `_shared/cors.ts` needed no GET.) `version` is the page's poll (§6.5): it
+ * answers the document's `etag` and writes nothing.
  */
 
 const JSON_HEADERS = {

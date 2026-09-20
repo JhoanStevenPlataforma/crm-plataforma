@@ -802,6 +802,7 @@ revoke all on function public.quote_portal_begin_answer(bytea, text, text, boole
 revoke all on function public.quote_portal_accept(bytea, text, text, inet, text) from public, anon, authenticated;
 revoke all on function public.quote_portal_reject(bytea, text, text, text, text, inet, text) from public, anon, authenticated;
 revoke all on function public.quote_portal_comment(bytea, text, text, text, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_version(bytea) from public, anon, authenticated;
 
 grant execute on function public.quote_portal_log(bigint, bigint, bigint, text, inet, text, text, text, jsonb) to service_role;
 grant execute on function public.quote_portal_resolve(bytea, inet, text) to service_role;
@@ -811,3 +812,4 @@ grant execute on function public.quote_portal_begin_answer(bytea, text, text, bo
 grant execute on function public.quote_portal_accept(bytea, text, text, inet, text) to service_role;
 grant execute on function public.quote_portal_reject(bytea, text, text, text, text, inet, text) to service_role;
 grant execute on function public.quote_portal_comment(bytea, text, text, text, inet, text) to service_role;
+grant execute on function public.quote_portal_version(bytea) to service_role;

@@ -80,6 +80,24 @@ describe("createQuotePortalClient", () => {
     ]);
   });
 
+  it("asks for the document's etag the same way, and a dead link answers it with its key", async () => {
+    const { client, received } = serverAnswering(200, {
+      data: { etag: "3f1c" },
+    });
+    const dead = serverAnswering(404, { error: "quote_link_invalid" });
+
+    await expect(client.version(PORTAL_TOKEN)).resolves.toBe("3f1c");
+    expect(received[0].url).toBe(
+      "https://project.supabase.co/functions/v1/quote-portal/version",
+    );
+    expect(JSON.parse(String(received[0].init.body))).toEqual({
+      token: PORTAL_TOKEN,
+    });
+    await expect(dead.client.version(PORTAL_TOKEN)).rejects.toMatchObject({
+      key: "quote_link_invalid",
+    });
+  });
+
   it("turns a refusal into its key", async () => {
     const { client } = serverAnswering(409, {
       error: "quote_version_superseded",

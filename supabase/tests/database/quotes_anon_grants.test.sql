@@ -72,10 +72,11 @@ select is(
             'public.quote_portal_begin_answer(bytea,text,text,boolean,inet,text)',
             'public.quote_portal_accept(bytea,text,text,inet,text)',
             'public.quote_portal_reject(bytea,text,text,text,text,inet,text)',
-            'public.quote_portal_comment(bytea,text,text,text,inet,text)']) as f
+            'public.quote_portal_comment(bytea,text,text,text,inet,text)',
+            'public.quote_portal_version(bytea)']) as f
       where to_regprocedure(f) is not null),
-    38,
-    'the thirty-eight functions of the module exist');
+    39,
+    'the thirty-nine functions of the module exist');
 
 --
 -- anon: nothing, anywhere.
@@ -133,7 +134,8 @@ select is(
             'public.quote_portal_begin_answer(bytea,text,text,boolean,inet,text)',
             'public.quote_portal_accept(bytea,text,text,inet,text)',
             'public.quote_portal_reject(bytea,text,text,text,text,inet,text)',
-            'public.quote_portal_comment(bytea,text,text,text,inet,text)']) as f
+            'public.quote_portal_comment(bytea,text,text,text,inet,text)',
+            'public.quote_portal_version(bytea)']) as f
       where has_function_privilege('anon', f, 'EXECUTE')),
     '{}'::text[],
     'anon may execute no quote-module function');
@@ -207,7 +209,8 @@ select is(
             'public.quote_portal_begin_answer(bytea,text,text,boolean,inet,text)',
             'public.quote_portal_accept(bytea,text,text,inet,text)',
             'public.quote_portal_reject(bytea,text,text,text,text,inet,text)',
-            'public.quote_portal_comment(bytea,text,text,text,inet,text)']) as f
+            'public.quote_portal_comment(bytea,text,text,text,inet,text)',
+            'public.quote_portal_version(bytea)']) as f
       where has_function_privilege('authenticated', f, 'EXECUTE')),
     '{}'::text[],
     'users cannot call the internal functions, above all apply_quote_status, mint_quote_token and the portal''s');

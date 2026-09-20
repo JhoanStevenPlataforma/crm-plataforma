@@ -151,8 +151,8 @@ reset role;
 --
 select is(
     public.quotes_test_keys_of(current_setting('portal_test.view')::jsonb),
-    'acceptance,actions,branding,comments,lines,parties,quote,terms,totals',
-    'the payload has exactly the groups of the document');
+    'acceptance,actions,branding,comments,etag,lines,parties,quote,terms,totals',
+    'the payload has exactly the groups of the document, and the etag of them');
 
 select is(
     public.quotes_test_keys_of(current_setting('portal_test.view')::jsonb -> 'quote'),

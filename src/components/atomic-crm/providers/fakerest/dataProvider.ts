@@ -466,6 +466,12 @@ export const createDataProvider = ({
       () => dataProvider,
       async () => (await getIdentity())?.id ?? null,
     ),
+    /**
+     * Nothing to listen to (quotes §6.5). Demo data lives in this tab and
+     * nowhere else: there is no other writer, no customer and no portal, and
+     * every write made here already refreshes the page that made it.
+     */
+    subscribeToQuoteChanges: async () => () => {},
     unarchiveDeal: async (deal: Deal) => {
       // get all deals where stage is the same as the deal to unarchive
       const { data: deals } = await baseDataProvider.getList<Deal>("deals", {

@@ -676,6 +676,13 @@ export const englishCrmMessages = {
         accept: "Accept",
         reject: "Decline",
         retry: "Try again",
+        live: {
+          link_closed:
+            "This link is no longer active: the quotation may have been revised or withdrawn. What you see below is the copy you were reading; ask the person who sent it for a new link.",
+          check_failed:
+            "We can't check this quotation for updates right now, so what you see may be out of date.",
+          check_now: "Check now",
+        },
         accepted_notice:
           "Thank you. Your acceptance has been recorded, and the quotation below now carries it.",
         rejected_notice:

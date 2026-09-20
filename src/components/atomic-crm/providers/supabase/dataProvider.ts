@@ -44,6 +44,7 @@ import {
 } from "../commons/taskAttachments";
 import { getIsInitialized } from "./authProvider";
 import { createQuoteMethods } from "./quoteMethods";
+import { subscribeToQuoteChanges, type Unsubscribe } from "./quoteRealtime";
 import { stripQuoteVirtuals, updateDraftVersionFields } from "./quoteWrites";
 import { getSupabaseClient } from "./supabase";
 
@@ -886,6 +887,12 @@ const getDataProviderWithCustomMethods = () => {
      * listed in two places is a method that drifts in one of them.
      */
     ...createQuoteMethods(getSupabaseClient),
+    /** Supabase Realtime, filtered to one quote (quotes §6.5). */
+    subscribeToQuoteChanges: (
+      quoteId: Identifier,
+      onChange: () => void,
+    ): Promise<Unsubscribe> =>
+      subscribeToQuoteChanges(getSupabaseClient(), quoteId, onChange),
     async getConfiguration(): Promise<ConfigurationContextValue> {
       const { data } = await baseDataProvider.getOne("configuration", {
         id: 1,

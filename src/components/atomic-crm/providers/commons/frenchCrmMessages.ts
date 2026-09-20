@@ -690,6 +690,13 @@ export const frenchCrmMessages = {
         accept: "Accepter",
         reject: "Refuser",
         retry: "Réessayer",
+        live: {
+          link_closed:
+            "Ce lien n’est plus actif : le devis a peut-être été révisé ou retiré. Ce que vous voyez ci-dessous est la copie que vous lisiez ; demandez un nouveau lien à la personne qui vous l’a envoyé.",
+          check_failed:
+            "Nous ne pouvons pas vérifier pour l’instant si ce devis a changé ; ce que vous voyez n’est peut-être plus à jour.",
+          check_now: "Vérifier maintenant",
+        },
         accepted_notice:
           "Merci. Votre acceptation a été enregistrée, et le devis ci-dessous la mentionne désormais.",
         rejected_notice:

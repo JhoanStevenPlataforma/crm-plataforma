@@ -6193,13 +6193,25 @@ $$;
 -- `quote_portal_begin_answer()` enforces, so the buttons and the refusals
 -- cannot disagree.
 --
--- Null for a draft: a draft is not a document. The change-detection etag
--- (Phase 9) joins the payload with the poll that reads it.
+-- `etag` (Phase 9, §6.5) is the sha256 of the rest of the payload, so it
+-- changes exactly when what the customer can see changes, and for no other
+-- reason. Not a list of columns: a second description of the payload is one
+-- that drifts -- §6.3's `max(comment.created_at)` already missed an edit and a
+-- soft delete -- and a column like `quotes.updated_at` would move on an
+-- internal note, telling whoever holds the link that the team is at work on
+-- something they cannot see. Nothing a portal request itself writes (a view, a
+-- counter, `last_seen_at`) is in the payload, which is what keeps a poll from
+-- refetching forever.
+--
+-- Null for a draft: a draft is not a document.
 create or replace function public.quote_portal_document(p_version_id bigint)
 returns jsonb
     language sql stable security definer
     set search_path to ''
 as $$
+    select doc.body || jsonb_build_object(
+               'etag', encode(sha256(convert_to(doc.body::text, 'UTF8')), 'hex'))
+      from (
     select jsonb_build_object(
         'quote', jsonb_build_object(
             'number',         q.quote_number,
@@ -6313,7 +6325,7 @@ as $$
         'acceptance', jsonb_build_object(
             'accepted_at',      v.accepted_at,
             'accepted_by_name', v.accepted_by_name,
-            'rejected_at',      v.rejected_at))
+            'rejected_at',      v.rejected_at)) as body
       from public.quote_versions v
       join public.quotes q on q.id = v.quote_id
      cross join lateral (
@@ -6324,7 +6336,8 @@ as $$
                as is_answerable
      ) answerable
      where v.id = p_version_id
-       and v.issued_at is not null;
+       and v.issued_at is not null
+      ) doc;
 $$;
 
 -- The customer opens the link.
@@ -6721,4 +6734,35 @@ begin
 
     return public.quote_portal_document(v_version.id);
 end;
+$$;
+
+-- Has the document changed? The portal's poll (Phase 9, §6.5).
+--
+-- The page asks every ten seconds while it is on screen, and fetches the
+-- document again -- through `quote_portal_view()`, which records it -- only
+-- when the answer differs from the `etag` of the payload it shows.
+--
+-- WRITES NOTHING, and takes no lock. A tab left open overnight asks 8,640
+-- times; recorded as views, that is a trail nobody can read and a view counter
+-- that means nothing. For the same reason it is not throttled: the throttle is
+-- a count of what the portal WROTE. What this function discloses is one hash of
+-- a document the caller can already open, so the cost of a hammered link is
+-- one document built per call, bounded by the gateway in front.
+--
+-- A dead link gets the answer `quote_portal_resolve()` gives it, without the
+-- trace: the page stops asking and says so, and it is a reload -- a real open
+-- -- that records the attempt as `token_invalid`.
+create or replace function public.quote_portal_version(p_token_hash bytea)
+returns jsonb
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select coalesce(
+        (select jsonb_build_object(
+                    'etag', public.quote_portal_document(t.version_id) ->> 'etag')
+           from public.quote_access_tokens t
+          where t.token_hash = p_token_hash
+            and t.revoked_at is null
+            and t.expires_at > now()),
+        jsonb_build_object('error', 'quote_link_invalid'));
 $$;

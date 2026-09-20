@@ -11,7 +11,13 @@
 
 import { isIP } from "node:net";
 
-export const PORTAL_ACTIONS = ["view", "accept", "reject", "comment"] as const;
+export const PORTAL_ACTIONS = [
+  "view",
+  "accept",
+  "reject",
+  "comment",
+  "version",
+] as const;
 
 export type PortalAction = (typeof PORTAL_ACTIONS)[number];
 
@@ -29,6 +35,7 @@ const MAX_USER_AGENT_LENGTH = 512;
 
 export type PortalCall =
   | { action: "view"; token: string }
+  | { action: "version"; token: string }
   | {
       action: "accept";
       token: string;
@@ -140,6 +147,8 @@ export const parsePortalCall = (
   switch (action) {
     case "view":
       return { action, token };
+    case "version":
+      return { action, token };
     case "accept":
       return {
         action,
@@ -237,6 +246,10 @@ export const rpcCallFor = (
   switch (call.action) {
     case "view":
       return { fn: "quote_portal_view", args: origin };
+    case "version":
+      // The poll writes nothing, so it records neither the address nor the
+      // browser: the hash is all it needs.
+      return { fn: "quote_portal_version", args: { p_token_hash: tokenHash } };
     case "accept":
       return {
         fn: "quote_portal_accept",

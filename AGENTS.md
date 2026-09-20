@@ -155,6 +155,12 @@ back through `quote_portal_comment()`. Bodies are plain text on both sides,
 deletion is soft, nobody rewrites a customer's words, and "read" is marked by
 `mark_quote_comments_read()` or by a shared answer, which clears the unread
 badge on the list.
+Phase 9 is done: real time (`20260919120000_quote_realtime.sql`). `QuoteShow`
+listens through `dataProvider.subscribeToQuoteChanges` (Supabase Realtime on
+`quotes`, `quote_comments` and `quote_portal_events`, which RLS filters; a no-op
+in demo mode) and refetches what it reads; the portal polls
+`quote_portal_version()`, which writes nothing, and reopens the document only
+when its `etag` — the hash of the payload itself — changes.
 Status changes go through `transition_quote()` / `issue_quote_version()` /
 `revise_quote()` or a portal function, never a column write, and an issued
 version is immutable. **§13 of the proposal is the as-built contract** — which

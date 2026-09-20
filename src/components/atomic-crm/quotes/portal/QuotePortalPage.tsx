@@ -1,5 +1,11 @@
 import { useTranslate } from "ra-core";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useLocation } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +30,7 @@ import {
   type QuotePortalPayload,
 } from "./quotePortalClient";
 import { QUOTE_PORTAL_PATH, tokenFromHash } from "./quotePortalPaths";
+import { useQuotePortalPoll } from "./useQuotePortalPoll";
 
 const IS_DEMO = import.meta.env.VITE_IS_DEMO === "true";
 
@@ -34,6 +41,13 @@ const IS_DEMO = import.meta.env.VITE_IS_DEMO === "true";
 const FALLBACK_BRANDING = {
   title: defaultTitle,
   logo_url: defaultLightModeLogo,
+};
+
+/** What a link that stopped working still offers: nothing to answer or say. */
+const DEAD_LINK_ACTIONS: QuotePortalPayload["actions"] = {
+  can_accept: false,
+  can_reject: false,
+  can_comment: false,
 };
 
 /** The failures a second attempt can cure. A dead link stays dead. */
@@ -76,6 +90,12 @@ const PortalShell = ({ children }: { children: ReactNode }) => (
  * StrictMode runs this effect twice on mount. The request is kept in a ref,
  * which survives that, so both runs wait on the same call: the rep's timeline
  * must not show a customer opening the quote twice in the same second.
+ *
+ * KEPT CURRENT WHILE OPEN (§6.5). `useQuotePortalPoll` asks every ten seconds
+ * whether the document changed, and opens it again only when it did — so the
+ * team's answer, a revision or a withdrawal reaches a page nobody reloads. The
+ * page has no socket: Realtime honours row level security, and no policy
+ * grants `anon`.
  */
 export const QuotePortalPage = () => {
   const translate = useTranslate();
@@ -134,6 +154,23 @@ export const QuotePortalPage = () => {
     state.key === requestKey ? state : { key: requestKey, status: "loading" };
   const number =
     current.status === "loaded" ? current.payload.quote.number : null;
+
+  // A document opened again replaces the one on screen. An answer given in
+  // this tab stays said, and the customer's unsent words live in the
+  // composer's own state, which a new payload does not reset.
+  const onRefreshed = useCallback(
+    (payload: QuotePortalPayload) =>
+      setState((previous) =>
+        previous.status === "loaded" ? { ...previous, payload } : previous,
+      ),
+    [],
+  );
+  const poll = useQuotePortalPoll({
+    client,
+    token: current.status === "loaded" ? token : null,
+    etag: current.status === "loaded" ? current.payload.etag : null,
+    onRefreshed,
+  });
 
   // The name "Save as PDF" proposes. A customer's downloads folder should say
   // what the file is, not "Plataforma Software (3).pdf".
@@ -201,7 +238,8 @@ export const QuotePortalPage = () => {
 
   const { payload, answered } = current;
   const data = fromPortalPayload(payload, FALLBACK_BRANDING);
-  const isOpen = payload.actions.can_accept || payload.actions.can_reject;
+  const actions = poll.isLinkClosed ? DEAD_LINK_ACTIONS : payload.actions;
+  const isOpen = actions.can_accept || actions.can_reject;
   // These three already say so on the paper itself (`QuoteDocument`).
   const isSettled =
     payload.acceptance.accepted_at != null ||
@@ -235,19 +273,26 @@ export const QuotePortalPage = () => {
         <Button variant="outline" onClick={() => window.print()}>
           {translate("resources.quotes.portal.print")}
         </Button>
-        {payload.actions.can_reject ? (
+        {actions.can_reject ? (
           <Button variant="outline" onClick={() => setDialog("reject")}>
             {translate("resources.quotes.portal.reject")}
           </Button>
         ) : null}
-        {payload.actions.can_accept ? (
+        {actions.can_accept ? (
           <Button onClick={() => setDialog("accept")}>
             {translate("resources.quotes.portal.accept")}
           </Button>
         ) : null}
       </div>
 
-      {answered ? (
+      {poll.isLinkClosed ? (
+        <p
+          role="status"
+          className="quote-print-hide rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm"
+        >
+          {translate("resources.quotes.portal.live.link_closed")}
+        </p>
+      ) : answered ? (
         <p
           role="status"
           className="quote-print-hide rounded-md border border-success bg-success/10 px-3 py-2 text-sm"
@@ -271,18 +316,31 @@ export const QuotePortalPage = () => {
         </p>
       ) : null}
 
+      {poll.isFailing && !poll.isLinkClosed ? (
+        <div
+          role="status"
+          className="quote-print-hide flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground"
+        >
+          <span>{translate("resources.quotes.portal.live.check_failed")}</span>
+          <Button size="sm" variant="outline" onClick={poll.checkNow}>
+            {translate("resources.quotes.portal.live.check_now")}
+          </Button>
+        </div>
+      ) : null}
+
       <QuoteDocument data={data} />
 
       <QuotePortalComments
         comments={payload.comments}
-        canComment={payload.actions.can_comment}
+        canComment={actions.can_comment}
         defaultName={data.parties.contact?.name ?? ""}
         defaultEmail={data.parties.contact?.email ?? ""}
         onSubmit={comment}
       />
 
       <QuotePortalAcceptDialog
-        open={dialog === "accept"}
+        // An offer withdrawn while the dialog was open closes it.
+        open={dialog === "accept" && actions.can_accept}
         number={data.quote.number}
         versionNumber={data.quote.version_number}
         total={formatMoneyExact(data.totals.total, data.quote.currency)}
@@ -294,7 +352,7 @@ export const QuotePortalPage = () => {
         }
       />
       <QuotePortalRejectDialog
-        open={dialog === "reject"}
+        open={dialog === "reject" && actions.can_reject}
         number={data.quote.number}
         onCancel={() => setDialog(null)}
         onSubmit={(rejection) =>

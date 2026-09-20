@@ -4,7 +4,8 @@
  * `portalPayload` has the shape `quote_portal_document()` returns — the keys
  * `quote_portal.test.sql` pins — and its figures add up the way the generated
  * columns compute them (round per line, then sum), so a document rendered from
- * it is a document the server could have sent.
+ * it is a document the server could have sent. Its `etag` is a label, not a
+ * hash: the fake portal only needs it to change whenever the document does.
  */
 
 import {
@@ -22,6 +23,7 @@ export const PORTAL_TOKEN =
   "5e42aca4f1ad3eb0ee60e1cfa23aaccf2de80241212ed3ac33c1d319b9b730a6";
 
 export const portalPayload: QuotePortalPayload = {
+  etag: "etag-0",
   quote: {
     number: "Q-2026-00042",
     title: "Renewal 2027",
@@ -115,12 +117,21 @@ export type FakeQuotePortal = {
   client: QuotePortalClient;
   /** The opens the server would have recorded, one per call. */
   views: () => number;
+  /** The times the page asked whether the document changed. */
+  polls: () => number;
+  /** The team changes the document on the server: a new etag with it. */
+  change: (edit: (payload: QuotePortalPayload) => QuotePortalPayload) => void;
+  /** The link dies — revoked by a revision, or withdrawn. */
+  revoke: () => void;
+  /** Every poll fails with this key until it is cleared with `null`. */
+  failPollsWith: (key: QuotePortalErrorKey | null) => void;
 };
 
 /**
  * A portal with no server behind it. It keeps the document, counts the opens
  * the way the server records views, closes both answers and the thread once an
- * answer is given, and refuses with the server's keys.
+ * answer is given, and refuses with the server's keys. Every change to the
+ * document mints a new etag, as the server's hash of it would change.
  */
 export const createFakeQuotePortal = ({
   payload = portalPayload,
@@ -135,10 +146,20 @@ export const createFakeQuotePortal = ({
 } = {}): FakeQuotePortal => {
   let current = payload;
   let viewCount = 0;
+  let pollCount = 0;
+  let revision = 0;
+  let isRevoked = false;
+  let pollFailure: QuotePortalErrorKey | null = null;
 
   const open = (token: string) => {
-    if (token !== PORTAL_TOKEN)
+    if (token !== PORTAL_TOKEN || isRevoked)
       throw new QuotePortalError("quote_link_invalid");
+  };
+
+  const store = (next: QuotePortalPayload) => {
+    revision += 1;
+    current = { ...next, etag: `etag-${revision}` };
+    return current;
   };
 
   const answer = (
@@ -146,7 +167,7 @@ export const createFakeQuotePortal = ({
     acceptedBy: string | null,
   ) => {
     if (refuseAnswerWith) throw new QuotePortalError(refuseAnswerWith);
-    current = {
+    return store({
       ...current,
       quote: { ...current.quote, status },
       actions: { can_accept: false, can_reject: false, can_comment: false },
@@ -162,18 +183,33 @@ export const createFakeQuotePortal = ({
               accepted_by_name: null,
               rejected_at: ANSWERED_AT,
             },
-    };
-    return current;
+    });
   };
 
   return {
     views: () => viewCount,
+    polls: () => pollCount,
+    change: (edit) => {
+      store(edit(current));
+    },
+    revoke: () => {
+      isRevoked = true;
+    },
+    failPollsWith: (key) => {
+      pollFailure = key;
+    },
     client: {
       view: async (token) => {
         viewCount += 1;
         open(token);
         if (refuseViewWith) throw new QuotePortalError(refuseViewWith);
         return current;
+      },
+      version: async (token) => {
+        pollCount += 1;
+        if (pollFailure) throw new QuotePortalError(pollFailure);
+        open(token);
+        return current.etag;
       },
       accept: async (token, { name }: QuotePortalAcceptance) => {
         open(token);
@@ -188,7 +224,7 @@ export const createFakeQuotePortal = ({
         if (refuseCommentWith) throw new QuotePortalError(refuseCommentWith);
         if (!current.actions.can_comment)
           throw new QuotePortalError("quote_portal_comments_closed");
-        current = {
+        return store({
           ...current,
           comments: [
             ...current.comments,
@@ -200,8 +236,7 @@ export const createFakeQuotePortal = ({
               edited_at: null,
             },
           ],
-        };
-        return current;
+        });
       },
     },
   };
