@@ -36,7 +36,8 @@ test("user adds a tag to several contacts", async ({
   await page.getByLabel("Password").fill("password");
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await expect(page).toHaveTitle(/Atomic CRM/);
+  // Signed in: the navigation is the proof, not the browser tab (which is the
+  // same string before and after signing in, so it never proved this at all).
   await expect(page.getByRole("link", { name: "Contacts" })).toBeVisible();
 
   await menu.goToContacts();

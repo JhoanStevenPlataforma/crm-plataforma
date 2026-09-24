@@ -169,6 +169,47 @@ concurrent sessions and a mutation, then built the screens: `QuoteAnswerPanel`
 on `QuoteShow` shows who answered, when, from where, how and at what figure
 (internal, never printed), and `quotes_summary` gained `rejected_reason_code`
 so the list says why we lost it.
+Phase 11 is done: somebody is finally told
+(`20260921120000_quote_notifications.sql`,
+`20260921130000_quote_expiry_scheduler.sql`). **`public.task_notifications` now
+carries a subject that is not a task** — `task_id` is nullable and
+(`entity_type`, `entity_id`) is the other branch, with
+`task_notifications_subject` enforcing exactly one of the two — so **anything
+reading that table must handle a null `task_id`**; the two readers already fixed
+are `claim_task_notifications()` (a `left join`) and `task_notifications_audit()`
+(an early return). Widened rather than duplicated, so quiet hours, `max_per_hour`,
+the mute list and the dedupe window apply to quotes for free. A trigger on
+`quote_portal_events` turns a customer's view, comment or answer into a
+notification through `notify_quote_event()`, an answer also reaches the deal's
+owner, and `sweep_expired_quotes()` is finally scheduled (daily, 06:00 UTC) and
+warns three days before the date as well. "Told once" is enforced by the
+`dedupe_key` ALONE — there is deliberately no second guard. **The database never
+stores a translated sentence**: it writes `message_key` + `message_params` and
+the client renders them through `notificationText.ts`, in the language the user
+currently has; `title` / `body` stay English for a reader with no catalogue (the
+email worker). A null `message_key` means "render the columns", which is every
+task reminder. Adding a notification means adding its key to all three catalogs —
+`i18nProvider.test.ts` enforces English/Spanish parity both ways.
+Phase 12 is done, and the module is feature-complete: four Playwright specs
+(`e2e/quote{Catalogue,Editor,Issue,Portal}.spec.ts`) plus the factories they
+need, and the catalogue's retention path
+(`20260922120000_quote_catalogue_purge.sql`). **`purge_catalogue()` is the only
+thing that removes a product** — `service_role` only, opening the
+`app.quote_purge` hatch, price rows before products — and `resetDb()` calls it
+third, after `purge_tasks()` and `purge_quotes()`; without it the e2e reset
+cannot reach `sales`, which `products.sales_id` pins. Seeded tax rates survive
+it on purpose. Two traps it cost to learn, both of which apply well outside this
+module: **every DELETE inside a `security definer` function needs a WHERE
+clause**, because the API roles preload `safeupdate` and a pgTAP run as
+`postgres` does not; and **`handle_update_user()` rewrites `sales.first_name` /
+`last_name` from `auth.users.raw_user_meta_data` on every update to that table**
+— a sign-in included — so a test user created without `user_metadata` silently
+becomes "Pending Pending" the moment it signs in. The specs also found that
+`Edit`'s default header renders a `DeleteButton` **that consults neither
+`canAccess` nor the grants**, so `ProductEdit`, `PriceListEdit`, `TaxRateEdit`
+and `QuoteEdit` were each offering a delete the database refuses for everybody;
+all four now pass `actions={<></>}`. Assume the same of any kit button: if a
+screen must not offer an action, the screen has to say so.
 Status changes go through `transition_quote()` / `issue_quote_version()` /
 `revise_quote()` or a portal function, never a column write, and an issued
 version is immutable. **§13 of the proposal is the as-built contract** — which

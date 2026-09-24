@@ -389,10 +389,18 @@ export type TaskReminder = {
  * Read-only from the client except for `read_at` / `acknowledged_at`: the
  * status belongs to the dispatcher and the worker. A reminder that was never
  * delivered stays visible AS SUCH, which is the whole point of O6.
+ *
+ * THE SUBJECT IS EITHER/OR. `task_id` for a reminder; the
+ * (`entity_type`, `entity_id`) pair for a notification about something that is
+ * not a task -- a quotation a customer opened, answered or wrote on (quotes
+ * proposal §8). `task_notifications_subject` refuses a row carrying both or
+ * neither, so exactly one of the two branches is populated on every row.
  */
 export type TaskNotification = {
   reminder_id?: Identifier | null;
-  task_id: Identifier;
+  task_id?: Identifier | null;
+  entity_type?: TaskEntityType | null;
+  entity_id?: Identifier | null;
   recipient_id: Identifier;
   channel: ReminderChannel;
   scheduled_for: string;
@@ -400,8 +408,21 @@ export type TaskNotification = {
   delivered_at?: string | null;
   read_at?: string | null;
   acknowledged_at?: string | null;
+  /**
+   * The English text, and the truth for any reader with no i18n catalogue —
+   * the `task-notification-worker` edge function above all.
+   */
   title?: string | null;
   body?: string | null;
+  /**
+   * What a client with a catalogue renders instead (quotes §13.6 #18), e.g.
+   * `crm.notifications.quote.accepted`. Null means this row has no
+   * translatable form and `title` / `body` ARE the text — every task reminder,
+   * and every row written before the column existed. `notificationText()` owns
+   * the fallback.
+   */
+  message_key?: string | null;
+  message_params?: Record<string, unknown> | null;
   status:
     | "queued"
     | "sending"

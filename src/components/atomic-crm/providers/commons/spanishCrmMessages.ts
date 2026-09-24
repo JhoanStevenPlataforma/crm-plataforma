@@ -705,6 +705,23 @@ export const spanishCrmMessages = {
           "Esta cotización ya no se puede responder en línea. Comuníquese con %{name}.",
         closed_anonymous:
           "Esta cotización ya no se puede responder en línea. Comuníquese con quien se la envió.",
+        landing: {
+          company_fallback: "usted",
+          sections: "Secciones",
+          start: "Comenzar propuesta",
+          skip_to_quote: "Ver cotización directamente",
+          view_quote: "Ver cotización",
+          scroll_hint: "Desplácese para conocer la propuesta",
+          back_to_top: "Volver arriba",
+          quote_eyebrow: "Propuesta económica",
+          quote_heading: "Su cotización",
+          quote_intro:
+            "Aquí encontrará el detalle de la propuesta preparada para %{company}.",
+          quote_intro_anonymous:
+            "Aquí encontrará el detalle de la propuesta preparada para usted.",
+          quote_intro_after_slides:
+            "Después de conocer quiénes somos, aquí encontrará el detalle de la propuesta preparada para %{company}.",
+        },
         comments: {
           title: "Preguntas y comentarios",
           empty:
@@ -1234,6 +1251,39 @@ export const spanishCrmMessages = {
       title: "Notificaciones",
       empty: "Estás al día",
       untitled: "Recordatorio de tarea",
+      /**
+       * Lo que el cliente hizo con una cotización (quotes §8, §13.6 #18).
+       *
+       * La base de datos escribe la CLAVE y sus parámetros, nunca una frase:
+       * no sabe en qué idioma lee quien recibe. `%{actor}` falta cuando el
+       * cliente no firmó, y `customer` es lo que ocupa su lugar.
+       */
+      quote: {
+        customer: "El cliente",
+        viewed: {
+          title: "%{number}: el cliente abrió la cotización",
+        },
+        commented: {
+          title: "%{number}: %{actor} escribió en la cotización",
+        },
+        accepted: {
+          title: "%{number} fue aceptada",
+          body: "%{actor} aceptó la versión %{version}",
+        },
+        rejected: {
+          title: "%{number} fue rechazada",
+          body: "%{actor} la rechazó: %{reason}",
+          no_reason: "sin motivo indicado",
+        },
+        expiring: {
+          title: "%{number} vence en 3 días",
+          body: "El cliente todavía no ha respondido.",
+        },
+        expired: {
+          title: "%{number} ha vencido",
+          body: "La oferta caducó sin respuesta.",
+        },
+      },
       channels: {
         in_app: "En la aplicación",
         email: "Correo electrónico",

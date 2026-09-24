@@ -45,7 +45,8 @@ test.describe("user adding a task", () => {
     await page.getByLabel("Password").fill("password");
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    await expect(page).toHaveTitle(/Atomic CRM/);
+    // The dashboard is the proof of a successful sign-in; the browser tab is
+    // the same string on the login page.
     await expect(page.getByText("Latest Activity")).toBeVisible();
 
     await menu.goToContacts();
@@ -92,7 +93,16 @@ test.describe("user adding a task", () => {
       // than as one exact string: Phase 1 added badges and moved the related
       // link out of the title row, and pinning the whole rendered line makes
       // the test fail on layout instead of on behaviour.
-      const upcoming = page.getByText("Upcoming Tasks").locator("../..");
+      // The CARD whose heading is "Upcoming Tasks", not two DOM levels above the
+      // text. `locator("../..")` reached the card only as long as the heading
+      // sat exactly two levels inside it; `SectionCard` now wraps the title in
+      // a header div with room for a subtitle, so the XPath resolved to that
+      // HEADER and every assertion below failed against a widget that was
+      // rendering correctly. Filtering a card by its own heading survives any
+      // amount of markup between the two.
+      const upcoming = page
+        .locator('[data-slot="card"]')
+        .filter({ has: page.getByRole("heading", { name: "Upcoming Tasks" }) });
       await expect(upcoming).toContainText("Follow up with Jane");
       await expect(upcoming).toContainText("Call");
       await expect(upcoming).toContainText("due 4/11/2026, 9:00:00 PM");

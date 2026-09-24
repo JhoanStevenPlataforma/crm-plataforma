@@ -19,6 +19,14 @@ export const ProductEdit = () => {
       redirect="list"
       mutationMode="pessimistic"
       mutationOptions={{ onError }}
+      // No delete, and it has to be said HERE: the kit's default header
+      // renders a `DeleteButton` that consults nothing, so `canAccess`
+      // refusing `products/delete` for every role does not remove it. Every
+      // product has append-only history, so the database refuses the delete
+      // too (quotes 13.2) -- the button could only ever fail. A product that
+      // is no longer sold is deactivated, which is the `is_active` control
+      // in the form below.
+      actions={<></>}
     >
       <SimpleForm>
         <ProductInputs />

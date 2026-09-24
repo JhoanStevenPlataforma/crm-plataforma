@@ -72,6 +72,9 @@ export const createCrmDb = (overrides: Partial<Db> = {}): Db =>
     task_checklist_items: [],
     task_dependencies: [],
     notification_preferences: [],
+    // The bell reads this on every screen. Present and empty rather than
+    // absent, for the same reason the quote collections are.
+    task_notifications: [],
     // Quotes. Present and empty rather than absent: a screen that reads a
     // collection FakeRest has never heard of fails, and `EntityQuotesPanel`
     // renders on every deal.

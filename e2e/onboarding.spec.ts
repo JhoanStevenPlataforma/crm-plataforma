@@ -3,8 +3,14 @@ import { test, expect } from "./fixtures";
 test("user onboarding", async ({ page, isMobile, menu, dismissToast }) => {
   await page.goto("/");
 
-  // Expect a title "to contain" a substring.
-  await expect(page).toHaveTitle(/Atomic CRM/);
+  // The browser tab, asserted HERE and nowhere else. It comes from the static
+  // `<title>` in `index.html` — not from the `title` configuration, which is the
+  // wordmark's alt text — so it is the one thing on screen that proves the shell
+  // itself loaded rather than the React app inside it. Three other specs used to
+  // repeat this line as a "we are signed in" proxy; they now assert a landmark,
+  // which is what they actually meant, so a rebrand is one edit rather than
+  // eleven failures.
+  await expect(page).toHaveTitle(/Hermes CRM/);
   await expect(page.getByText("Welcome to Atomic CRM")).toBeVisible();
 
   await page.getByLabel("First name").fill("John");
@@ -56,14 +62,20 @@ test("user onboarding", async ({ page, isMobile, menu, dismissToast }) => {
 
   await page.getByLabel("Has newsletter").check();
 
-  await expect(page.getByLabel("Account manager *")).toHaveText("John Doe");
-
   await page.getByRole("button", { name: "Save" }).click();
 
   await dismissToast("Element created");
 
   await expect(page.locator(isMobile ? "h2" : "h5")).toHaveText("Jane Smith");
   await expect(page.getByText("CEO at Smith Corp")).toBeVisible();
+
+  // Ownership, asserted on the OUTCOME rather than on a form control. This used
+  // to read the "Account manager" input before saving; that input is gone since
+  // roles shipped — `ContactCreate` defaults `sales_id` to the current identity
+  // and reassigning is a manager privilege (`ASSIGN_ACTION`), so a rep is no
+  // longer offered the field. What the test meant is still true and still worth
+  // checking: the contact belongs to whoever created it.
+  await expect(page.getByText("Followed by you")).toBeVisible();
 
   await menu.goToDashboard();
   await page.waitForLoadState("networkidle");
@@ -91,15 +103,21 @@ test("user onboarding", async ({ page, isMobile, menu, dismissToast }) => {
   await page.waitForLoadState("networkidle");
 
   await expect(page.getByText("Latest Activity")).toBeVisible();
-  await expect(
-    page.getByText("Latest Activity").locator("xpath=../.."),
-  ).toHaveText(/You added company Smith Corp today at/);
 
+  // The three entries this session produced, matched on the page rather than
+  // through `getByText("Latest Activity").locator("xpath=../..")`. That XPath
+  // walked two levels up from the heading to reach the card, and it broke the
+  // moment the widget gained a subtitle: it then resolved to the HEADER alone,
+  // whose text is the title and the subtitle, so every one of these three
+  // assertions failed against a card that was rendering correctly. A locator
+  // that counts DOM ancestors is a locator that fails on a styling change.
   await expect(
-    page.getByText("Latest Activity").locator("xpath=../.."),
-  ).toHaveText(/You added Jane Smith to Smith Corp today at/);
-
+    page.getByText(/You added company Smith Corp today at/),
+  ).toBeVisible();
   await expect(
-    page.getByText("Latest Activity").locator("xpath=../.."),
-  ).toHaveText(/You added a note about Jane Smith today at/);
+    page.getByText(/You added Jane Smith to Smith Corp today at/),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/You added a note about Jane Smith today at/),
+  ).toBeVisible();
 });

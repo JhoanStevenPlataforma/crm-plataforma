@@ -15,7 +15,12 @@ const signIn = async (page: Page, email: string) => {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveTitle(/Atomic CRM/);
+  // A landmark inside the app, not the browser tab: the tab title is served by
+  // `index.html` and is identical on the login page, so it never proved the
+  // sign-in succeeded.
+  await expect(
+    page.getByRole("link", { name: "Tasks", exact: true }),
+  ).toBeVisible();
 };
 
 test.describe("roles and permissions", () => {

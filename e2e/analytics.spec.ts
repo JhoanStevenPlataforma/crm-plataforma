@@ -18,6 +18,10 @@ import { expect, test } from "./fixtures";
  *   3. A rep sees the module and gets their own numbers. The route is
  *      deliberately ungated: the scoping is RLS, not `canAccess`.
  */
+/** The query string of a hash-router URL: everything after the `?` in `#/…`. */
+const hashParams = (url: string) =>
+  new URLSearchParams(new URL(url).hash.split("?")[1] ?? "");
+
 test.describe("analytics", () => {
   const signIn = async (page: Page, email: string) => {
     await page.goto("/");
@@ -66,8 +70,14 @@ test.describe("analytics", () => {
       exact: false,
     });
 
+    // Scoped to the page, not the whole document: the sidebar has carried its
+    // own "Leads" entry since the leads module shipped, so an unscoped
+    // `getByRole("link", { name: "Leads" })` matches the navigation as well as
+    // the tab and fails on strict mode.
+    const tabs = page.locator("#main-content");
+
     for (const tab of ["Pipeline", "Leads", "Productivity", "Overview"]) {
-      await page.getByRole("link", { name: tab, exact: true }).click();
+      await tabs.getByRole("link", { name: tab, exact: true }).click();
       await page.waitForLoadState("networkidle");
       await expect(errorBanner).toBeHidden();
     }
@@ -77,16 +87,24 @@ test.describe("analytics", () => {
     page,
   }) => {
     await signIn(page, "ada@doe.com");
-    await page.goto("/analytics");
+    await page.goto("/#/analytics");
 
     await page.getByRole("button", { name: "12 months" }).click();
     await expect(page).toHaveURL(/from=/);
 
-    const withTwelveMonths = new URL(page.url()).searchParams.get("from");
+    // Read out of the HASH, not out of `searchParams`. The app runs on a hash
+    // router, so a filter the page puts "in the URL" lands in
+    // `#/analytics?from=…` — `new URL(...).searchParams` looks before the `#`
+    // and finds nothing there, which is why this read came back null while the
+    // `toHaveURL(/from=/)` above (which matches the whole string) passed.
+    const withTwelveMonths = hashParams(page.url()).get("from");
     expect(withTwelveMonths).not.toBeNull();
 
     // Switching tabs must not silently reset a period the manager just chose.
-    await page.getByRole("link", { name: "Leads", exact: true }).click();
+    await page
+      .locator("#main-content")
+      .getByRole("link", { name: "Leads", exact: true })
+      .click();
     await expect(page).toHaveURL(new RegExp(`from=${withTwelveMonths}`));
 
     // And the link has to survive being opened fresh — that is the entire
@@ -104,7 +122,7 @@ test.describe("analytics", () => {
     // change nothing on screen — a control that does nothing is worse than an
     // absent one.
     await signIn(page, "rita@doe.com");
-    await page.goto("/analytics");
+    await page.goto("/#/analytics");
 
     await expect(
       page.getByRole("heading", { name: "Analytics" }),
@@ -121,7 +139,7 @@ test.describe("analytics", () => {
     // business rather than about the query — the same rule `ChartCard` applies
     // to every chart in the module.
     await signIn(page, "ada@doe.com");
-    await page.goto("/analytics");
+    await page.goto("/#/analytics");
 
     await expect(
       page.getByText("No deal is past its closing date"),

@@ -8,7 +8,14 @@
 
 export type ClaimedNotification = {
   id: number;
-  task_id: number;
+  /**
+   * Null when the subject is not a task. The outbox was widened so the quotes
+   * module could reuse this pipeline (quotes proposal §8); a row carries
+   * EITHER `task_id` OR the `entity_type` / `entity_id` pair, never both.
+   */
+  task_id: number | null;
+  entity_type?: string | null;
+  entity_id?: number | null;
   channel: string;
   recipient_id: number;
   recipient_email: string | null;
@@ -43,12 +50,58 @@ const formatDueDate = (value: string | null): string | null => {
 };
 
 /**
- * The task link is what makes a reminder actionable rather than a nag. Without
- * a configured base URL the message still goes out — a reminder with no link
- * beats no reminder at all.
+ * `task_entity` names nine kinds and this CRM routes four of them; the rest are
+ * reserved in the enum for modules that do not exist yet. A link to a route the
+ * app does not have is worse than no link, so an unrouted subject gets none.
  */
-const taskUrl = (baseUrl: string, taskId: number): string | null =>
-  baseUrl ? `${baseUrl.replace(/\/$/, "")}/#/tasks/${taskId}` : null;
+const ENTITY_PATHS: Record<string, string> = {
+  quote: "quotes",
+  contact: "contacts",
+  company: "companies",
+  deal: "deals",
+};
+
+/**
+ * The link that makes a notification actionable rather than a nag. Without a
+ * configured base URL the message still goes out — a reminder with no link
+ * beats no reminder at all.
+ *
+ * A task points at its task; anything else points at its own record.
+ */
+const subjectUrl = (
+  baseUrl: string,
+  notification: ClaimedNotification,
+): string | null => {
+  if (!baseUrl) return null;
+  const root = baseUrl.replace(/\/$/, "");
+
+  if (notification.task_id != null) {
+    return `${root}/#/tasks/${notification.task_id}`;
+  }
+
+  const path = notification.entity_type
+    ? ENTITY_PATHS[notification.entity_type]
+    : undefined;
+  if (!path || notification.entity_id == null) return null;
+
+  return `${root}/#/${path}/${notification.entity_id}/show`;
+};
+
+/**
+ * What to call this notification when nothing named it.
+ *
+ * A quote row always writes its own title, so the fallback is only ever
+ * reached by a task row — but `Task #null` is what a bare `task_id` template
+ * would produce if that ever stopped being true, so the subject is named from
+ * whichever half the row actually carries.
+ */
+const subjectLabel = (notification: ClaimedNotification): string => {
+  if (notification.task_id != null) return `Task #${notification.task_id}`;
+  if (notification.entity_type && notification.entity_id != null) {
+    return `${notification.entity_type} #${notification.entity_id}`;
+  }
+  return "Notification";
+};
 
 export const buildEmailMessage = (
   notification: ClaimedNotification,
@@ -61,7 +114,7 @@ export const buildEmailMessage = (
   const subjectSource =
     notification.title?.trim() ||
     notification.task_title?.trim() ||
-    `Task #${notification.task_id}`;
+    subjectLabel(notification);
 
   const lines: string[] = [];
   const body = notification.body?.trim();
@@ -70,7 +123,7 @@ export const buildEmailMessage = (
   const due = formatDueDate(notification.task_due_date);
   if (due) lines.push(`Due: ${due}`);
 
-  const url = taskUrl(baseUrl, notification.task_id);
+  const url = subjectUrl(baseUrl, notification);
   if (url) lines.push(url);
 
   return {
@@ -111,9 +164,9 @@ export const buildDigestMessage = (
     const label =
       notification.title?.trim() ||
       notification.task_title?.trim() ||
-      `Task #${notification.task_id}`;
+      subjectLabel(notification);
     const due = formatDueDate(notification.task_due_date);
-    const url = taskUrl(baseUrl, notification.task_id);
+    const url = subjectUrl(baseUrl, notification);
 
     return [`- ${label}`, due ? `  Due: ${due}` : null, url ? `  ${url}` : null]
       .filter(Boolean)

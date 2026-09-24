@@ -692,6 +692,23 @@ export const englishCrmMessages = {
           "This quotation can no longer be answered online. Please contact %{name}.",
         closed_anonymous:
           "This quotation can no longer be answered online. Please contact whoever sent it to you.",
+        landing: {
+          company_fallback: "you",
+          sections: "Sections",
+          start: "Start the proposal",
+          skip_to_quote: "View the quotation directly",
+          view_quote: "View quotation",
+          scroll_hint: "Scroll to read the proposal",
+          back_to_top: "Back to top",
+          quote_eyebrow: "Commercial proposal",
+          quote_heading: "Your quotation",
+          quote_intro:
+            "Here is the detail of the proposal prepared for %{company}.",
+          quote_intro_anonymous:
+            "Here is the detail of the proposal prepared for you.",
+          quote_intro_after_slides:
+            "Now that you know who we are, here is the detail of the proposal prepared for %{company}.",
+        },
         comments: {
           title: "Questions and comments",
           empty:
@@ -1217,6 +1234,39 @@ export const englishCrmMessages = {
       title: "Notifications",
       empty: "You are all caught up",
       untitled: "Task reminder",
+      /**
+       * What a customer did to a quotation (quotes §8, §13.6 #18).
+       *
+       * The database writes the KEY and its parameters, never a sentence: it
+       * does not know the reader's language. `%{actor}` is absent when the
+       * customer did not sign, and `customer` is what stands in for them.
+       */
+      quote: {
+        customer: "The customer",
+        viewed: {
+          title: "%{number} was opened by the customer",
+        },
+        commented: {
+          title: "%{number}: %{actor} wrote on the quotation",
+        },
+        accepted: {
+          title: "%{number} was accepted",
+          body: "%{actor} accepted version %{version}",
+        },
+        rejected: {
+          title: "%{number} was declined",
+          body: "%{actor} declined: %{reason}",
+          no_reason: "no reason given",
+        },
+        expiring: {
+          title: "%{number} expires in 3 days",
+          body: "The customer has not answered yet.",
+        },
+        expired: {
+          title: "%{number} has expired",
+          body: "The offer lapsed without an answer.",
+        },
+      },
       channels: {
         in_app: "In app",
         email: "Email",

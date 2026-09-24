@@ -1,5 +1,6 @@
 import { Bell } from "lucide-react";
 import { useTranslate } from "ra-core";
+import { useNavigate } from "react-router-dom";
 
 import { DateField } from "@/components/admin/date-field";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { notificationLink } from "./notificationLink";
+import { notificationText } from "./notificationText";
 import { useTaskNotifications } from "./useTaskNotifications";
 
 /** Past this, the badge stops being a number and starts being a warning. */
@@ -25,12 +28,25 @@ const BADGE_CAP = 9;
  * reminders, so tasks are only seen if the user opens the tab". A badge the
  * user passes on every screen is what closes that gap.
  *
- * Clicking an entry marks it read and nothing else — no navigation guess. The
- * notification names its task; where the user goes from there is their call.
+ * Clicking a TASK reminder marks it read and nothing else — no navigation
+ * guess. The notification names its task; where the user goes from there is
+ * their call.
+ *
+ * A notification about something that is not a task does navigate (quotes §8).
+ * "A customer accepted Q-2026-0042" has exactly one place to act on it, so
+ * making the user find it themselves is friction, not restraint.
+ * `notificationLink` owns which subjects are actionable.
  */
 export const NotificationsBell = () => {
   const translate = useTranslate();
+  const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead } = useTaskNotifications();
+
+  const open = (notification: (typeof notifications)[number]) => {
+    markAsRead(notification);
+    const link = notificationLink(notification);
+    if (link) navigate(link);
+  };
 
   return (
     <DropdownMenu>
@@ -64,29 +80,37 @@ export const NotificationsBell = () => {
             {translate("crm.notifications.empty")}
           </p>
         ) : (
-          notifications.map((notification) => (
-            <DropdownMenuItem
-              key={notification.id}
-              className="flex flex-col items-start gap-0.5"
-              onSelect={() => markAsRead(notification)}
-            >
-              <span className="text-sm font-medium">
-                {notification.title ?? translate("crm.notifications.untitled")}
-              </span>
-              {notification.body && (
-                <span className="text-xs text-muted-foreground line-clamp-2">
-                  {notification.body}
-                </span>
-              )}
-              <DateField
-                source="scheduled_for"
-                record={notification}
-                showDate
-                showTime
-                className="text-[10px] text-muted-foreground"
-              />
-            </DropdownMenuItem>
-          ))
+          notifications.map((notification) => {
+            // Translated here rather than read off the row: the database wrote
+            // what happened, not how to say it (quotes §13.6 #18).
+            const text = notificationText(
+              notification,
+              translate,
+              translate("crm.notifications.untitled"),
+            );
+
+            return (
+              <DropdownMenuItem
+                key={notification.id}
+                className="flex flex-col items-start gap-0.5"
+                onSelect={() => open(notification)}
+              >
+                <span className="text-sm font-medium">{text.title}</span>
+                {text.body && (
+                  <span className="text-xs text-muted-foreground line-clamp-2">
+                    {text.body}
+                  </span>
+                )}
+                <DateField
+                  source="scheduled_for"
+                  record={notification}
+                  showDate
+                  showTime
+                  className="text-[10px] text-muted-foreground"
+                />
+              </DropdownMenuItem>
+            );
+          })
         )}
       </DropdownMenuContent>
     </DropdownMenu>

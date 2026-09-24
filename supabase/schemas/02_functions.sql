@@ -2650,6 +2650,15 @@ create or replace function public.task_notifications_audit() returns trigger
     set search_path to ''
 as $$
 begin
+    -- A quote row has no task timeline to write into, and `emit_task_event(null,
+    -- ...)` would raise -- taking the settlement down with it, so a failed quote
+    -- email would sit at `sending` forever. The quote's own trail is
+    -- `quote_portal_events` and `quote_status_changes`; a delivery failure is
+    -- not a commercial act and does not belong on it.
+    if new.task_id is null then
+        return new;
+    end if;
+
     if new.status in ('failed', 'bounced') and old.status is distinct from new.status then
         perform public.emit_task_event(
             new.task_id, 'reminder.failed', null, null, null,
@@ -2872,7 +2881,12 @@ returns table (
     scheduled_for timestamp with time zone,
     attempt       smallint,
     task_title    text,
-    task_due_date timestamp with time zone
+    task_due_date timestamp with time zone,
+    -- Appended, never inserted mid-list: the worker reads these by name, and a
+    -- reordered `returns table` is the kind of change that compiles and then
+    -- delivers the wrong field.
+    entity_type   public.task_entity,
+    entity_id     bigint
 )
     language plpgsql security definer
     set search_path to ''
@@ -2906,11 +2920,19 @@ begin
            s.email::text,
            nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), ''),
            (public.notification_prefs_for(c.recipient_id)).digest_mode,
-           c.title, c.body, c.scheduled_for, c.attempt,
-           t.title, t.due_date
+           -- The row's own title wins. A task row that left it null falls back
+           -- to the task's, exactly as before; a quote row always writes one,
+           -- because there is no second place to take it from.
+           coalesce(c.title, t.title),
+           c.body, c.scheduled_for, c.attempt,
+           t.title, t.due_date,
+           c.entity_type, c.entity_id
       from claimed c
       join public.sales s on s.id = c.recipient_id
-      join public.tasks t on t.id = c.task_id;
+      -- LEFT, so a row whose subject is not a task is claimed instead of
+      -- silently dropped. This one word is the whole risk of the widening
+      -- (quotes §8).
+      left join public.tasks t on t.id = c.task_id;
 end;
 $$;
 
@@ -5994,24 +6016,106 @@ begin
 end;
 $$;
 
--- An offer nobody answered stops being an offer.
+-- The catalogue's half of the retention path (§13.6 #8, #19).
 --
--- Runs on `quotes_expiring_idx`, so it costs the size of the pending work rather
--- than the size of the quote history. Goes through `apply_quote_status()` like
--- every other transition, so an expiry lands in the same audit trail as a move
--- somebody made by hand -- attributed to 'system', with no `sales_id`, because
--- inventing an actor is worse than admitting there was none.
+-- `products` carries append-only `product_events`, so a plain service-role
+-- DELETE hits `reject_quote_history_mutation()` through the cascade -- and
+-- `products.sales_id` then pins every user who ever created one, which is what
+-- made `e2e/fixtures.ts` `resetDb()` unable to reach `sales`.
+--
+-- No user-facing path deletes a product and none is added here: `canAccess`
+-- refuses `products/delete` for every role, the trigger refuses it for
+-- everyone, and what is no longer sold is DEACTIVATED. This is the retention
+-- path, `service_role` only, exactly like `purge_quotes()` above.
+--
+-- `price_list_items` first, because `product_id` is `on delete restrict` on
+-- purpose. `tax_rates` keeps its seeded rows: they are reference data like
+-- `quote_statuses`, and a reset that took `iva_19` with it would leave every
+-- later spec quoting at 0% in silence.
+create or replace function public.purge_catalogue(
+    p_product_ids  bigint[] default null,
+    p_purge_lists  boolean  default false
+) returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_count integer;
+begin
+    perform set_config('app.quote_purge', 'on', true);
+
+    delete from public.price_list_items
+     where p_product_ids is null or product_id = any (p_product_ids);
+
+    delete from public.products
+     where p_product_ids is null or id = any (p_product_ids);
+    get diagnostics v_count = row_count;
+
+    if p_purge_lists then
+        -- Every delete here carries a WHERE clause because it has to:
+        -- the API roles run with `safeupdate` preloaded, which refuses an
+        -- unqualified DELETE outright -- and this function is only ever
+        -- called through PostgREST. A pgTAP run as `postgres` does not
+        -- have it loaded and would never notice.
+        delete from public.price_lists where id is not null;
+        delete from public.tax_rates where not is_system;
+    end if;
+
+    perform set_config('app.quote_purge', 'off', true);
+
+    return v_count;
+end;
+$$;
+
+comment on function public.purge_catalogue(bigint[], boolean) is
+    'Retention path for the commercial catalogue: removes products (and their '
+    'price rows and append-only history) through the app.quote_purge hatch. '
+    'service_role only -- no user-facing path deletes a product, which is '
+    'deactivated instead. Proposal section 13.6 items 8 and 19.';
+
+-- An offer nobody answered stops being an offer, and somebody is told before it
+-- does.
+--
+-- Both loops run on `quotes_expiring_idx`, so the pass costs the size of the
+-- pending work rather than the size of the quote history. The expiry goes
+-- through `apply_quote_status()` like every other transition, so it lands in the
+-- same audit trail as a move somebody made by hand -- attributed to 'system',
+-- with no `sales_id`, because inventing an actor is worse than admitting there
+-- was none.
+--
+-- Scheduled daily at 06:00 UTC by `20260921130000_quote_expiry_scheduler.sql`;
+-- until Phase 11 it existed and nothing ever called it (§13.6 #9).
 create or replace function public.sweep_expired_quotes()
 returns integer
     language plpgsql security definer
     set search_path to ''
 as $$
 declare
-    v_id    bigint;
-    v_count integer := 0;
+    v_id     bigint;
+    v_number text;
+    v_count  integer := 0;
 begin
-    for v_id in
-        select q.id from public.quotes q
+    -- The warning first: a quote expiring in exactly three days (§8). Keyed on
+    -- the date rather than a range, so a sweep that ran twice in one day does
+    -- not warn twice -- and `dedupe_key` catches it even if it does.
+    for v_id, v_number in
+        select q.id, q.quote_number from public.quotes q
+         where q.valid_until = current_date + 3
+           and q.status_key in ('sent', 'viewed', 'under_review')
+         order by q.valid_until
+    loop
+        perform public.notify_quote_event(
+            v_id, 'expiring',
+            format('%s expires in 3 days', v_number),
+            'The customer has not answered yet.',
+            (current_date + 3)::text,
+            null,
+            'crm.notifications.quote.expiring',
+            jsonb_build_object('number', v_number));
+    end loop;
+
+    for v_id, v_number in
+        select q.id, q.quote_number from public.quotes q
          where q.valid_until is not null
            and q.valid_until < current_date
            and q.status_key in ('sent', 'viewed', 'under_review')
@@ -6019,6 +6123,18 @@ begin
     loop
         perform public.apply_quote_status(
             v_id, 'expired', 'validity elapsed', 'system', null, null, null);
+
+        -- After the transition, not before: a notification for a move that
+        -- then failed is worse than none, because it is believed.
+        perform public.notify_quote_event(
+            v_id, 'expired',
+            format('%s has expired', v_number),
+            'The offer lapsed without an answer.',
+            null,
+            null,
+            'crm.notifications.quote.expired',
+            jsonb_build_object('number', v_number));
+
         v_count := v_count + 1;
     end loop;
 
@@ -6765,4 +6881,280 @@ as $$
             and t.revoked_at is null
             and t.expires_at > now()),
         jsonb_build_object('error', 'quote_link_invalid'));
+$$;
+
+--
+-- The quote notifier (§8, Phase 11)
+--
+-- One writer for every quote notification, so quiet hours, the mute list and
+-- the dedupe window have ONE implementation rather than one per call site.
+-- Modelled on the body of `dispatch_due_reminders()` and deliberately not
+-- extracted from it: that loop also advances reminder schedules and fires task
+-- events, and a shared helper would have to be passed a task or a quote and
+-- branch internally -- which is the parallel system §8 Option C was rejected
+-- for, arriving by another road.
+--
+-- CHANNELS. `in_app` always: the row IS the delivery, Realtime streams it to
+-- the bell, and it costs nothing. `email` only for the four events a rep
+-- cannot afford to miss while out of the app -- an answer, and the two
+-- validity notices. A `viewed` or a customer comment is in-app only, because
+-- an email per customer open is the fatigue this module's preferences exist to
+-- prevent, and because those two are the high-frequency events.
+--
+-- A recipient with no `sales` row, or a disabled one, is skipped -- never
+-- silently attributed to somebody else.
+--
+create or replace function public.notify_quote_event(
+    p_quote_id        bigint,
+    p_event           text,
+    p_title           text,
+    p_body            text    default null,
+    p_dedupe_suffix   text    default null,
+    p_extra_recipient bigint  default null,
+    -- What the client renders. `p_title` / `p_body` remain the English
+    -- fallback for a reader with no catalogue.
+    p_message_key     text    default null,
+    p_message_params  jsonb   default null
+)
+returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote     public.quotes;
+    v_recipient bigint;
+    v_prefs     public.notification_preferences;
+    v_channel   public.reminder_channel;
+    v_channels  public.reminder_channel[];
+    v_send_at   timestamp with time zone;
+    v_status    text;
+    v_error     text;
+    v_written   integer := 0;
+begin
+    select * into v_quote from public.quotes q where q.id = p_quote_id;
+    if v_quote.id is null then
+        return 0;
+    end if;
+
+    -- The events worth an email are the terminal ones and the two that carry a
+    -- deadline. The rest stay in the bell.
+    v_channels := case
+        when p_event in ('accepted', 'rejected', 'expired', 'expiring')
+            then array['in_app', 'email']::public.reminder_channel[]
+        else array['in_app']::public.reminder_channel[]
+    end;
+
+    for v_recipient in
+        select s.id
+          from public.sales s
+         where s.disabled is not true
+           and s.id in (v_quote.sales_id, p_extra_recipient)
+    loop
+        v_prefs := public.notification_prefs_for(v_recipient);
+
+        foreach v_channel in array v_channels loop
+            v_send_at := now();
+            v_status  := 'queued';
+            v_error   := null;
+
+            if v_channel = any (v_prefs.muted_channels) then
+                -- The row still exists, marked, so the suppression is auditable
+                -- rather than a gap somebody has to explain.
+                v_status := 'skipped';
+                v_error  := format('channel %s muted by recipient', v_channel);
+
+            elsif v_channel <> 'in_app' then
+                -- Several acts on one quote inside the window are one ping.
+                -- Scoped to the quote, exactly as the task path scopes it to
+                -- the task.
+                if v_prefs.dedupe_window_minutes > 0
+                   and exists (select 1 from public.task_notifications n
+                                where n.entity_type = 'quote'
+                                  and n.entity_id = p_quote_id
+                                  and n.recipient_id = v_recipient
+                                  and n.channel = v_channel
+                                  and n.status <> 'skipped'
+                                  and n.created_at > now()
+                                      - make_interval(mins => v_prefs.dedupe_window_minutes))
+                then
+                    v_status := 'skipped';
+                    v_error  := 'deduplicated: same quote already notified in this window';
+                else
+                    v_send_at := public.next_allowed_send_at(
+                        v_send_at, v_prefs.timezone,
+                        v_prefs.quiet_hours_start, v_prefs.quiet_hours_end);
+
+                    if v_prefs.digest_mode then
+                        v_send_at := greatest(
+                            v_send_at,
+                            public.next_digest_at(v_send_at, v_prefs.timezone,
+                                                  v_prefs.digest_at));
+                    end if;
+                end if;
+            end if;
+
+            insert into public.task_notifications (
+                task_id, entity_type, entity_id, recipient_id, channel,
+                scheduled_for, title, body, message_key, message_params,
+                dedupe_key, status, sent_at, delivered_at, error)
+            values (
+                null, 'quote', p_quote_id, v_recipient, v_channel,
+                v_send_at, p_title, p_body, p_message_key, p_message_params,
+                -- `quote:<id>:<event>:<suffix>:<recipient>:<channel>`. The
+                -- suffix is what makes "first view of version 3" distinct from
+                -- "first view of version 4" while both stay idempotent: a
+                -- replayed call is a no-op, not a second ping.
+                format('quote:%s:%s:%s:%s:%s', p_quote_id, p_event,
+                       coalesce(p_dedupe_suffix, ''), v_recipient, v_channel),
+                case when v_status <> 'queued' then v_status
+                     when v_channel = 'in_app' then 'delivered'
+                     else 'queued' end,
+                case when v_status = 'queued' and v_channel = 'in_app' then now() end,
+                case when v_status = 'queued' and v_channel = 'in_app' then now() end,
+                v_error)
+            on conflict (dedupe_key) do nothing;
+
+            if found then
+                v_written := v_written + 1;
+            end if;
+        end loop;
+    end loop;
+
+    return v_written;
+end;
+$$;
+
+--
+-- What the customer did, turned into a notification (§8, Phase 11)
+--
+-- A TRIGGER on the trail rather than a call in each portal function, and the
+-- reason is §5's: the event row IS the record of what happened. Deriving the
+-- notification from it means a portal path added later cannot forget to notify,
+-- and "the first view of this version" is a count on the table the trigger is
+-- already sitting on. The alternative -- four `perform notify_quote_event(...)`
+-- lines inside four functions -- is four places to keep in step.
+--
+-- Only four of the seven event types notify. `token_invalid` and `throttled`
+-- are security noise, not news about the document, and `downloaded` is a second
+-- look at what `viewed` already reported. `sent` notifies nobody at all,
+-- because the rep just did it (§8).
+--
+-- §8 calls the comment event `comment_added`; the column's check constraint
+-- calls it `commented`, and the constraint is what exists.
+--
+create or replace function public.quote_portal_events_notify() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote   public.quotes;
+    v_number  text;
+    v_deal_owner bigint;
+    v_actor   text;
+    v_excerpt text;
+begin
+    if new.event_type not in ('viewed', 'accepted', 'rejected', 'commented') then
+        return new;
+    end if;
+
+    select * into v_quote from public.quotes q where q.id = new.quote_id;
+    if v_quote.id is null then
+        return new;
+    end if;
+    v_number := v_quote.quote_number;
+
+    -- A view is news the FIRST time a version is opened. Every later open is
+    -- the same customer re-reading the same document, and a ping for each one
+    -- is how a bell gets ignored.
+    --
+    -- "First time" is enforced by the `dedupe_key` ALONE -- the version id is
+    -- the dedupe suffix, so every later view of that version computes the same
+    -- key and `on conflict do nothing` drops it. An earlier draft also counted
+    -- prior `viewed` events here and returned early; a mutation check could not
+    -- make that guard matter, because the key had already done the work. Two
+    -- mechanisms for one rule is the drift this module keeps refusing (§6.4):
+    -- the one that is testable stays.
+    if new.event_type = 'viewed' then
+        perform public.notify_quote_event(
+            new.quote_id, 'viewed',
+            format('%s was opened by the customer', v_number),
+            null,
+            new.version_id::text,
+            null,
+            'crm.notifications.quote.viewed',
+            jsonb_build_object('number', v_number));
+        return new;
+    end if;
+
+    if new.event_type = 'commented' then
+        v_actor := coalesce(nullif(btrim(coalesce(new.actor_name, '')), ''),
+                            'The customer');
+
+        -- The preview is read from the comment rather than copied into the
+        -- event's payload: the trail would then hold a second copy of words
+        -- that already have a home, and the two could only ever disagree.
+        -- `quote_portal_comment()` writes the comment immediately before the
+        -- event, in this transaction, so the newest customer comment on this
+        -- version is the one that just arrived.
+        select left(c.body, 140) into v_excerpt
+          from public.quote_comments c
+         where c.version_id = new.version_id
+           and c.author_kind = 'customer'
+           and c.deleted_at is null
+         order by c.id desc
+         limit 1;
+
+        perform public.notify_quote_event(
+            new.quote_id, 'commented',
+            format('%s: %s wrote on the quotation', v_number, v_actor),
+            v_excerpt,
+            new.id::text,
+            null,
+            'crm.notifications.quote.commented',
+            -- `actor` is left NULL rather than defaulted to a word: "The
+            -- customer" is itself a sentence needing translation, and the
+            -- client has the catalogue. The English fallback above keeps it.
+            jsonb_build_object(
+                'number', v_number,
+                'actor',  nullif(btrim(coalesce(new.actor_name, '')), '')));
+        return new;
+    end if;
+
+    -- An answer reaches the deal owner as well, when the quote was raised
+    -- against somebody else's opportunity -- they are the one who has to act on
+    -- it. `notify_quote_event()` resolves the pair, so one recipient named
+    -- twice is still one notification.
+    select d.sales_id into v_deal_owner
+      from public.deals d where d.id = v_quote.deal_id;
+
+    v_actor := nullif(btrim(coalesce(new.actor_name, '')), '');
+
+    perform public.notify_quote_event(
+        new.quote_id, new.event_type,
+        case when new.event_type = 'accepted'
+             then format('%s was accepted', v_number)
+             else format('%s was declined', v_number) end,
+        case when new.event_type = 'accepted'
+             then nullif(btrim(concat_ws(' ', v_actor, 'accepted version',
+                                         new.payload ->> 'version_number')), '')
+             else nullif(btrim(concat_ws(' ',
+                      coalesce(v_actor, 'The customer'), 'declined:',
+                      coalesce(new.payload ->> 'reason_code', 'no reason given'))), '')
+        end,
+        new.version_id::text,
+        v_deal_owner,
+        case when new.event_type = 'accepted'
+             then 'crm.notifications.quote.accepted'
+             else 'crm.notifications.quote.rejected' end,
+        jsonb_build_object(
+            'number',      v_number,
+            'actor',       v_actor,
+            'version',     new.payload ->> 'version_number',
+            -- The CODE, never a label: `price` is a value from a check
+            -- constraint, and the words for it live in the catalogue beside
+            -- the dialog that offered them.
+            'reason_code', new.payload ->> 'reason_code'));
+
+    return new;
+end;
 $$;

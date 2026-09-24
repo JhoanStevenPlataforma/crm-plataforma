@@ -492,3 +492,13 @@ create or replace trigger quote_status_changes_immutable
 create or replace trigger quote_portal_events_immutable
     before update or delete on public.quote_portal_events
     for each row execute function public.reject_quote_history_mutation();
+
+-- What the customer did, turned into a notification (§8, Phase 11).
+--
+-- AFTER INSERT, on the trail rather than inside each portal function: the event
+-- row IS the record of what happened (§5), so deriving the notification from it
+-- means a portal path added later cannot forget to notify. AFTER, so a
+-- notification that fails cannot stop the event being recorded.
+create or replace trigger quote_portal_events_notify
+    after insert on public.quote_portal_events
+    for each row execute function public.quote_portal_events_notify();

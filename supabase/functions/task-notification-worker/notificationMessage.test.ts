@@ -173,3 +173,70 @@ describe("buildDigestMessage", () => {
     expect(() => buildDigestMessage([])).toThrow(/empty batch/);
   });
 });
+
+describe("a subject that is not a task (quotes §8)", () => {
+  const quoteNotification = (overrides: Partial<ClaimedNotification> = {}) =>
+    buildNotification({
+      task_id: null,
+      entity_type: "quote",
+      entity_id: 42,
+      title: "Q-2026-0042 was accepted",
+      body: "Clara Cliente accepted version 2",
+      task_title: null,
+      task_due_date: null,
+      ...overrides,
+    });
+
+  it("links to the quotation rather than to a task", () => {
+    const message = buildEmailMessage(
+      quoteNotification(),
+      "https://crm.example.com",
+    );
+
+    expect(message.textBody).toContain(
+      "https://crm.example.com/#/quotes/42/show",
+    );
+    expect(message.textBody).not.toContain("/tasks/");
+  });
+
+  it("takes its subject from the row, since there is no task to take it from", () => {
+    const message = buildEmailMessage(quoteNotification());
+
+    expect(message.subject).toBe("Reminder: Q-2026-0042 was accepted");
+  });
+
+  it("names the subject without inventing a task id when nothing titled it", () => {
+    // `Task #null` is what a bare task_id template would print here.
+    const message = buildEmailMessage(
+      quoteNotification({ title: null, body: null }),
+    );
+
+    expect(message.subject).toBe("Reminder: quote #42");
+  });
+
+  it("gives no link for an entity kind the app has no route for", () => {
+    // `task_entity` reserves `invoice` and `order` for modules that do not
+    // exist; a link to a missing route lands the reader on a blank page.
+    const message = buildEmailMessage(
+      quoteNotification({ entity_type: "invoice" }),
+      "https://crm.example.com",
+    );
+
+    expect(message.textBody).not.toContain("https://crm.example.com");
+  });
+
+  it("digests a quote notice beside a task one, each with its own link", () => {
+    const message = buildDigestMessage(
+      [
+        buildNotification({ id: 1, task_id: 7, title: "Llamar a Ana" }),
+        quoteNotification({ id: 2, recipient_digest: true }),
+      ],
+      "https://crm.example.com",
+    );
+
+    expect(message.textBody).toContain("https://crm.example.com/#/tasks/7");
+    expect(message.textBody).toContain(
+      "https://crm.example.com/#/quotes/42/show",
+    );
+  });
+});

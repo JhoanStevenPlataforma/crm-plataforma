@@ -743,16 +743,25 @@ grant execute on function public.mark_quote_comments_read(bigint) to authenticat
 revoke all on function public.apply_quote_status(bigint, text, text, text, bigint, jsonb, text) from public, anon, authenticated;
 revoke all on function public.mint_quote_token(bigint, integer, text) from public, anon, authenticated;
 revoke all on function public.purge_quotes(bigint[], boolean) from public, anon, authenticated;
+-- The catalogue's retention path (§13.6 #8, #19). Same status, same reason: a
+-- product is deactivated, never deleted, by anybody using the application.
+revoke all on function public.purge_catalogue(bigint[], boolean) from public, anon, authenticated;
 revoke all on function public.sweep_expired_quotes() from public, anon, authenticated;
 revoke all on function public.refresh_quote_version_totals(bigint) from public, anon, authenticated;
 revoke all on function public.quote_party_snapshot(bigint) from public, anon, authenticated;
+-- The quote notifier (§8, Phase 11). Service-role only for the same reason
+-- `apply_quote_status` is: it trusts its title and body, so a user able to call
+-- it could put any text in a colleague's bell.
+revoke all on function public.notify_quote_event(bigint, text, text, text, text, bigint, text, jsonb) from public, anon, authenticated;
 
 grant execute on function public.apply_quote_status(bigint, text, text, text, bigint, jsonb, text) to service_role;
 grant execute on function public.mint_quote_token(bigint, integer, text) to service_role;
 grant execute on function public.purge_quotes(bigint[], boolean) to service_role;
+grant execute on function public.purge_catalogue(bigint[], boolean) to service_role;
 grant execute on function public.sweep_expired_quotes() to service_role;
 grant execute on function public.refresh_quote_version_totals(bigint) to service_role;
 grant execute on function public.quote_party_snapshot(bigint) to service_role;
+grant execute on function public.notify_quote_event(bigint, text, text, text, text, bigint, text, jsonb) to service_role;
 
 -- Trigger functions: never called directly by anybody.
 revoke all on function public.quotes_set_defaults() from public, anon, authenticated;
@@ -771,6 +780,7 @@ revoke all on function public.reject_quote_history_mutation() from public, anon,
 revoke all on function public.products_audit() from public, anon, authenticated;
 revoke all on function public.quotes_status_guard() from public, anon, authenticated;
 revoke all on function public.quotes_log_status_change() from public, anon, authenticated;
+revoke all on function public.quote_portal_events_notify() from public, anon, authenticated;
 
 grant execute on function public.quotes_set_defaults() to service_role;
 grant execute on function public.quotes_seed_first_version() to service_role;
@@ -788,6 +798,7 @@ grant execute on function public.reject_quote_history_mutation() to service_role
 grant execute on function public.products_audit() to service_role;
 grant execute on function public.quotes_status_guard() to service_role;
 grant execute on function public.quotes_log_status_change() to service_role;
+grant execute on function public.quote_portal_events_notify() to service_role;
 
 -- The customer portal (Phase 7): `service_role` only, which only the
 -- `quote-portal` edge function holds. Not `anon` -- the portal is not a

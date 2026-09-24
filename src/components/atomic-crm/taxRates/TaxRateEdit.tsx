@@ -13,6 +13,10 @@ export const TaxRateEdit = () => {
       redirect="list"
       mutationMode="pessimistic"
       mutationOptions={{ onError }}
+      // No delete: a rate is referenced by every line that ever froze it, and
+      // the seeded rows are reference data. Stated here because the kit's
+      // default header offers one regardless of `canAccess`.
+      actions={<></>}
     >
       <SimpleForm>
         <TaxRateInputs />

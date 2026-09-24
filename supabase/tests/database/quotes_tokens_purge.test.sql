@@ -13,11 +13,15 @@
 --     valid;
 --   * `purge_quotes()` is the one way past the freeze and append-only guards,
 --     which is what `e2e/fixtures.ts` `resetDb()` depends on -- and the guards
---     are back in force the moment it returns.
+--     are back in force the moment it returns;
+--   * `purge_catalogue()` is the same path for the catalogue (§13.6 #8, #19):
+--     the only way a product is ever removed, which is what lets the reset
+--     reach `sales` at all -- and a quoted product taken that way leaves its
+--     line's snapshot intact, provenance nulled.
 --
 begin;
 
-select plan(32);
+select plan(38);
 
 create function public.quotes_test_error_of(p_sql text) returns text
     language plpgsql
@@ -57,6 +61,26 @@ insert into public.quotes (id, company_id, sales_id, currency, valid_until) valu
 
 insert into public.quote_lines (version_id, name, quantity, unit_price)
 select v.id, 'Linea', 1, 100 from public.quote_versions v where v.quote_id between 9791 and 9796;
+
+-- The catalogue the retention assertions at the bottom of this file work on.
+-- 9791 is quoted (its provenance is what a purge must not fabricate a value
+-- for); 9792 is only priced; the tax rate is a test row beside the seeded ones.
+insert into public.tax_rates (id, code, label, rate)
+values (9791, 'purge-test', 'Tarifa de prueba', 7.000);
+
+insert into public.products (id, sku, name, currency, tax_rate_id, sales_id) values
+  (9791, 'PURGE-1', 'Producto cotizado', 'COP', 9791, 9791),
+  (9792, 'PURGE-2', 'Producto solo tarifado', 'COP', null, 9791);
+
+insert into public.price_lists (id, code, name, currency)
+values (9791, 'purge-test', 'Lista de prueba', 'COP');
+
+insert into public.price_list_items (price_list_id, product_id, unit_price) values
+  (9791, 9791, 250), (9791, 9792, 400);
+
+insert into public.quote_lines (version_id, product_id, name, quantity, unit_price)
+select v.id, 9791, 'Producto cotizado', 2, 250
+  from public.quote_versions v where v.quote_id = 9796;
 
 -- The issue results are kept in transaction-local settings: the raw token is
 -- returned exactly once and the token table is unreadable to the rep.
@@ -311,6 +335,40 @@ select is(
     '23514:quote_version_frozen',
     'the guards are back in force once the purge returns');
 
+--
+-- The catalogue's own retention path (§13.6 #8, #19). Asserted BEFORE the full
+-- quote reset below, because the point of the first half is what happens to a
+-- line that names the product being removed -- which needs a line to still
+-- exist.
+--
+select is(
+    public.quotes_test_error_of($$delete from public.products where id = 9792$$),
+    '42501',
+    'a plain delete of a product is refused: the cascade to product_events is append-only');
+
+select is(
+    public.purge_catalogue(array[9792]::bigint[]),
+    1,
+    'purge_catalogue removes a product through the retention path');
+
+select is(
+    array[(select count(*) from public.products where id = 9792),
+          (select count(*) from public.product_events where product_id = 9792),
+          (select count(*) from public.price_list_items where product_id = 9792),
+          (select count(*) from public.products where id = 9791)],
+    array[0, 0, 0, 1]::bigint[],
+    'with its price rows and its history, and no other product');
+
+-- `on delete set null` on `quote_lines.product_id`, and the frozen columns are
+-- the record: a purged product must not blank the document that quoted it.
+select public.purge_catalogue(array[9791]::bigint[]);
+
+select is(
+    (select array[l.product_id::text, l.name, l.quantity::text, l.unit_price::text]
+       from public.quote_lines l where l.quote_id = 9796 and l.name = 'Producto cotizado'),
+    array[null, 'Producto cotizado', '2.000', '250.00'],
+    'a quoted product taken by the purge leaves the line''s snapshot intact, provenance nulled');
+
 -- The e2e reset: everything, history included.
 select public.purge_quotes(null, true);
 
@@ -325,6 +383,24 @@ select is(
     current_setting('app.quote_purge', true),
     'off',
     'the purge switch is closed again');
+
+-- The order `resetDb()` uses: the quotes go first, then what priced them.
+select public.purge_catalogue(null, true);
+
+select is(
+    array[(select count(*) from public.products),
+          (select count(*) from public.price_lists),
+          (select count(*) from public.price_list_items),
+          (select count(*) from public.tax_rates where not is_system)],
+    array[0, 0, 0, 0]::bigint[],
+    'the full catalogue reset empties the catalogue and the rates a test created');
+
+-- The asymmetry is the assertion: the seeded rates are reference data, like
+-- `quote_statuses`. A reset that took `iva_19` with it would leave every later
+-- spec quoting at 0% without saying so.
+select ok(
+    (select count(*) from public.tax_rates where is_system) > 0,
+    'and keeps the seeded rates, which are reference data and not test residue');
 
 select * from finish();
 rollback;

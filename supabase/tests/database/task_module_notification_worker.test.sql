@@ -9,7 +9,7 @@
 --
 begin;
 
-select plan(17);
+select plan(28);
 
 alter table public.contacts disable trigger "20_contact_saved";
 
@@ -155,6 +155,105 @@ select is(
     (select public.requeue_stale_task_notifications('15 minutes'::interval)),
     1,
     'the sweep puts an unsettled claim back in the queue');
+
+--
+-- 8. A subject that is not a task (quotes §8, Option A).
+--
+-- The outbox was widened so the quote module could reuse this pipeline instead
+-- of growing a second inbox. The risk named in the proposal is that widening it
+-- SILENTLY stops task reminders -- silently, because nobody reports a
+-- notification they never expected. Everything above this line is the task
+-- path, unchanged; everything below is the new shape, and the two share one
+-- function.
+--
+select throws_ok(
+    $$insert into public.task_notifications
+          (task_id, entity_type, entity_id, recipient_id, channel, scheduled_for, dedupe_key)
+      values (9701, 'quote', 1, 9701, 'email', now(), 'w:bad-both')$$,
+    '23514',
+    null,
+    'a row naming a task AND an entity is refused: one subject, never two');
+
+select throws_ok(
+    $$insert into public.task_notifications
+          (recipient_id, channel, scheduled_for, dedupe_key)
+      values (9701, 'email', now(), 'w:bad-neither')$$,
+    '23514',
+    null,
+    'and a row naming no subject at all is refused too');
+
+insert into public.task_notifications
+    (id, task_id, entity_type, entity_id, recipient_id, channel, scheduled_for,
+     title, body, status, dedupe_key)
+values
+  (9705, null, 'quote', 4242, 9701, 'email', now() - interval '1 minute',
+   'Quote Q-2026-0042 accepted', 'Ana Ruiz accepted version 2', 'queued', 'w:5');
+
+-- Test 17 requeued 9703 with a past schedule, so it is claimable again. Park it
+-- so this section claims exactly the row it is about.
+update public.task_notifications set status = 'canceled' where id = 9703;
+
+create temporary table claimed_quote as
+select * from public.claim_task_notifications(
+    array['email']::public.reminder_channel[], 10);
+
+select is(
+    (select count(*)::int from claimed_quote),
+    1,
+    'a task-less row is claimed like any other -- the join to tasks no longer drops it');
+
+select is(
+    (select task_id from claimed_quote),
+    null,
+    'it carries no task id, because it has no task');
+
+select is(
+    (select entity_type::text || '/' || entity_id from claimed_quote),
+    'quote/4242',
+    'it names its subject instead, which is what the worker links back to');
+
+select is(
+    (select title from claimed_quote),
+    'Quote Q-2026-0042 accepted',
+    'the title is the one written on the row, since there is no task to take it from');
+
+select is(
+    (select task_title from claimed_quote),
+    null,
+    'and the task title comes back null rather than failing the claim');
+
+select is(
+    (select recipient_email from claimed_quote),
+    'worker.owner@test.local',
+    'the recipient is resolved exactly as on the task path');
+
+select is(
+    (select status from public.complete_task_notification(9705, 'sent', 'pm-q42')),
+    'sent',
+    'a task-less delivery settles as sent');
+
+--
+-- The audit trigger writes into the TASK timeline. A task-less row has no
+-- timeline to write into, and a failed quote delivery must not take the
+-- settlement down with it.
+--
+insert into public.task_notifications
+    (id, task_id, entity_type, entity_id, recipient_id, channel, scheduled_for,
+     title, status, attempt, dedupe_key)
+values
+  (9706, null, 'quote', 4242, 9701, 'email', now() - interval '1 minute',
+   'Quote Q-2026-0042 expiring', 'queued', 5, 'w:6');
+
+select is(
+    (select status from public.complete_task_notification(9706, 'failed', null, 'no provider')),
+    'failed',
+    'a task-less delivery exhausting its retries settles rather than raising');
+
+select is(
+    (select count(*)::int from public.task_events
+      where task_id = 9701 and event_type = 'reminder.failed'),
+    1,
+    'and it files nothing in the timeline of the unrelated task beside it');
 
 select * from finish();
 rollback;

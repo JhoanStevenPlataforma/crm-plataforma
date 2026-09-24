@@ -50,7 +50,16 @@ const ViewDocumentButton = () => {
  * there. One component in both places, so the two cannot offer different moves.
  */
 export const QuoteEdit = () => (
-  <Edit redirect={false} mutationMode="pessimistic">
+  <Edit
+    redirect={false}
+    mutationMode="pessimistic"
+    // The kit's default header is a Show link and a DELETE button, and the
+    // second one can only fail: there is no delete policy and no DELETE
+    // privilege on `quotes` for anybody (quotes 13.2, 13.6 #11) -- a quote ends
+    // as `canceled`. The header is replaced rather than extended because the
+    // Show link it also carries is already here as `ViewDocumentButton`.
+    actions={<></>}
+  >
     <div className="p-4 pb-0 flex flex-wrap items-start justify-between gap-2">
       <QuoteActions />
       <ViewDocumentButton />

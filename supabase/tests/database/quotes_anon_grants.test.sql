@@ -64,6 +64,7 @@ select is(
             'public.revoke_quote_token(bigint)',
             'public.mark_quote_comments_read(bigint)',
             'public.purge_quotes(bigint[],boolean)',
+            'public.purge_catalogue(bigint[],boolean)',
             'public.sweep_expired_quotes()',
             'public.quote_portal_log(bigint,bigint,bigint,text,inet,text,text,text,jsonb)',
             'public.quote_portal_resolve(bytea,inet,text)',
@@ -73,10 +74,12 @@ select is(
             'public.quote_portal_accept(bytea,text,text,inet,text)',
             'public.quote_portal_reject(bytea,text,text,text,text,inet,text)',
             'public.quote_portal_comment(bytea,text,text,text,inet,text)',
-            'public.quote_portal_version(bytea)']) as f
+            'public.quote_portal_version(bytea)',
+            'public.notify_quote_event(bigint,text,text,text,text,bigint,text,jsonb)',
+            'public.quote_portal_events_notify()']) as f
       where to_regprocedure(f) is not null),
-    39,
-    'the thirty-nine functions of the module exist');
+    42,
+    'the forty-two functions of the module exist');
 
 --
 -- anon: nothing, anywhere.
@@ -126,6 +129,7 @@ select is(
             'public.revoke_quote_token(bigint)',
             'public.mark_quote_comments_read(bigint)',
             'public.purge_quotes(bigint[],boolean)',
+            'public.purge_catalogue(bigint[],boolean)',
             'public.sweep_expired_quotes()',
             'public.quote_portal_log(bigint,bigint,bigint,text,inet,text,text,text,jsonb)',
             'public.quote_portal_resolve(bytea,inet,text)',
@@ -135,7 +139,9 @@ select is(
             'public.quote_portal_accept(bytea,text,text,inet,text)',
             'public.quote_portal_reject(bytea,text,text,text,text,inet,text)',
             'public.quote_portal_comment(bytea,text,text,text,inet,text)',
-            'public.quote_portal_version(bytea)']) as f
+            'public.quote_portal_version(bytea)',
+            'public.notify_quote_event(bigint,text,text,text,text,bigint,text,jsonb)',
+            'public.quote_portal_events_notify()']) as f
       where has_function_privilege('anon', f, 'EXECUTE')),
     '{}'::text[],
     'anon may execute no quote-module function');
@@ -201,6 +207,7 @@ select is(
             'public.mint_quote_token(bigint,integer,text)',
             'public.quote_party_snapshot(bigint)',
             'public.purge_quotes(bigint[],boolean)',
+            'public.purge_catalogue(bigint[],boolean)',
             'public.sweep_expired_quotes()',
             'public.quote_portal_log(bigint,bigint,bigint,text,inet,text,text,text,jsonb)',
             'public.quote_portal_resolve(bytea,inet,text)',
@@ -210,7 +217,9 @@ select is(
             'public.quote_portal_accept(bytea,text,text,inet,text)',
             'public.quote_portal_reject(bytea,text,text,text,text,inet,text)',
             'public.quote_portal_comment(bytea,text,text,text,inet,text)',
-            'public.quote_portal_version(bytea)']) as f
+            'public.quote_portal_version(bytea)',
+            'public.notify_quote_event(bigint,text,text,text,text,bigint,text,jsonb)',
+            'public.quote_portal_events_notify()']) as f
       where has_function_privilege('authenticated', f, 'EXECUTE')),
     '{}'::text[],
     'users cannot call the internal functions, above all apply_quote_status, mint_quote_token and the portal''s');

@@ -21,6 +21,11 @@ export const PriceListEdit = () => {
       redirect={false}
       mutationMode="pessimistic"
       mutationOptions={{ onError }}
+      // No delete anywhere in the catalogue (Phase 3): a list a quote was
+      // priced from is what makes that quote's figures explicable. The kit's
+      // default header renders a `DeleteButton` that consults nothing, so the
+      // absence has to be stated here rather than left to `canAccess`.
+      actions={<></>}
     >
       <SimpleForm>
         <PriceListInputs />

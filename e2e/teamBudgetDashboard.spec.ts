@@ -75,7 +75,12 @@ test.describe("team budgets", () => {
     await expect(
       page.getByRole("heading", { name: "Team performance" }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Renewals" })).toBeVisible();
+    // Exact: the row also carries "See the statistics of Renewals" and "See the
+    // deals of Renewals", both added after this spec was written, and an
+    // accessible name that CONTAINS the team name is not the team's own link.
+    await expect(
+      page.getByRole("link", { name: "Renewals", exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("Total budget")).toBeVisible();
   });
 
@@ -113,15 +118,28 @@ test.describe("team budgets", () => {
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText("Rita Rep")).toBeVisible();
-    // The roster reports pending and overdue as separate columns. They are not
-    // two ways of saying the same thing: overdue is a subset of open, and the
-    // pending column has already had it subtracted out, so a late task is never
-    // counted twice.
+
+    // THE ROSTER's columns, not the page's. The team table above it grew an
+    // "Overdue" column of its own, so an unscoped `columnheader` matches both
+    // and fails on strict mode. The roster is the table keyed on a member.
+    // The roster is NESTED inside the teams table — it renders in the expanded
+    // row — so "the table with a Member column" matches the outer one too.
+    // `hasNot` on the teams table's own first column is what separates them.
+    const roster = page
+      .getByRole("table")
+      .filter({ has: page.getByRole("columnheader", { name: "Member" }) })
+      .filter({
+        hasNot: page.getByRole("columnheader", { name: "Name", exact: true }),
+      });
+
+    // Pending and overdue are separate columns and not two ways of saying the
+    // same thing: overdue is a subset of open, and the pending column has
+    // already had it subtracted out, so a late task is never counted twice.
     await expect(
-      page.getByRole("columnheader", { name: "Pending" }),
+      roster.getByRole("columnheader", { name: "Pending" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("columnheader", { name: "Overdue" }),
+      roster.getByRole("columnheader", { name: "Overdue" }),
     ).toBeVisible();
   });
 
@@ -149,7 +167,16 @@ test.describe("team budgets", () => {
     await page.getByLabel("Period start").fill("2026-01-01");
     await page.getByLabel("Period end").fill("2026-12-31");
     await page.getByRole("button", { name: "Save" }).click();
-    await page.waitForLoadState("networkidle");
+    // Wait for the SAVE to land, not for the network to fall quiet. `Edit`
+    // redirects after the mutation resolves, and under a hash router that
+    // redirect is a fragment change — so a `goto` fired while it was still in
+    // flight got overwritten and this test carried on asserting against the
+    // editor it thought it had left. The budget-history panel only renders once
+    // the row is in `team_budgets`, which is exactly the moment it is safe to
+    // navigate.
+    await expect(
+      page.getByRole("heading", { name: "Budget history" }),
+    ).toBeVisible();
 
     await page.goto("/#/teams-dashboard");
     await page.waitForLoadState("networkidle");
@@ -157,9 +184,17 @@ test.describe("team budgets", () => {
     // The health row: figures that turn a total into a judgement. Pace is the
     // one that matters most — 45% of target is excellent in March and alarming
     // in November, and attainment alone renders the two identically.
-    await expect(page.getByText("Pace", { exact: true })).toBeVisible();
-    await expect(page.getByText("Win rate", { exact: true })).toBeVisible();
+    //
+    // On the OVERVIEW that judgement is "Teams at risk", whose hint names the
+    // rule it applies; the per-team "Pace" tile this used to look for lives on
+    // the drill-down (`TeamHealthTiles`), which the last test in this file
+    // covers. Asserting the hint keeps the pace rule itself under test rather
+    // than just the count beside it.
     await expect(page.getByText("Teams at risk")).toBeVisible();
+    await expect(
+      page.getByText("Behind the pace the period needs"),
+    ).toBeVisible();
+    await expect(page.getByText("Win rate", { exact: true })).toBeVisible();
 
     // The workload row, which comes from the second view.
     await expect(
@@ -220,9 +255,25 @@ test.describe("team budgets", () => {
     await page.waitForLoadState("networkidle");
 
     // The quota reached `team_members_summary`, and attainment is now measured
-    // against it rather than against the team target.
-    await expect(page.getByText("Quota", { exact: true })).toBeVisible();
-    await expect(page.getByText("$400K")).toBeVisible();
+    // against it rather than against the team target. Read in the ROSTER: the
+    // same $400K is also a headline tile, a chart axis label and a cell of the
+    // team table, so an unscoped match cannot say which one it found — and
+    // three of those four would still render if the roster had not been given
+    // the quota at all.
+    // The roster is NESTED inside the teams table — it renders in the expanded
+    // row — so "the table with a Member column" matches the outer one too.
+    // `hasNot` on the teams table's own first column is what separates them.
+    const roster = page
+      .getByRole("table")
+      .filter({ has: page.getByRole("columnheader", { name: "Member" }) })
+      .filter({
+        hasNot: page.getByRole("columnheader", { name: "Name", exact: true }),
+      });
+
+    await expect(
+      roster.getByRole("columnheader", { name: "Quota" }),
+    ).toBeVisible();
+    await expect(roster.getByRole("cell", { name: "$400K" })).toBeVisible();
   });
 
   test("the dashboard drills down into a team and then into one member", async ({
@@ -266,7 +317,14 @@ test.describe("team budgets", () => {
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByRole("heading", { name: "Rita Rep" })).toBeVisible();
-    await expect(page.getByText("Open tasks")).toBeVisible();
+
+    // The member's own workload, scoped to this membership and this period —
+    // the header above says which. "Open tasks" was one tile once; the workload
+    // view split it into the stock figures the roster also reports, because
+    // overdue is a SUBSET of open and one number could not say both.
+    await expect(page.getByText("Pending", { exact: true })).toBeVisible();
+    await expect(page.getByText("Overdue", { exact: true })).toBeVisible();
+    await expect(page.getByText("Completed", { exact: true })).toBeVisible();
   });
 
   test("a rep is not offered the dashboard and cannot reach it by URL", async ({
