@@ -100,125 +100,160 @@ export const QuotePortalComments = ({
   return (
     <section
       aria-labelledby="quote-portal-comments-title"
-      className="quote-print-hide flex flex-col gap-4 rounded-xl border bg-card p-6 text-sm text-card-foreground"
+      className="quote-print-hide flex flex-col overflow-hidden rounded-3xl border bg-card text-sm text-card-foreground shadow-xl shadow-foreground/5"
     >
-      <h2 id="quote-portal-comments-title" className="text-base font-semibold">
-        {translate("resources.quotes.portal.comments.title")}
-      </h2>
+      <header className="flex items-center gap-2.5 border-b px-5 py-4">
+        <span
+          aria-hidden
+          className={cn(
+            "size-2.5 rounded-full",
+            canComment
+              ? "bg-success ring-4 ring-success/15"
+              : "bg-muted-foreground",
+          )}
+        />
+        <h2 id="quote-portal-comments-title" className="font-bold">
+          {translate("resources.quotes.portal.comments.title")}
+        </h2>
+      </header>
 
-      {comments.length === 0 ? (
-        <p className="text-muted-foreground">
-          {translate("resources.quotes.portal.comments.empty")}
-        </p>
-      ) : (
-        <ol className="flex flex-col gap-3">
-          {comments.map((comment, index) => (
-            <li
-              key={`${comment.created_at}-${index}`}
-              className={cn(
-                "flex flex-col gap-1 rounded-lg border p-3",
-                comment.author_kind === "internal" && "bg-muted/40",
-              )}
-            >
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-medium">
-                  {comment.author_name ?? teamLabel}
-                </span>
-                {comment.author_kind === "internal" && comment.author_name ? (
-                  <Badge variant="outline" className="text-[10px]">
-                    {teamLabel}
-                  </Badge>
-                ) : null}
-                <span className="text-xs text-muted-foreground">
-                  {formatCommentDate(comment.created_at)}
-                </span>
-                {comment.edited_at ? (
-                  <span className="text-xs text-muted-foreground">
-                    {translate("resources.quotes.portal.comments.edited")}
+      <div className="flex flex-col gap-4 p-5">
+        {comments.length === 0 ? (
+          <p className="rounded-2xl bg-muted/60 p-3.5 text-xs leading-relaxed text-muted-foreground">
+            {translate("resources.quotes.portal.comments.empty")}
+          </p>
+        ) : (
+          <ol className="-mr-2 flex max-h-96 flex-col gap-2.5 overflow-y-auto pr-2">
+            {comments.map((comment, index) => (
+              <li
+                key={`${comment.created_at}-${index}`}
+                className={cn(
+                  "flex flex-col gap-1 rounded-2xl p-3",
+                  comment.author_kind === "internal"
+                    ? "mr-4 bg-muted/60"
+                    : "ml-4 bg-brand-tint",
+                )}
+              >
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+                  <span className="font-semibold">
+                    {comment.author_name ?? teamLabel}
                   </span>
-                ) : null}
+                  {comment.author_kind === "internal" && comment.author_name ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      {teamLabel}
+                    </Badge>
+                  ) : null}
+                  <span className="text-muted-foreground">
+                    {formatCommentDate(comment.created_at)}
+                  </span>
+                  {comment.edited_at ? (
+                    <span className="text-muted-foreground">
+                      {translate("resources.quotes.portal.comments.edited")}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="whitespace-pre-line break-words">
+                  {comment.body}
+                </p>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {canComment ? (
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (isValid && !isPending) void submit();
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label
+                htmlFor="quote-portal-comment-body"
+                className="text-xs text-muted-foreground"
+              >
+                {translate("resources.quotes.portal.comments.message")}
+              </Label>
+              <Textarea
+                id="quote-portal-comment-body"
+                value={body}
+                rows={4}
+                maxLength={MAX_BODY_LENGTH}
+                className="min-h-28 rounded-xl"
+                onChange={(event) => {
+                  setBody(event.target.value);
+                  setIsSent(false);
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Label
+                  htmlFor="quote-portal-comment-name"
+                  className="text-xs text-muted-foreground"
+                >
+                  {translate("resources.quotes.portal.comments.name")}
+                </Label>
+                <Input
+                  id="quote-portal-comment-name"
+                  value={name}
+                  autoComplete="name"
+                  maxLength={200}
+                  className="rounded-xl text-xs"
+                  onChange={(event) => setName(event.target.value)}
+                />
               </div>
-              <p className="whitespace-pre-line break-words">{comment.body}</p>
-            </li>
-          ))}
-        </ol>
-      )}
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <Label
+                  htmlFor="quote-portal-comment-email"
+                  className="text-xs text-muted-foreground"
+                >
+                  {translate("resources.quotes.portal.comments.email")}
+                </Label>
+                <Input
+                  id="quote-portal-comment-email"
+                  type="email"
+                  value={email}
+                  autoComplete="email"
+                  maxLength={320}
+                  className="rounded-xl text-xs"
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </div>
+            </div>
+
+            {error ? (
+              <p role="alert" className="text-xs text-destructive">
+                {translate(`resources.quotes.portal.errors.${error}`)}
+              </p>
+            ) : isSent ? (
+              <p role="status" className="text-xs text-muted-foreground">
+                {translate("resources.quotes.portal.comments.sent")}
+              </p>
+            ) : null}
+
+            <Button
+              type="submit"
+              disabled={!isValid || isPending}
+              className="mt-1 w-full rounded-xl bg-brand font-bold text-brand-foreground hover:bg-brand/90"
+            >
+              {translate("resources.quotes.portal.comments.submit")}
+              <span aria-hidden>→</span>
+            </Button>
+          </form>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {translate("resources.quotes.portal.comments.closed")}
+          </p>
+        )}
+      </div>
 
       {canComment ? (
-        <form
-          className="flex flex-col gap-4 border-t pt-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (isValid && !isPending) void submit();
-          }}
-        >
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="quote-portal-comment-body">
-              {translate("resources.quotes.portal.comments.message")}
-            </Label>
-            <Textarea
-              id="quote-portal-comment-body"
-              value={body}
-              rows={4}
-              maxLength={MAX_BODY_LENGTH}
-              onChange={(event) => {
-                setBody(event.target.value);
-                setIsSent(false);
-              }}
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="quote-portal-comment-name">
-                {translate("resources.quotes.portal.comments.name")}
-              </Label>
-              <Input
-                id="quote-portal-comment-name"
-                value={name}
-                autoComplete="name"
-                maxLength={200}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="quote-portal-comment-email">
-                {translate("resources.quotes.portal.comments.email")}
-              </Label>
-              <Input
-                id="quote-portal-comment-email"
-                type="email"
-                value={email}
-                autoComplete="email"
-                maxLength={320}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {translate("resources.quotes.portal.comments.privacy")}
-          </p>
-
-          {error ? (
-            <p role="alert" className="text-destructive">
-              {translate(`resources.quotes.portal.errors.${error}`)}
-            </p>
-          ) : isSent ? (
-            <p role="status" className="text-muted-foreground">
-              {translate("resources.quotes.portal.comments.sent")}
-            </p>
-          ) : null}
-
-          <div className="flex justify-end">
-            <Button type="submit" disabled={!isValid || isPending}>
-              {translate("resources.quotes.portal.comments.submit")}
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <p className="text-muted-foreground">
-          {translate("resources.quotes.portal.comments.closed")}
+        <p className="px-5 pb-5 text-[11px] leading-snug text-muted-foreground">
+          {translate("resources.quotes.portal.comments.privacy")}
         </p>
-      )}
+      ) : null}
     </section>
   );
 };

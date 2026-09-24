@@ -10,6 +10,7 @@ import { useLocation } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 import { formatMoneyExact } from "../../misc/reporting";
 import {
@@ -20,7 +21,18 @@ import { QuoteDocument } from "../QuoteDocument";
 import { fromPortalPayload } from "../quoteDocumentData";
 import "../quotePrint.css";
 import { QuotePortalAcceptDialog } from "./QuotePortalAcceptDialog";
+import { QuotePortalAnswerBar } from "./QuotePortalAnswerBar";
+import {
+  QuotePortalFloatingActions,
+  QuotePortalMiniNav,
+  QuotePortalProgress,
+  QuotePortalTopbar,
+} from "./QuotePortalChrome";
 import { QuotePortalComments } from "./QuotePortalComments";
+import { QuotePortalHero } from "./QuotePortalHero";
+import { QuotePortalNotice } from "./QuotePortalNotice";
+import { QuotePortalReveal } from "./QuotePortalReveal";
+import { QuotePortalSlide } from "./QuotePortalSlide";
 import { QuotePortalRejectDialog } from "./QuotePortalRejectDialog";
 import {
   portalErrorKeyOf,
@@ -30,7 +42,14 @@ import {
   type QuotePortalPayload,
 } from "./quotePortalClient";
 import { QUOTE_PORTAL_PATH, tokenFromHash } from "./quotePortalPaths";
+import {
+  DEFAULT_QUOTE_PRESENTATION,
+  personalizePresentation,
+  slideNumber,
+  slideSectionId,
+} from "./quotePortalPresentation";
 import { useQuotePortalPoll } from "./useQuotePortalPoll";
+import { useQuotePortalScroll } from "./useQuotePortalScroll";
 
 const IS_DEMO = import.meta.env.VITE_IS_DEMO === "true";
 
@@ -57,6 +76,25 @@ const RETRYABLE = new Set<QuotePortalErrorKey>([
 ]);
 
 type Answer = "accepted" | "rejected";
+
+/**
+ * The page's sections, in reading order: the cover, the presentation's slides,
+ * then the quotation. The deck is the installation's static one until the
+ * per-company editor stores it (`quotePortalPresentation.ts`).
+ */
+const PRESENTATION = DEFAULT_QUOTE_PRESENTATION;
+const COVER_ID = "quote-portal-cover";
+const QUOTATION_ID = "quote-portal-quotation";
+const SLIDE_IDS = PRESENTATION.slides.map(slideSectionId);
+const SECTION_IDS = [COVER_ID, ...SLIDE_IDS, QUOTATION_ID];
+
+/**
+ * The sheet as the portal presents it: a larger card, the total set apart.
+ * Classes on the shared `QuoteDocument`, never a copy of it — the customer's
+ * copy and the rep's PDF must stay one document.
+ */
+const PORTAL_SHEET_CLASS =
+  "gap-8 rounded-3xl p-6 shadow-2xl shadow-foreground/5 sm:p-10 [&>header]:-mx-6 [&>header]:border-b [&>header]:px-6 [&>header]:pb-8 sm:[&>header]:-mx-10 sm:[&>header]:px-10 print:shadow-none print:[&>header]:mx-0 print:[&>header]:px-0 [&>h3]:rounded-2xl [&>h3]:border [&>h3]:border-brand/25 [&>h3]:bg-brand-tint [&>h3]:px-5 [&>h3]:py-4 [&>h3]:text-sm [&>h3]:text-brand-strong [&_.quote-total]:mt-3 [&_.quote-total]:rounded-xl [&_.quote-total]:border-0 [&_.quote-total]:bg-brand-tint [&_.quote-total]:p-4 [&_.quote-total]:text-lg [&_.quote-total]:font-extrabold [&_dl]:max-w-sm [&_table]:text-[13px] [&_td]:py-4 [&_th]:py-3";
 
 type PortalState =
   | { key: string | null; status: "loading" }
@@ -96,6 +134,11 @@ const PortalShell = ({ children }: { children: ReactNode }) => (
  * team's answer, a revision or a withdrawal reaches a page nobody reloads. The
  * page has no socket: Realtime honours row level security, and no policy
  * grants `anon`.
+ *
+ * A PROPOSAL, NOT A FORM. The quotation is presented the way a sales deck is:
+ * a cover naming both parties, then the document with the conversation beside
+ * it. Everything around the document is `quote-print-hide`, so "Print / PDF"
+ * still produces the sheet and nothing else.
  */
 export const QuotePortalPage = () => {
   const translate = useTranslate();
@@ -165,6 +208,7 @@ export const QuotePortalPage = () => {
       ),
     [],
   );
+  const scroll = useQuotePortalScroll(SECTION_IDS, current.status === "loaded");
   const poll = useQuotePortalPoll({
     client,
     token: current.status === "loaded" ? token : null,
@@ -267,75 +311,156 @@ export const QuotePortalPage = () => {
     setState({ key: current.key, status: "loaded", payload: next, answered });
   };
 
+  const brand = data.branding.title;
+  const companyName = data.parties.company?.name ?? null;
+  const hasThread = actions.can_comment || payload.comments.length > 0;
+  const hasSlides = PRESENTATION.slides.length > 0;
+  // The deck as written for THIS customer (the company, the addressee, the
+  // quotation's own title), recomputed with the payload it reads from.
+  const deck = personalizePresentation(PRESENTATION, {
+    company:
+      companyName ??
+      translate("resources.quotes.portal.landing.company_fallback"),
+    contact: data.parties.contact?.name ?? "",
+    quote: data.quote.title ?? "",
+    brand,
+  });
+
   return (
-    <PortalShell>
-      <div className="quote-print-hide flex flex-wrap items-center justify-end gap-2">
-        <Button variant="outline" onClick={() => window.print()}>
-          {translate("resources.quotes.portal.print")}
-        </Button>
-        {actions.can_reject ? (
-          <Button variant="outline" onClick={() => setDialog("reject")}>
-            {translate("resources.quotes.portal.reject")}
-          </Button>
-        ) : null}
-        {actions.can_accept ? (
-          <Button onClick={() => setDialog("accept")}>
-            {translate("resources.quotes.portal.accept")}
-          </Button>
-        ) : null}
-      </div>
+    <div className="quote-print-root min-h-screen bg-background">
+      <QuotePortalProgress />
+      <QuotePortalTopbar
+        brand={brand}
+        number={data.quote.number}
+        versionNumber={data.quote.version_number}
+      />
+      <QuotePortalMiniNav
+        activeId={scroll.activeId}
+        sections={[
+          { id: COVER_ID, label: deck.cover.navLabel },
+          ...deck.slides.map((slide, index) => ({
+            id: SLIDE_IDS[index],
+            label: slide.navLabel,
+          })),
+          {
+            id: QUOTATION_ID,
+            label: translate("resources.quotes.portal.landing.quote_heading"),
+          },
+        ]}
+      />
 
-      {poll.isLinkClosed ? (
-        <p
-          role="status"
-          className="quote-print-hide rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm"
-        >
-          {translate("resources.quotes.portal.live.link_closed")}
-        </p>
-      ) : answered ? (
-        <p
-          role="status"
-          className="quote-print-hide rounded-md border border-success bg-success/10 px-3 py-2 text-sm"
-        >
-          {translate(
-            answered === "accepted"
-              ? "resources.quotes.portal.accepted_notice"
-              : "resources.quotes.portal.rejected_notice",
-          )}
-        </p>
-      ) : !isOpen && !isSettled ? (
-        <p
-          role="status"
-          className="quote-print-hide rounded-md border px-3 py-2 text-sm text-muted-foreground"
-        >
-          {data.parties.owner_name
-            ? translate("resources.quotes.portal.closed", {
-                name: data.parties.owner_name,
-              })
-            : translate("resources.quotes.portal.closed_anonymous")}
-        </p>
-      ) : null}
+      <main>
+        <QuotePortalHero
+          id={COVER_ID}
+          cover={deck.cover}
+          nextId={SLIDE_IDS[0] ?? QUOTATION_ID}
+          quoteId={QUOTATION_ID}
+        />
 
-      {poll.isFailing && !poll.isLinkClosed ? (
-        <div
-          role="status"
-          className="quote-print-hide flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground"
+        {deck.slides.map((slide, index) => (
+          <QuotePortalSlide
+            key={slide.key}
+            id={SLIDE_IDS[index]}
+            slide={slide}
+            number={slideNumber(index)}
+          />
+        ))}
+
+        <section
+          id={QUOTATION_ID}
+          aria-labelledby={`${QUOTATION_ID}-title`}
+          className="scroll-mt-4 pt-20 pb-24 min-[1000px]:pt-[110px] min-[1000px]:pb-[140px] print:py-0"
         >
-          <span>{translate("resources.quotes.portal.live.check_failed")}</span>
-          <Button size="sm" variant="outline" onClick={poll.checkNow}>
-            {translate("resources.quotes.portal.live.check_now")}
-          </Button>
-        </div>
-      ) : null}
+          <div className="mx-auto flex w-[min(1280px,calc(100%-28px))] flex-col gap-7.5 min-[641px]:w-[min(1280px,calc(100%-40px))]">
+            <QuotePortalReveal className="quote-print-hide">
+              <p className="mb-4.5 text-[11px] font-bold tracking-[0.2em] text-brand uppercase">
+                {hasSlides
+                  ? `${slideNumber(PRESENTATION.slides.length)} · `
+                  : null}
+                {translate("resources.quotes.portal.landing.quote_eyebrow")}
+              </p>
+              <h2
+                id={`${QUOTATION_ID}-title`}
+                className="mb-2.5 text-[clamp(2.375rem,5vw,3.875rem)] leading-none font-bold tracking-[-0.05em]"
+              >
+                {translate("resources.quotes.portal.landing.quote_heading")}
+              </h2>
+              <p className="max-w-[650px] leading-relaxed text-muted-foreground">
+                {companyName
+                  ? translate(
+                      hasSlides
+                        ? "resources.quotes.portal.landing.quote_intro_after_slides"
+                        : "resources.quotes.portal.landing.quote_intro",
+                      { company: companyName },
+                    )
+                  : translate(
+                      "resources.quotes.portal.landing.quote_intro_anonymous",
+                    )}
+              </p>
+            </QuotePortalReveal>
 
-      <QuoteDocument data={data} />
+            <div
+              className={cn(
+                "grid items-start gap-7",
+                hasThread && "min-[1000px]:grid-cols-[minmax(0,1fr)_330px]",
+              )}
+            >
+              <div className="flex min-w-0 flex-col gap-4">
+                <QuotePortalNotice
+                  isLinkClosed={poll.isLinkClosed}
+                  answered={answered}
+                  isUnanswerable={!isOpen && !isSettled}
+                  ownerName={data.parties.owner_name}
+                />
+                {poll.isFailing && !poll.isLinkClosed ? (
+                  <div
+                    role="status"
+                    className="quote-print-hide flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground"
+                  >
+                    <span>
+                      {translate("resources.quotes.portal.live.check_failed")}
+                    </span>
+                    <Button size="sm" variant="outline" onClick={poll.checkNow}>
+                      {translate("resources.quotes.portal.live.check_now")}
+                    </Button>
+                  </div>
+                ) : null}
 
-      <QuotePortalComments
-        comments={payload.comments}
-        canComment={actions.can_comment}
-        defaultName={data.parties.contact?.name ?? ""}
-        defaultEmail={data.parties.contact?.email ?? ""}
-        onSubmit={comment}
+                <QuoteDocument
+                  data={data}
+                  className={PORTAL_SHEET_CLASS}
+                  footer={
+                    <QuotePortalAnswerBar
+                      canAccept={actions.can_accept}
+                      canReject={actions.can_reject}
+                      onAccept={() => setDialog("accept")}
+                      onReject={() => setDialog("reject")}
+                    />
+                  }
+                />
+              </div>
+
+              {hasThread ? (
+                <aside className="min-[1000px]:sticky min-[1000px]:top-[92px]">
+                  <QuotePortalComments
+                    comments={payload.comments}
+                    canComment={actions.can_comment}
+                    defaultName={data.parties.contact?.name ?? ""}
+                    defaultEmail={data.parties.contact?.email ?? ""}
+                    onSubmit={comment}
+                  />
+                </aside>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <QuotePortalFloatingActions
+        topId={COVER_ID}
+        quoteId={QUOTATION_ID}
+        isPastFold={scroll.isPastFold}
+        isReadingQuote={scroll.activeId === QUOTATION_ID}
       />
 
       <QuotePortalAcceptDialog
@@ -359,7 +484,7 @@ export const QuotePortalPage = () => {
           settle(client.reject(token, rejection), "rejected")
         }
       />
-    </PortalShell>
+    </div>
   );
 };
 

@@ -1,4 +1,5 @@
 import { useTranslate } from "ra-core";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -46,13 +47,19 @@ const SectionTitle = ({ children }: { children: string }) => (
  * A draft and a superseded version say so ON THE PAPER, not only on the screen
  * around it. A PDF outlives the page it was printed from, and a draft forwarded
  * by email is otherwise indistinguishable from the offer.
+ *
+ * `footer` is the portal's answer bar, rendered inside the sheet so the buttons
+ * sit under the figure they answer. The caller marks it `quote-print-hide`: a
+ * button on paper is a button nobody can press.
  */
 export const QuoteDocument = ({
   data,
   className,
+  footer,
 }: {
   data: QuoteDocumentData;
   className?: string;
+  footer?: ReactNode;
 }) => {
   const translate = useTranslate();
   const { quote, parties, lines, totals, terms, branding, acceptance } = data;
@@ -288,6 +295,8 @@ export const QuoteDocument = ({
           })}
         </p>
       ) : null}
+
+      {footer}
     </article>
   );
 };

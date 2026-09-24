@@ -62,7 +62,9 @@ export const QuoteTotals = ({
           <dd className="tabular-nums">{row.value}</dd>
         </div>
       ))}
-      <div className="mt-1 flex justify-between border-t pt-1 font-medium">
+      {/* `quote-total` is a styling hook: the customer portal sets the figure
+          apart without a second copy of this block. */}
+      <div className="quote-total mt-1 flex justify-between border-t pt-1 font-medium">
         <dt>{translate("resources.quotes.totals.total")}</dt>
         <dd className="tabular-nums">
           {formatMoneyExact(amounts.total, currency)}
