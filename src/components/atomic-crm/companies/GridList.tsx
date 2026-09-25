@@ -1,18 +1,22 @@
 import { RecordContextProvider, useListContext, useTranslate } from "ra-core";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 import type { Company } from "../types";
+
 import { CompanyCard } from "./CompanyCard";
 
 const times = (nbChildren: number, fn: (key: number) => any) =>
   Array.from({ length: nbChildren }, (_, key) => fn(key));
 
+const GRID_STYLE = {
+  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+};
+
 const LoadingGridList = () => (
-  <div className="flex flex-wrap w-[1008px] gap-1">
-    {times(15, (key) => (
-      <div
-        className="h-[200px] w-[194px] flex flex-col bg-gray-200"
-        key={key}
-      />
+  <div className="grid w-full gap-4" style={GRID_STYLE}>
+    {times(8, (key) => (
+      <Skeleton className="h-[188px] rounded-xl" key={key} />
     ))}
   </div>
 );
@@ -24,12 +28,7 @@ const LoadedGridList = () => {
   if (isPending || error) return null;
 
   return (
-    <div
-      className="w-full gap-2 grid"
-      style={{
-        gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-      }}
-    >
+    <div className="grid w-full gap-4" style={GRID_STYLE}>
       {data.map((record) => (
         <RecordContextProvider key={record.id} value={record}>
           <CompanyCard />
@@ -37,7 +36,7 @@ const LoadedGridList = () => {
       ))}
 
       {data.length === 0 && (
-        <div className="p-2">
+        <div className="col-span-full rounded-xl border border-dashed bg-card px-6 py-14 text-center text-sm text-muted-foreground">
           {translate("resources.companies.empty.title", {
             _: "No companies found",
           })}

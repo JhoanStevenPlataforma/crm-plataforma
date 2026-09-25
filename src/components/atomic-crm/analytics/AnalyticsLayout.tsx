@@ -1,4 +1,3 @@
-import { BarChart3 } from "lucide-react";
 import { CanAccess, useTranslate } from "ra-core";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -9,6 +8,8 @@ import { TEAMS_DASHBOARD_PATH } from "../teams/teamsDashboardPath";
 import { AnalyticsFilterBar } from "./AnalyticsFilterBar";
 import { ANALYTICS_TABS, type AnalyticsTab } from "./analyticsPath";
 import { useAnalyticsFilters } from "./useAnalyticsFilters";
+import { PageHeader } from "@/components/admin/page-header";
+import { Button } from "@/components/ui/button";
 
 /**
  * Chrome shared by the four tabs: title, tab bar, filter bar.
@@ -35,26 +36,25 @@ export const AnalyticsLayout = ({
 
   return (
     <div className="flex flex-col gap-6 mt-1">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <BarChart3 className="text-muted-foreground w-6 h-6" />
-          <h1 className="text-xl font-semibold text-muted-foreground">
-            {translate("crm.analytics.title")}
-          </h1>
-        </div>
-        {/* The team dashboard answers budget-against-reality and is scoped to a
+      <PageHeader
+        className="mb-0"
+        title={translate("crm.analytics.title")}
+        actions={
+          <>
+            {/* The team dashboard answers budget-against-reality and is scoped to a
             budget period; this module is company-wide and scoped to the range
             above. They will disagree, legitimately, so the link says which is
             which rather than pretending they are the same screen. */}
-        <CanAccess resource="teams" action="edit">
-          <Link
-            to={TEAMS_DASHBOARD_PATH}
-            className="text-sm text-muted-foreground underline underline-offset-4"
-          >
-            {translate("crm.analytics.see_teams_dashboard")}
-          </Link>
-        </CanAccess>
-      </div>
+            <CanAccess resource="teams" action="edit">
+              <Button asChild variant="outline" size="sm">
+                <Link to={TEAMS_DASHBOARD_PATH}>
+                  {translate("crm.analytics.see_teams_dashboard")}
+                </Link>
+              </Button>
+            </CanAccess>
+          </>
+        }
+      />
 
       <nav className="flex gap-1 border-b">
         {ANALYTICS_TABS.map((item) => (

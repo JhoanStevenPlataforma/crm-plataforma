@@ -242,6 +242,47 @@ runs only in `layout/Layout.tsx`** — so any `noLayout` route renders with
 `defaultConfiguration`, whose currency is `USD`, and must get branding and
 currency from its server payload instead.
 
+#### Customer Portal Slides (what a customer sees before a quotation)
+
+**`docs/proposals/quote-portal-presentation.md` §7 is the reference** (the
+brand kit / experiences builder of §6 was removed on 2026-09-24). Admins keep
+**templates** (`public.portal_templates`) of slides (`public.portal_slides`) at
+`/portal` (`src/components/atomic-crm/portal/`), and exactly one template is
+active (partial unique index; switched only through `activate_portal_template()`).
+A slide is a free canvas: `elements` is an ordered list (first = bottom) of
+image / video / text boxes placed with `x`, `y`, `w`, `h` in PERCENT of a 16:9
+stage. `issue_quote_version()` freezes the ACTIVE template's slides into
+`quote_versions.slides` (`portal_slides_snapshot()`), and
+`quote_portal_document()` serves them as `slides`; no active template or no
+slides means a plain cover. **"Predeterminada" (`is_system`) IS the original
+designed presentation** — `DEFAULT_QUOTE_PRESENTATION` rendered by
+`QuotePortalHero` + `QuotePortalSlide` (the FX-refined Phase 0 design), not free
+boxes. Issuing under it stamps `quote_versions.standard_presentation = true`
+(payload key of the same name) and freezes no slides; the page draws the deck
+from the bundle. It is LOCKED (guards refuse any edit, rename or delete, key
+`portal_template_locked`). Its seeded free-form slides (pictures bundled as
+`builtin/<name>.webp`) are never shown to a customer: they are what "save as"
+(`duplicate_portal_template()`) copies, an editable approximation. The demo
+mirror (`fakerest/dataGenerator/portalTemplates.ts`) copies that seed — keep the
+two identical. Text boxes may carry `{company}`, `{contact}`, `{quote}`,
+`{brand}`, filled by the customer's page (`fillSlidePlaceholders`).
+
+Rules that are easy to break from the outside:
+
+- **The box shape lives in three places that must agree:**
+  `portal_slide_element_is_valid()` (SQL, strict keys), `portalSlides.ts`
+  (zod, the portal drops a deck it cannot vouch for) and `slideEditing.ts`
+  (the editor never produces a box the database refuses).
+- **The editor and the portal render with the same components**
+  (`quotes/portal/SlideStage.tsx`); text sizes are in `cqw` of the stage, so a
+  slide looks the same at any width. Never size slide content in `px` / `vw`.
+- **Media go to the PUBLIC `portal-media` bucket** under `slides/<uuid>.<ext>`,
+  admin-only uploads, never overwritten (no update/delete policy); snapshots
+  store the path, the browser builds the URL with `portalMediaUrl()`.
+- **The quotation is never a slide.** The portal renders it last.
+- The canvas autosaves the draft of the selected slide (`usePortalSlides`);
+  there is no save button.
+
 #### Design System and Application Shell
 
 The visual layer is being rebuilt in phases. **`docs/proposals/ui-redesign.md`
@@ -262,6 +303,12 @@ Three rules it is worth knowing without opening the document:
   headers, not status badges — those are semantic (`--success`, `--warning`,
   `--destructive`, `--info`). `--accent`, which shadcn uses for generic hover,
   is deliberately neutral.
+- **The sidebar is ink in both themes** ("Midnight & Amber", shared with the
+  customer portal). Anything rendered inside it must use the `sidebar-*`
+  tokens (`text-sidebar-foreground`, `text-sidebar-muted`, …), never
+  `foreground` / `muted-foreground`, which in light mode are dark text on a
+  dark ground. Elevation is tokenised too: `shadow-card` / `shadow-raised` /
+  `shadow-float` / `shadow-brand`, not `shadow-md`/`shadow-xl`.
 - **`--chart-1..5` are not what the CRM's charts use.** Every real chart reads
   `misc/chartTheme.ts`, whose palette was selected by measurement and whose key
   order is part of it. Do not harmonise it with the brand hue; read the comment
@@ -423,6 +470,14 @@ teal — `won` against `pipeline` measured ΔE 7.1 for *normal* vision, below th
 15 floor, so nobody could reliably tell those two bars apart. Dark mode is a
 selected set of steps for the dark surface, not the light palette flipped.
 
+Chart **anatomy** is shared too, in `misc/chartMarks.tsx` + `misc/chartTheme.ts`:
+spread `barDefaults` into every `ResponsiveBar` (capped 24px marks, rounded data
+end, square base, hover dimming, the CRM tooltip), and spread
+`horizontalBarProps` after it on `layout="horizontal"` — without it a
+horizontal chart draws a column's geometry. Legends go in the `ChartCard`
+header (`legend` prop), not nivo's `legends`; pass `table` to offer the
+Chart / Table switch, so no figure depends on hovering.
+
 #### Deal Stage History
 
 Moving a deal to another stage on the kanban opens a dialog: the reason and any
@@ -492,6 +547,37 @@ another way — the `stage` `SelectInput` on the deal edit form, an import — s
 writes history with a null reason and is **not** gated. Closing that needs a
 `deals_stage_guard` trigger mirroring `tasks_status_guard`, plus routing the edit
 form through the dialog; it is a deliberate follow-up, not an oversight.
+
+##### The pipeline follows its quotations
+
+A quotation raised against a deal (`quotes.deal_id`) moves the deal: sent or
+viewed → "Proposal Sent", negotiating or a customer comment → "In Negotiation",
+accepted → "Won", rejected → "Lost", expired → "Delayed"
+(`20260927120000_deal_quote_sync.sql`). The one function that does it is
+`public.sync_deal_from_quote()`, called by two triggers — `quotes_sync_deal`
+(every status change, whoever made it) and `quote_portal_events_sync_deal` (the
+customer's `commented`) — so no path can forget to move the deal.
+
+- **The mapping is data**, `public.deal_quote_stage_rules` (one row per event,
+  admin-only writes, edited in Settings → "Pipeline and quotations"), for the
+  reason `deal_stage_requirements` is: stages are free-text configuration. An
+  event with no row moves nothing. `closes` marks won/lost: **a deal in a
+  closing stage is never moved by a quotation**. `only_if_no_open_quote` makes a
+  refusal or an expiry wait until no other quotation of the deal is open.
+- **Automatic moves skip `deal_stage_gate()`** on purpose (a customer's
+  acceptance cannot be blocked by a pending task) and are recorded instead:
+  `deal_stage_changes.source = 'quote'`, `quote_id`, reason `quote:<event>`
+  (rendered as a sentence by `StageChangeDetails`).
+- **The amount follows the quotation**: `deals.amount` becomes the total of the
+  version sent (rounded, `amount` is `bigint`), `amount_source_quote_id` names
+  it, and it is fixed once a quotation of the deal is accepted.
+- The deal's timeline shows the quotation's status changes and the customer's
+  comments (`quote.status_changed` is a lifecycle event, `quote.commented` a
+  communication — both visible by default); the board card shows the latest
+  quotation (`DealBoardSignals.latestQuotes`, one query for the board).
+- Demo mode mirrors it in `providers/fakerest/dealQuoteSync.ts`, called by the
+  demo's `applyQuoteStatus()`; it must keep agreeing with
+  `deal_quote_sync.test.sql`.
 
 #### Database Triggers
 

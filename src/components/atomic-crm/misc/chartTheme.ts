@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 
 import { useTheme } from "@/components/admin/use-theme";
 
+import { CrmBarTooltip, CrmColumn, CrmHorizontalBar } from "./chartMarks";
+
 /**
  * One colour system for every chart on the team dashboards.
  *
@@ -29,25 +31,40 @@ import { useTheme } from "@/components/admin/use-theme";
  * through the validator in both light and dark mode.
  *
  * Dark mode is a selected set of steps for the dark surface, not the light
- * palette flipped — three of these hues fall below 3:1 contrast on one surface
- * or the other, and the step that works on white is not the step that works on
+ * palette flipped: the step that works on white is not the step that works on
  * near-black.
+ *
+ * THE HUES ("Midnight jewel", 2026-09-24). Chosen to sit inside the CRM's
+ * Midnight & Amber shell rather than beside it: the blue leans indigo (hue
+ * ~268, the ink of the sidebar and the dark ground), the green is an emerald
+ * rather than a stock mint, the red a rose rather than a fire-engine red, and
+ * the reference gray is the shell's own ink-tinted slate. The amber brand hue
+ * is deliberately NOT a chart role (ui-redesign.md, D6).
+ *
+ * Measured with the dataviz validator on the real surfaces (#FFFFFF card,
+ * #111621 dark card), roles in their mandated order green, blue, red:
+ *
+ *   light  worst adjacent CVD ΔE 22.8 · normal-vision ΔE 26.6 · all >= 3:1
+ *   dark   worst adjacent CVD ΔE 19.4 · normal-vision ΔE 23.1 · all >= 3:1
+ *
+ * The previous green (#1baf7a) sat at 2.74:1 on white; every role now clears
+ * 3:1 in both themes. The gray fails the chroma floor on purpose (see above).
  */
 
 export type ChartRole = "reference" | "inFlight" | "good" | "bad";
 
 const LIGHT: Record<ChartRole, string> = {
-  reference: "#9ca3af",
-  inFlight: "#2a78d6",
-  good: "#1baf7a",
-  bad: "#e34948",
+  reference: "#a3acbd", // slate, ink-tinted
+  inFlight: "#4263eb", // indigo
+  good: "#0e9a74", // emerald
+  bad: "#e0495f", // rose
 };
 
 const DARK: Record<ChartRole, string> = {
-  reference: "#6b7280",
-  inFlight: "#3987e5",
-  good: "#199e70",
-  bad: "#e66767",
+  reference: "#4b5468",
+  inFlight: "#6184ef",
+  good: "#21a97d",
+  bad: "#e35e70",
 };
 
 /**
@@ -84,25 +101,60 @@ export type ChartPalette = Record<ChartRole, string>;
 export const useChartPalette = (): ChartPalette => (useIsDark() ? DARK : LIGHT);
 
 /**
- * Axis, grid and legend styling. Everything here is a CSS variable, so the
- * chrome follows the app theme without this module knowing anything about it —
+ * Axis, grid, legend and tooltip chrome. Everything here is a CSS variable, so
+ * it follows the app theme without this module knowing anything about it --
  * only the data marks need the resolved palette above.
+ *
+ * The chrome is deliberately recessive: no axis lines (the zero gridline is
+ * the baseline), no tick marks, solid hairline gridlines, 11px muted ticks in
+ * tabular figures so a column of amounts aligns. The data is the only loud
+ * thing on the plot.
  */
 export const nivoTheme = {
-  axis: {
-    domain: { line: { stroke: "var(--color-border)" } },
-    ticks: { text: { fill: "var(--color-muted-foreground)" } },
-    legend: { text: { fill: "var(--color-muted-foreground)" } },
+  text: {
+    fontFamily: '"Inter Variable", ui-sans-serif, system-ui, sans-serif',
+    fontSize: 11,
+    fill: "var(--color-muted-foreground)",
   },
-  legends: { text: { fill: "var(--color-muted-foreground)" } },
-  grid: { line: { stroke: "var(--color-border)", strokeOpacity: 0.4 } },
+  axis: {
+    domain: { line: { stroke: "transparent", strokeWidth: 0 } },
+    ticks: {
+      line: { stroke: "transparent", strokeWidth: 0 },
+      text: {
+        fill: "var(--color-muted-foreground)",
+        fontSize: 11,
+        fontVariantNumeric: "tabular-nums",
+      },
+    },
+    legend: {
+      text: {
+        fill: "var(--color-muted-foreground)",
+        fontSize: 11,
+        fontWeight: 500,
+      },
+    },
+  },
+  legends: {
+    text: { fill: "var(--color-muted-foreground)", fontSize: 12 },
+  },
+  grid: {
+    line: {
+      stroke: "var(--color-border)",
+      strokeWidth: 1,
+      strokeOpacity: 0.75,
+    },
+  },
+  labels: {
+    text: { fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums" },
+  },
   tooltip: {
+    // The readout draws its own card (`CrmBarTooltip`); nivo's wrapper stays
+    // invisible so the two never double up.
     container: {
-      background: "var(--color-popover)",
-      color: "var(--color-popover-foreground)",
-      fontSize: 12,
-      borderRadius: 6,
-      border: "1px solid var(--color-border)",
+      background: "transparent",
+      padding: 0,
+      boxShadow: "none",
+      border: "none",
     },
   },
 };
@@ -120,33 +172,40 @@ const labelTextColor: { from: string; modifiers: ["darker", number][] } = {
 /**
  * Shared bar settings.
  *
- * `innerPadding` is the 2px surface gap that keeps stacked segments from
- * bleeding into one another, and `labelSkip*` is the relief the validator asks
- * for: two of these hues sit under 3:1 against the light surface, so the value
- * is printed on any segment big enough to hold it rather than being carried by
- * colour alone.
+ * `innerPadding` is the 2px surface gap between touching marks, and the bar
+ * component caps each mark at 24px with a rounded data end (see
+ * `chartMarks.tsx`). Horizontal charts swap in `CrmHorizontalBar`.
+ *
+ * Values are printed on any horizontal bar big enough to hold them, and
+ * `ChartCard` offers a table view, so no figure depends on hovering.
  */
 export const barDefaults = {
   theme: nivoTheme,
-  padding: 0.25,
+  padding: 0.3,
   innerPadding: 2,
-  borderRadius: 3,
-  labelSkipWidth: 32,
+  borderRadius: 4,
+  labelSkipWidth: 36,
   labelSkipHeight: 16,
   labelTextColor,
+  // Off for columns: a figure never fits a 24px column, and nivo judges the
+  // fit on the band, not on the narrowed mark. Horizontal bars turn it back on.
+  enableLabel: false,
+  enableGridX: false,
+  barComponent: CrmColumn,
+  tooltip: CrmBarTooltip,
+  motionConfig: "gentle",
 } as const;
 
-/** The legend block every multi-series chart here uses. Identity is never colour alone. */
-export const bottomLegend = [
-  {
-    dataFrom: "keys" as const,
-    anchor: "bottom" as const,
-    direction: "row" as const,
-    translateY: 45,
-    itemWidth: 100,
-    itemHeight: 16,
-  },
-];
+/** The same, for `layout="horizontal"`. Spread after `barDefaults`. */
+export const horizontalBarProps = {
+  barComponent: CrmHorizontalBar,
+  enableLabel: true,
+  // A compact money figure ("$339.2K") needs ~64px with padding; below that
+  // the value lives in the tooltip and the table, never spilling off its bar.
+  labelSkipWidth: 72,
+  enableGridY: false,
+  enableGridX: true,
+} as const;
 
 /**
  * A categorical sequence, for charts whose series are not semantic.
@@ -160,32 +219,33 @@ export const bottomLegend = [
  * block above mandates: green, then blue, then red, so blue always sits between
  * the two that collide under deuteranopia. A report whose series happen to be
  * won / pipeline / lost therefore gets the correct semantic colours from
- * position alone. Three further hues extend the sequence at roughly even
- * spacing around the wheel, and the recessive gray is deliberately NOT in it:
- * gray marks a reference, and a category drawn in it would read as one.
+ * position alone. Violet, ochre and teal extend it; the recessive gray is
+ * deliberately NOT in it: gray marks a reference, and a category drawn in it
+ * would read as one.
  *
- * NOT MEASURED AT THE SAME STANDARD. The four roles above were selected with
- * the ΔE validator in both themes; these three additions were not. The one
- * adjacency worth a designer's eye is red -> amber, which are close in hue
- * though far apart in lightness. Treat this as the palette to validate first if
- * the report charts are pushed to six series in practice.
+ * MEASURED, all six, adjacent pairs (stacks and grouped bars), on the real
+ * surfaces. The extension order was searched, not picked: ochre beside the
+ * rose fell below the normal-vision floor in dark mode, so violet comes first.
+ *
+ *   light  worst CVD ΔE 17.3 (violet↔rose) · normal-vision 21.9 · all >= 3:1
+ *   dark   worst CVD ΔE 15.9 (violet↔rose) · normal-vision 19.4 · all >= 3:1
  */
 const LIGHT_CATEGORICAL: string[] = [
-  "#1baf7a", // green  — the semantic good
-  "#2a78d6", // blue   — the semantic in-flight
-  "#e34948", // red    — the semantic bad
-  "#d98324", // amber
-  "#7c5cd6", // purple
-  "#0f9b9b", // teal
+  "#0e9a74", // emerald — the semantic good
+  "#4263eb", // indigo  — the semantic in-flight
+  "#e0495f", // rose    — the semantic bad
+  "#8951bf", // violet
+  "#c98212", // ochre
+  "#0090a9", // teal
 ];
 
 const DARK_CATEGORICAL: string[] = [
-  "#199e70",
-  "#3987e5",
-  "#e66767",
-  "#e0913c",
-  "#9179e0",
-  "#22aeae",
+  "#21a97d",
+  "#6184ef",
+  "#e35e70",
+  "#9763cc",
+  "#c38824",
+  "#009fb4",
 ];
 
 /**

@@ -7,8 +7,6 @@ import {
 import { useGetList, useTranslate, type Identifier } from "ra-core";
 import { useState, type CSSProperties } from "react";
 
-import { Badge } from "@/components/ui/badge";
-
 import type { Task, TaskStatusKey } from "../types";
 import { TaskEdit } from "./TaskEdit";
 import { TaskPriorityBadge, TaskTraceabilityBadges } from "./TaskBadges";
@@ -18,6 +16,7 @@ import {
   resolveKanbanDrop,
 } from "./taskViews";
 import { useTransitionTask } from "./useTransitionTask";
+import { cn } from "@/lib/utils";
 
 /**
  * The task board (proposal §15.4, deliverable 2.9).
@@ -60,14 +59,31 @@ export const TaskKanban = ({ filter }: { filter: Record<string, unknown> }) => {
           {KANBAN_COLUMNS.map((status) => {
             const columnTasks = byColumn(status);
             return (
-              <div key={status} className="flex-1 min-w-56">
-                <h3
-                  className={`text-sm font-medium ${KANBAN_COLUMN_CLASS[status] ?? ""}`}
-                >
+              // A lane, drawn exactly like the deals board's: a tinted track,
+              // its name and count on one line, a coloured top edge.
+              <div
+                key={status}
+                className="relative flex min-w-60 flex-1 flex-col self-start overflow-hidden rounded-2xl border border-border/60 bg-muted/45 p-2 dark:bg-surface/60"
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-x-0 top-0 h-[3px]",
+                    KANBAN_COLUMN_CLASS[status],
+                  )}
+                />
+                <h3 className="flex items-center gap-2 px-1.5 pt-1 pb-1 text-sm font-semibold">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-2 rounded-full",
+                      KANBAN_COLUMN_CLASS[status],
+                    )}
+                  />
                   {translate(`resources.tasks.statuses.${status}`)}
-                  <Badge variant="outline" className="ml-2 text-[10px]">
+                  <span className="rounded-full bg-background px-1.5 py-px text-[11px] font-medium text-muted-foreground tabular-nums dark:bg-surface-muted">
                     {columnTasks.length}
-                  </Badge>
+                  </span>
                 </h3>
 
                 <Droppable droppableId={status}>
@@ -75,9 +91,11 @@ export const TaskKanban = ({ filter }: { filter: Record<string, unknown> }) => {
                     <div
                       ref={droppableProvided.innerRef}
                       {...droppableProvided.droppableProps}
-                      className={`flex flex-col rounded-lg mt-2 gap-2 min-h-24 p-1 ${
-                        snapshot.isDraggingOver ? "bg-muted" : ""
-                      }`}
+                      className={cn(
+                        "mt-1.5 flex min-h-24 flex-col gap-2 rounded-xl transition-colors",
+                        snapshot.isDraggingOver &&
+                          "bg-brand-tint/60 ring-1 ring-brand/30",
+                      )}
                     >
                       {columnTasks.map((task, index) => (
                         <Draggable
@@ -115,10 +133,10 @@ export const TaskKanban = ({ filter }: { filter: Record<string, unknown> }) => {
                                   setOpenTaskId(task.id);
                                 }
                               }}
-                              className="cursor-pointer rounded-md border bg-background p-2 text-sm shadow-xs hover:bg-accent"
+                              className="cursor-pointer rounded-xl border bg-card p-3 text-sm font-medium shadow-card transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-px hover:border-border-strong hover:shadow-raised"
                             >
                               <span className="line-clamp-2">{task.title}</span>
-                              <span className="mt-1 flex flex-wrap items-center gap-1">
+                              <span className="mt-2 flex flex-wrap items-center gap-1 font-normal">
                                 <TaskPriorityBadge task={task} />
                                 <TaskTraceabilityBadges task={task} />
                               </span>

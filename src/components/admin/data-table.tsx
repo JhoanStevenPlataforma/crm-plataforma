@@ -28,10 +28,9 @@ import {
   useTranslateLabel,
 } from "ra-core";
 import { useNavigate } from "react-router";
-import { ArrowDownAZ, ArrowUpZA } from "lucide-react";
+import { ArrowDownAZ, ArrowUpZA, SearchX } from "lucide-react";
 import get from "lodash/get";
 import { cn } from "@/lib/utils";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -112,7 +111,12 @@ export function DataTable<RecordType extends RaRecord = RaRecord>(
       empty={<DataTableEmpty />}
       {...rest}
     >
-      <div className={cn("rounded-md border", className)}>
+      <div
+        className={cn(
+          "overflow-hidden rounded-xl border border-border/80 bg-card shadow-card",
+          className,
+        )}
+      >
         <Table>
           <DataTableRenderContext.Provider value="header">
             <DataTableHead>{columns}</DataTableHead>
@@ -285,11 +289,27 @@ const DataTableRow = ({
 const isPromise = (value: any): value is Promise<any> =>
   value && typeof value.then === "function";
 
+/**
+ * What an empty table says: nothing matched, and what to try. Drawn in the
+ * table's own frame, centred, with an icon — not an alert, which reads as an
+ * error when nothing went wrong.
+ */
 const DataTableEmpty = () => {
+  const translate = useTranslate();
   return (
-    <Alert>
-      <AlertDescription>No results found.</AlertDescription>
-    </Alert>
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-card px-6 py-14 text-center">
+      <span className="mb-1 grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
+        <SearchX className="size-5" />
+      </span>
+      <p className="text-sm font-medium">
+        {translate("crm.common.no_results", { _: "No results" })}
+      </p>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        {translate("crm.common.no_results_hint", {
+          _: "Try another search or clear the filters.",
+        })}
+      </p>
+    </div>
   );
 };
 
@@ -384,7 +404,7 @@ function DataTableHeadCell<
               <Button
                 variant="ghost"
                 size="sm"
-                className="-ml-3 -mr-3 h-8 data-[state=open]:bg-accent cursor-pointer"
+                className="-ml-3 -mr-3 h-8 cursor-pointer text-xs tracking-wide text-muted-foreground uppercase hover:text-foreground data-[state=open]:bg-accent"
                 data-field={source}
                 onClick={handleSort}
               >
@@ -397,9 +417,9 @@ function DataTableHeadCell<
                 )}
                 {sort.field === source ? (
                   sort.order === "ASC" ? (
-                    <ArrowDownAZ className="ml-2 h-6 w-6" />
+                    <ArrowDownAZ className="ml-1 size-3.5 text-brand" />
                   ) : (
-                    <ArrowUpZA className="ml-2 h-6 w-6" />
+                    <ArrowUpZA className="ml-1 size-3.5 text-brand" />
                   )
                 ) : null}
                 {headerClassName?.includes("text-right") ? (
@@ -455,7 +475,9 @@ function DataTableCell<
   return (
     <TableCell
       className={cn(
-        "py-1",
+        // 44px rows: dense enough for a working list, loose enough that a
+        // row reads as one record rather than a line in a spreadsheet.
+        "py-3",
         className,
         cellClassName,
         record && conditionalClassName?.(record),

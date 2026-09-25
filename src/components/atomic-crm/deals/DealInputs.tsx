@@ -1,3 +1,4 @@
+import { Handshake, Link2 } from "lucide-react";
 import { required, useTranslate } from "ra-core";
 import { AutocompleteArrayInput } from "@/components/admin/autocomplete-array-input";
 import { ReferenceArrayInput } from "@/components/admin/reference-array-input";
@@ -13,6 +14,7 @@ import { contactOptionText } from "../misc/ContactOption";
 import { SaleInput } from "../misc/SaleInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { AutocompleteCompanyInput } from "../companies/AutocompleteCompanyInput.tsx";
+import { FormSection } from "../misc/FormSection";
 
 export const DealInputs = () => {
   const isMobile = useIsMobile();
@@ -41,10 +43,12 @@ const DealInfoInputs = () => {
 const DealLinkedToInputs = () => {
   const translate = useTranslate();
   return (
-    <div className="flex flex-col gap-4 flex-1">
-      <h3 className="text-base font-medium">
-        {translate("resources.deals.inputs.linked_to")}
-      </h3>
+    <FormSection
+      icon={Link2}
+      title={translate("resources.deals.inputs.linked_to")}
+      description={translate("crm.form_section.linked_to")}
+      className="flex-1"
+    >
       <ReferenceInput source="company_id" reference="companies">
         <AutocompleteCompanyInput
           label="resources.deals.fields.company_id"
@@ -60,7 +64,7 @@ const DealLinkedToInputs = () => {
           helperText={false}
         />
       </ReferenceArrayInput>
-    </div>
+    </FormSection>
   );
 };
 
@@ -68,11 +72,12 @@ const DealMiscInputs = () => {
   const { dealStages, dealCategories } = useConfigurationContext();
   const translate = useTranslate();
   return (
-    <div className="flex flex-col gap-4 flex-1">
-      <h3 className="text-base font-medium">
-        {translate("resources.deals.field_categories.misc")}
-      </h3>
-
+    <FormSection
+      icon={Handshake}
+      title={translate("resources.deals.field_categories.misc")}
+      description={translate("crm.form_section.deal_misc")}
+      className="flex-1"
+    >
       <SelectInput
         source="category"
         choices={dealCategories}
@@ -80,18 +85,20 @@ const DealMiscInputs = () => {
         optionValue="value"
         helperText={false}
       />
-      <NumberInput
-        source="amount"
-        defaultValue={0}
-        helperText={false}
-        validate={required()}
-      />
-      <DateInput
-        validate={required()}
-        source="expected_closing_date"
-        helperText={false}
-        defaultValue={new Date().toISOString().split("T")[0]}
-      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <NumberInput
+          source="amount"
+          defaultValue={0}
+          helperText={false}
+          validate={required()}
+        />
+        <DateInput
+          validate={required()}
+          source="expected_closing_date"
+          helperText={false}
+          defaultValue={new Date().toISOString().split("T")[0]}
+        />
+      </div>
       <SelectInput
         source="stage"
         choices={dealStages}
@@ -114,6 +121,6 @@ const DealMiscInputs = () => {
           label="resources.deals.fields.team_id"
         />
       </ReferenceInput>
-    </div>
+    </FormSection>
   );
 };

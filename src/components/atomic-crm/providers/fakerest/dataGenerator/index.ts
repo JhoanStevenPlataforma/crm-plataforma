@@ -1,3 +1,5 @@
+import { DEMO_DEAL_QUOTE_STAGE_RULES } from "../dealQuoteSync";
+import { DEMO_PORTAL_SLIDES, DEMO_PORTAL_TEMPLATES } from "./portalTemplates";
 import { defaultTaskTypes } from "../../../root/defaultConfiguration";
 import { generateCompanies } from "./companies";
 import { generateContactNotes } from "./contactNotes";
@@ -126,6 +128,12 @@ export default (): Db => {
   db.quote_comments = [];
   db.quote_status_changes = [];
   db.quote_access_tokens = [];
+  // Where a quotation's event moves its deal, seeded as the migration seeds it.
+  db.deal_quote_stage_rules = DEMO_DEAL_QUOTE_STAGE_RULES;
+  // The customer portal: the default template the migration seeds. The demo
+  // cannot upload media, so new slides take text boxes only here.
+  db.portal_templates = DEMO_PORTAL_TEMPLATES;
+  db.portal_slides = DEMO_PORTAL_SLIDES;
   db.configuration = [
     {
       id: 1,

@@ -77,7 +77,9 @@ export const BooleanInput = (props: BooleanInputProps) => {
 
   return (
     <FormField className={className} id={id} name={field.name}>
-      <div className="flex items-center space-x-2">
+      {/* A tile, like the radio chips: the whole row is the target, and an
+          "on" setting takes the brand tint so it reads without the switch. */}
+      <div className="flex min-h-10 items-center gap-2.5 rounded-lg border border-input bg-field px-3 py-2 shadow-card transition-colors hover:border-border-strong has-[[data-state=checked]]:border-brand/40 has-[[data-state=checked]]:bg-brand-tint">
         <Switch
           id={id}
           checked={Boolean(field.value)}
@@ -85,7 +87,7 @@ export const BooleanInput = (props: BooleanInputProps) => {
           onCheckedChange={handleChange}
           disabled={disabled || readOnly}
         />
-        <FormLabel htmlFor={id}>
+        <FormLabel htmlFor={id} className="cursor-pointer font-normal">
           <FieldTitle
             label={label}
             source={source}

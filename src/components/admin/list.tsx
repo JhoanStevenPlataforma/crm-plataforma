@@ -11,6 +11,7 @@ import {
   useGetResourceLabel,
   useHasDashboard,
   useResourceContext,
+  useListContext,
   useResourceDefinition,
   useTranslate,
 } from "ra-core";
@@ -21,6 +22,7 @@ import { CreateButton } from "@/components/admin/create-button";
 import { ExportButton } from "@/components/admin/export-button";
 import { ListPagination } from "@/components/admin/list-pagination";
 import { FilterButton, FilterForm } from "@/components/admin/filter-form";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * A complete list page with breadcrumb, title, filters, and pagination.
@@ -108,6 +110,7 @@ export const ListView = <RecordType extends RaRecord = RaRecord>(
     title,
     children,
     actions,
+    summary,
   } = props;
   const translate = useTranslate();
   const resource = useResourceContext();
@@ -118,12 +121,17 @@ export const ListView = <RecordType extends RaRecord = RaRecord>(
   }
   const getResourceLabel = useGetResourceLabel();
   const resourceLabel = getResourceLabel(resource, 2);
-  const finalTitle =
-    title !== undefined
-      ? title
-      : translate("ra.page.list", {
-          name: resourceLabel,
-        });
+  // The resource's own plural ("Contacts"), not "Contact list": the
+  // breadcrumb and the menu already say it is a list.
+  const finalTitle = title !== undefined ? title : resourceLabel;
+  const { total } = useListContext();
+  const countLabel =
+    total != null
+      ? translate("crm.common.record_count", {
+          smart_count: total,
+          _: `${total}`,
+        })
+      : null;
   const { hasCreate } = useResourceDefinition({ resource });
   const hasDashboard = useHasDashboard();
 
@@ -143,26 +151,57 @@ export const ListView = <RecordType extends RaRecord = RaRecord>(
       )}
 
       <FilterContext.Provider value={filters}>
-        <div className="flex justify-between items-start flex-wrap gap-2 my-2">
-          <h2 className="text-2xl font-bold tracking-tight mb-2">
-            {finalTitle}
-          </h2>
-          {actions ?? (
-            <div className="flex items-center gap-2">
-              {filters && filters.length > 0 ? <FilterButton /> : null}
-              {hasCreate ? <CreateButton /> : null}
-              {<ExportButton />}
-            </div>
-          )}
+        {finalTitle === false ? (
+          // A screen that draws its own heading (a KPI strip above the list)
+          // still gets its actions on the right.
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+            {actions ?? (
+              <DefaultListActions
+                hasFilters={Boolean(filters?.length)}
+                hasCreate={Boolean(hasCreate)}
+              />
+            )}
+          </div>
+        ) : (
+          <PageHeader
+            title={finalTitle}
+            description={countLabel}
+            actions={
+              actions ?? (
+                <DefaultListActions
+                  hasFilters={Boolean(filters?.length)}
+                  hasCreate={Boolean(hasCreate)}
+                />
+              )
+            }
+          />
+        )}
+        {summary ? <div className="mb-5">{summary}</div> : null}
+        {/* One block, so the page's own gap is paid once between the header
+            and the content, not again around an empty filter form. */}
+        <div className="flex flex-col gap-3">
+          <FilterForm />
+          <div className={cn(props.className)}>{children}</div>
+          {pagination}
         </div>
-        <FilterForm />
-
-        <div className={cn("my-2", props.className)}>{children}</div>
-        {pagination}
       </FilterContext.Provider>
     </>
   );
 };
+
+const DefaultListActions = ({
+  hasFilters,
+  hasCreate,
+}: {
+  hasFilters: boolean;
+  hasCreate: boolean;
+}) => (
+  <div className="flex items-center gap-2">
+    {hasFilters ? <FilterButton /> : null}
+    <ExportButton />
+    {hasCreate ? <CreateButton /> : null}
+  </div>
+);
 
 const defaultPagination = <ListPagination />;
 
@@ -210,5 +249,10 @@ export interface ListViewProps<RecordType extends RaRecord = RaRecord> {
   filters?: ReactNode[];
   pagination?: ReactNode;
   title?: ReactNode | string | false;
+  /**
+   * Drawn between the header and the filters -- a KPI strip, a notice. The
+   * header keeps the title, the count and the actions on one row above it.
+   */
+  summary?: ReactNode;
   className?: string;
 }

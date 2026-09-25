@@ -102,6 +102,15 @@ export const canAccess = <
     return params.action === "list" || params.action === "show";
   }
 
+  // The customer portal's slides are the company's voice, like the
+  // configuration: everyone reads them, admins change them (portal §7).
+  if (
+    params.resource === "portal_slides" ||
+    params.resource === "portal_templates"
+  ) {
+    return params.action === "list" || params.action === "show";
+  }
+
   // Only admins manage users and application configuration. Managers still
   // resolve sales names through ReferenceField/ReferenceInput, which query the
   // data provider directly and do not go through canAccess.

@@ -2,6 +2,7 @@ import { useTranslate } from "ra-core";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -20,6 +21,7 @@ import {
 import { QuoteDocument } from "../QuoteDocument";
 import { fromPortalPayload } from "../quoteDocumentData";
 import "../quotePrint.css";
+import "./quotePortal.css";
 import { QuotePortalAcceptDialog } from "./QuotePortalAcceptDialog";
 import { QuotePortalAnswerBar } from "./QuotePortalAnswerBar";
 import {
@@ -29,10 +31,26 @@ import {
   QuotePortalTopbar,
 } from "./QuotePortalChrome";
 import { QuotePortalComments } from "./QuotePortalComments";
+import { QuotePortalCursor } from "./QuotePortalCursor";
 import { QuotePortalHero } from "./QuotePortalHero";
 import { QuotePortalNotice } from "./QuotePortalNotice";
-import { QuotePortalReveal } from "./QuotePortalReveal";
+import {
+  QuotePortalQuotationIntro,
+  QuotePortalStageFade,
+} from "./QuotePortalQuotationIntro";
+
+import { QuotePortalCanvasSlide } from "./QuotePortalCanvasSlide";
 import { QuotePortalSlide } from "./QuotePortalSlide";
+import {
+  DEFAULT_QUOTE_PRESENTATION,
+  personalizePresentation,
+  slideNumber,
+  slideSectionId as standardSectionId,
+  type QuotePortalCover,
+} from "./quotePortalPresentation";
+import { fillSlidePlaceholders } from "./portalSlides";
+import { QuotePortalStamp } from "./QuotePortalStamp";
+import { fx } from "./quotePortalFx";
 import { QuotePortalRejectDialog } from "./QuotePortalRejectDialog";
 import {
   portalErrorKeyOf,
@@ -42,12 +60,9 @@ import {
   type QuotePortalPayload,
 } from "./quotePortalClient";
 import { QUOTE_PORTAL_PATH, tokenFromHash } from "./quotePortalPaths";
-import {
-  DEFAULT_QUOTE_PRESENTATION,
-  personalizePresentation,
-  slideNumber,
-  slideSectionId,
-} from "./quotePortalPresentation";
+import { portalSheetClass } from "./quotePortalSheet";
+import { useQuotePortalDisplayFont } from "./useQuotePortalDisplayFont";
+import { useQuotePortalKeyboard } from "./useQuotePortalKeyboard";
 import { useQuotePortalPoll } from "./useQuotePortalPoll";
 import { useQuotePortalScroll } from "./useQuotePortalScroll";
 
@@ -78,23 +93,32 @@ const RETRYABLE = new Set<QuotePortalErrorKey>([
 type Answer = "accepted" | "rejected";
 
 /**
- * The page's sections, in reading order: the cover, the presentation's slides,
- * then the quotation. The deck is the installation's static one until the
- * per-company editor stores it (`quotePortalPresentation.ts`).
+ * The page's sections, in reading order, then the quotation — always last,
+ * because it is not a slide. What comes before it is what the version was
+ * issued with (quote-portal-presentation.md §7):
+ *
+ * - `standard`: the default template, which IS the original designed
+ *   presentation (`DEFAULT_QUOTE_PRESENTATION`: the cover, then its slides);
+ * - `custom`: a template of the company's own free-form slides;
+ * - `plain`: nothing active when it was issued — a plain cover.
  */
-const PRESENTATION = DEFAULT_QUOTE_PRESENTATION;
+type Presentation = "standard" | "custom" | "plain";
+
+const presentationOf = (payload: QuotePortalPayload): Presentation =>
+  payload.standard_presentation
+    ? "standard"
+    : payload.slides.length > 0
+      ? "custom"
+      : "plain";
+
+const STANDARD_SECTION_IDS =
+  DEFAULT_QUOTE_PRESENTATION.slides.map(standardSectionId);
 const COVER_ID = "quote-portal-cover";
 const QUOTATION_ID = "quote-portal-quotation";
-const SLIDE_IDS = PRESENTATION.slides.map(slideSectionId);
-const SECTION_IDS = [COVER_ID, ...SLIDE_IDS, QUOTATION_ID];
+const slideSectionId = (index: number) => `quote-portal-slide-${index + 1}`;
 
-/**
- * The sheet as the portal presents it: a larger card, the total set apart.
- * Classes on the shared `QuoteDocument`, never a copy of it — the customer's
- * copy and the rep's PDF must stay one document.
- */
-const PORTAL_SHEET_CLASS =
-  "gap-8 rounded-3xl p-6 shadow-2xl shadow-foreground/5 sm:p-10 [&>header]:-mx-6 [&>header]:border-b [&>header]:px-6 [&>header]:pb-8 sm:[&>header]:-mx-10 sm:[&>header]:px-10 print:shadow-none print:[&>header]:mx-0 print:[&>header]:px-0 [&>h3]:rounded-2xl [&>h3]:border [&>h3]:border-brand/25 [&>h3]:bg-brand-tint [&>h3]:px-5 [&>h3]:py-4 [&>h3]:text-sm [&>h3]:text-brand-strong [&_.quote-total]:mt-3 [&_.quote-total]:rounded-xl [&_.quote-total]:border-0 [&_.quote-total]:bg-brand-tint [&_.quote-total]:p-4 [&_.quote-total]:text-lg [&_.quote-total]:font-extrabold [&_dl]:max-w-sm [&_table]:text-[13px] [&_td]:py-4 [&_th]:py-3";
+/** "01", "02"…: the number the quotation's eyebrow carries after the slides. */
+const sectionNumber = (count: number) => String(count).padStart(2, "0");
 
 type PortalState =
   | { key: string | null; status: "loading" }
@@ -208,7 +232,33 @@ export const QuotePortalPage = () => {
       ),
     [],
   );
-  const scroll = useQuotePortalScroll(SECTION_IDS, current.status === "loaded");
+  const presentation =
+    current.status === "loaded" ? presentationOf(current.payload) : "plain";
+  const slideCount =
+    current.status === "loaded" ? current.payload.slides.length : 0;
+  const sectionIds = useMemo(
+    () =>
+      presentation === "standard"
+        ? [COVER_ID, ...STANDARD_SECTION_IDS, QUOTATION_ID]
+        : presentation === "custom"
+          ? [
+              ...Array.from({ length: slideCount }, (_, index) =>
+                slideSectionId(index),
+              ),
+              QUOTATION_ID,
+            ]
+          : [COVER_ID, QUOTATION_ID],
+    [presentation, slideCount],
+  );
+
+  useQuotePortalDisplayFont();
+  const scroll = useQuotePortalScroll(sectionIds, current.status === "loaded");
+  useQuotePortalKeyboard({
+    sectionIds,
+    activeId: scroll.activeId,
+    quotationId: QUOTATION_ID,
+    isReady: current.status === "loaded",
+  });
   const poll = useQuotePortalPoll({
     client,
     token: current.status === "loaded" ? token : null,
@@ -314,22 +364,49 @@ export const QuotePortalPage = () => {
   const brand = data.branding.title;
   const companyName = data.parties.company?.name ?? null;
   const hasThread = actions.can_comment || payload.comments.length > 0;
-  const hasSlides = PRESENTATION.slides.length > 0;
-  // The deck as written for THIS customer (the company, the addressee, the
-  // quotation's own title), recomputed with the payload it reads from.
-  const deck = personalizePresentation(PRESENTATION, {
-    company:
-      companyName ??
-      translate("resources.quotes.portal.landing.company_fallback"),
+  const customerName =
+    companyName ??
+    translate("resources.quotes.portal.landing.company_fallback");
+  // Written for THIS customer: `{company}` and friends filled from the
+  // payload, recomputed with it.
+  const values = {
+    company: customerName,
     contact: data.parties.contact?.name ?? "",
     quote: data.quote.title ?? "",
     brand,
-  });
+  };
+  const deck = personalizePresentation(DEFAULT_QUOTE_PRESENTATION, values);
+  const slides = fillSlidePlaceholders(payload.slides, values);
+  const plainCover: QuotePortalCover = {
+    navLabel: brand,
+    eyebrow: brand,
+    title: translate("resources.quotes.portal.landing.plain_cover_title", {
+      company: customerName,
+    }),
+    titleAccent: null,
+    body: translate("resources.quotes.portal.landing.plain_cover_body"),
+    image: null,
+  };
+  // How many numbered slides come before the quotation (the cover has none).
+  const numberedSlides =
+    presentation === "standard"
+      ? deck.slides.length
+      : presentation === "custom"
+        ? slideCount
+        : 0;
+  const slideLabel = (index: number) =>
+    translate("resources.quotes.portal.landing.slide_label", {
+      number: index + 1,
+      total: slideCount,
+    });
+  const topId = sectionIds[0];
 
   return (
     <div className="quote-print-root min-h-screen bg-background">
       <QuotePortalProgress />
+      <QuotePortalCursor />
       <QuotePortalTopbar
+        isCompact={scroll.isScrolled}
         brand={brand}
         number={data.quote.number}
         versionNumber={data.quote.version_number}
@@ -337,11 +414,20 @@ export const QuotePortalPage = () => {
       <QuotePortalMiniNav
         activeId={scroll.activeId}
         sections={[
-          { id: COVER_ID, label: deck.cover.navLabel },
-          ...deck.slides.map((slide, index) => ({
-            id: SLIDE_IDS[index],
-            label: slide.navLabel,
-          })),
+          ...(presentation === "standard"
+            ? [
+                { id: COVER_ID, label: deck.cover.navLabel },
+                ...deck.slides.map((slide, index) => ({
+                  id: STANDARD_SECTION_IDS[index],
+                  label: slide.navLabel,
+                })),
+              ]
+            : presentation === "custom"
+              ? slides.map((_, index) => ({
+                  id: sectionIds[index],
+                  label: slideLabel(index),
+                }))
+              : [{ id: COVER_ID, label: brand }]),
           {
             id: QUOTATION_ID,
             label: translate("resources.quotes.portal.landing.quote_heading"),
@@ -350,21 +436,45 @@ export const QuotePortalPage = () => {
       />
 
       <main>
-        <QuotePortalHero
-          id={COVER_ID}
-          cover={deck.cover}
-          nextId={SLIDE_IDS[0] ?? QUOTATION_ID}
-          quoteId={QUOTATION_ID}
-        />
-
-        {deck.slides.map((slide, index) => (
-          <QuotePortalSlide
-            key={slide.key}
-            id={SLIDE_IDS[index]}
-            slide={slide}
-            number={slideNumber(index)}
+        {presentation === "standard" ? (
+          <>
+            <QuotePortalHero
+              id={COVER_ID}
+              cover={deck.cover}
+              nextId={STANDARD_SECTION_IDS[0] ?? QUOTATION_ID}
+              quoteId={QUOTATION_ID}
+            />
+            {deck.slides.map((slide, index) => (
+              <QuotePortalSlide
+                key={slide.key}
+                id={STANDARD_SECTION_IDS[index]}
+                slide={slide}
+                number={slideNumber(index)}
+              />
+            ))}
+          </>
+        ) : presentation === "custom" ? (
+          slides.map((slide, index) => (
+            <QuotePortalCanvasSlide
+              key={sectionIds[index]}
+              id={sectionIds[index]}
+              label={slideLabel(index)}
+              slide={slide}
+              nextId={sectionIds[index + 1] ?? QUOTATION_ID}
+              quoteId={QUOTATION_ID}
+            />
+          ))
+        ) : (
+          // No slides: a plain cover naming the two parties.
+          <QuotePortalHero
+            id={COVER_ID}
+            cover={plainCover}
+            nextId={QUOTATION_ID}
+            quoteId={QUOTATION_ID}
           />
-        ))}
+        )}
+
+        <QuotePortalStageFade />
 
         <section
           id={QUOTATION_ID}
@@ -372,32 +482,30 @@ export const QuotePortalPage = () => {
           className="scroll-mt-4 pt-20 pb-24 min-[1000px]:pt-[110px] min-[1000px]:pb-[140px] print:py-0"
         >
           <div className="mx-auto flex w-[min(1280px,calc(100%-28px))] flex-col gap-7.5 min-[641px]:w-[min(1280px,calc(100%-40px))]">
-            <QuotePortalReveal className="quote-print-hide">
-              <p className="mb-4.5 text-[11px] font-bold tracking-[0.2em] text-brand uppercase">
-                {hasSlides
-                  ? `${slideNumber(PRESENTATION.slides.length)} · `
-                  : null}
-                {translate("resources.quotes.portal.landing.quote_eyebrow")}
-              </p>
-              <h2
-                id={`${QUOTATION_ID}-title`}
-                className="mb-2.5 text-[clamp(2.375rem,5vw,3.875rem)] leading-none font-bold tracking-[-0.05em]"
-              >
-                {translate("resources.quotes.portal.landing.quote_heading")}
-              </h2>
-              <p className="max-w-[650px] leading-relaxed text-muted-foreground">
-                {companyName
+            <QuotePortalQuotationIntro
+              titleId={`${QUOTATION_ID}-title`}
+              number={data.quote.number}
+              eyebrow={`${
+                numberedSlides > 0
+                  ? `${sectionNumber(numberedSlides + 1)} · `
+                  : ""
+              }${translate("resources.quotes.portal.landing.quote_eyebrow")}`}
+              heading={translate(
+                "resources.quotes.portal.landing.quote_heading",
+              )}
+              intro={
+                companyName
                   ? translate(
-                      hasSlides
+                      numberedSlides > 0
                         ? "resources.quotes.portal.landing.quote_intro_after_slides"
                         : "resources.quotes.portal.landing.quote_intro",
                       { company: companyName },
                     )
                   : translate(
                       "resources.quotes.portal.landing.quote_intro_anonymous",
-                    )}
-              </p>
-            </QuotePortalReveal>
+                    )
+              }
+            />
 
             <div
               className={cn(
@@ -426,18 +534,21 @@ export const QuotePortalPage = () => {
                   </div>
                 ) : null}
 
-                <QuoteDocument
-                  data={data}
-                  className={PORTAL_SHEET_CLASS}
-                  footer={
-                    <QuotePortalAnswerBar
-                      canAccept={actions.can_accept}
-                      canReject={actions.can_reject}
-                      onAccept={() => setDialog("accept")}
-                      onReject={() => setDialog("reject")}
-                    />
-                  }
-                />
+                <div className="relative">
+                  {fx(19) ? <QuotePortalStamp payload={payload} /> : null}
+                  <QuoteDocument
+                    data={data}
+                    className={portalSheetClass()}
+                    footer={
+                      <QuotePortalAnswerBar
+                        canAccept={actions.can_accept}
+                        canReject={actions.can_reject}
+                        onAccept={() => setDialog("accept")}
+                        onReject={() => setDialog("reject")}
+                      />
+                    }
+                  />
+                </div>
               </div>
 
               {hasThread ? (
@@ -457,7 +568,7 @@ export const QuotePortalPage = () => {
       </main>
 
       <QuotePortalFloatingActions
-        topId={COVER_ID}
+        topId={topId}
         quoteId={QUOTATION_ID}
         isPastFold={scroll.isPastFold}
         isReadingQuote={scroll.activeId === QUOTATION_ID}

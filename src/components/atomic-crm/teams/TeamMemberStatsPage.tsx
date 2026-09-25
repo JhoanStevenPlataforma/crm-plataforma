@@ -118,7 +118,9 @@ export const TeamMemberStatsPage = () => {
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold">{memberNameOf(member)}</h1>
+            <h1 className="text-2xl leading-tight font-semibold">
+              {memberNameOf(member)}
+            </h1>
             {member.role && member.role !== "rep" ? (
               <Badge variant="secondary">{member.role}</Badge>
             ) : null}

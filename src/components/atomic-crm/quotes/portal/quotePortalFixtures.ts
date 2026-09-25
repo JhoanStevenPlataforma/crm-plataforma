@@ -105,9 +105,60 @@ export const portalPayload: QuotePortalPayload = {
     },
   ],
   branding: { title: "Acme CRM", logo_url: null },
+  slides: [],
+  standard_presentation: false,
   actions: { can_accept: true, can_reject: true, can_comment: true },
   acceptance: { accepted_at: null, accepted_by_name: null, rejected_at: null },
 };
+
+/**
+ * Two slides as `portal_slides_snapshot()` freezes them: a picture filling the
+ * left of the stage beside a heading, then a text alone in the middle.
+ */
+export const portalSlidesSample: QuotePortalPayload["slides"] = [
+  {
+    elements: [
+      {
+        id: "picture",
+        kind: "image",
+        x: 0,
+        y: 0,
+        w: 55,
+        h: 100,
+        path: "slides/11111111-1111-4111-8111-111111111111.webp",
+        alt: "Our team",
+      },
+      {
+        id: "heading",
+        kind: "text",
+        x: 60,
+        y: 30,
+        w: 35,
+        h: 30,
+        text: "People behind every event",
+        size: "xl",
+        align: "left",
+        color: "light",
+      },
+    ],
+  },
+  {
+    elements: [
+      {
+        id: "claim",
+        kind: "text",
+        x: 10,
+        y: 40,
+        w: 80,
+        h: 20,
+        text: "Twenty years on stage",
+        size: "lg",
+        align: "center",
+        color: "light",
+      },
+    ],
+  },
+];
 
 export const ANSWERED_AT = "2026-09-14T15:00:00.000Z";
 

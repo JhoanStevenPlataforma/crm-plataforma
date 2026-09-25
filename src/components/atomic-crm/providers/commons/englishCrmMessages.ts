@@ -188,15 +188,49 @@ export const englishCrmMessages = {
           'Change the status of a contact by adding a note to that contact and clicking on "show options".',
         empty_hint: 'Contacts with a "hot" status will appear here.',
         title: "Hot Contacts",
+        subtitle: "Longest without contact first",
+        cooling: "Cooling",
+        cooling_hint:
+          "No contact for %{smart_count} day |||| No contact for %{smart_count} days",
+        last_touch: "Last contact: %{date}",
+        filter_label: "Filter hot contacts",
+        filter_all: "All",
+        filter_cooling: "Cooling",
+        filter_mine: "Mine",
+        no_next_task: "No next task",
+        view_all: "View all %{total}",
+        empty_filter: "No hot contact matches this filter.",
+        call: "Call %{name}",
+        email: "Email %{name}",
       },
     },
     deals: {
+      quote_history: {
+        commented: "%{name} wrote back on the quotation",
+        customer: "The customer",
+        by_customer: "by the customer",
+      },
       name: "Deal |||| Deals",
+      board: {
+        latest_quote: "Latest quotation and where it stands",
+        amount_from_quote: "Amount taken from the quotation",
+        probability: "%{value} probability",
+        weighted_short: "Weighted %{amount}",
+        share: "%{value} of the open pipeline",
+        close_date: "Expected close: %{date}",
+        no_close_date: "No close date",
+        next_task: "Next: %{task}",
+        overdue_task: "Overdue: %{task}",
+        no_task: "No activity scheduled",
+        owner: "Owner: %{name}",
+        drop_here: "Drag a deal here",
+      },
       fields: {
         name: "Name",
         description: "Description",
         company_id: "Company",
         contact_ids: "Contacts",
+        sales_id: "Owner",
         category: "Category",
         amount: "Budget",
         expected_closing_date: "Expected closing date",
@@ -229,6 +263,16 @@ export const englishCrmMessages = {
       },
       updated: "Deal updated",
       stage_change: {
+        by_quote: {
+          sent: "Moved automatically: the quotation was sent",
+          viewed: "Moved automatically: the customer opened the quotation",
+          commented: "Moved automatically: the customer wrote back",
+          negotiating: "Moved automatically: the quotation is being negotiated",
+          accepted: "Moved automatically: the customer accepted the quotation",
+          rejected: "Moved automatically: the customer declined the quotation",
+          expired: "Moved automatically: the quotation expired",
+          generic: "Moved automatically by a quotation",
+        },
         title: "Move to %{stage}",
         description:
           "%{deal} is moving from %{from} to %{to}. Record what happened, so the board still explains itself in three months.",
@@ -370,6 +414,10 @@ export const englishCrmMessages = {
       },
     },
     sales: {
+      field_categories: {
+        person: "Person",
+        access: "Access",
+      },
       name: "User |||| Users",
       fields: {
         first_name: "First name",
@@ -400,6 +448,10 @@ export const englishCrmMessages = {
       },
     },
     teams: {
+      field_categories: {
+        team: "Team",
+        budget: "Budget",
+      },
       name: "Team |||| Teams",
       forcedCaseName: "Team",
       fields: {
@@ -448,6 +500,11 @@ export const englishCrmMessages = {
       },
     },
     products: {
+      field_categories: {
+        product: "Product",
+        pricing: "Pricing",
+        internal: "Internal use",
+      },
       name: "Product |||| Products",
       forcedCaseName: "Product",
       fields: {
@@ -490,6 +547,10 @@ export const englishCrmMessages = {
       },
     },
     price_lists: {
+      field_categories: {
+        general: "Price list",
+        validity: "Validity",
+      },
       name: "Price list |||| Price lists",
       forcedCaseName: "Price list",
       fields: {
@@ -608,6 +669,7 @@ export const englishCrmMessages = {
         },
       },
       panel: {
+        customer_activity: "Customer activity: %{date}",
         empty: "No quotes for this deal yet",
         load_error: "The quotes of this deal could not be loaded",
       },
@@ -693,11 +755,23 @@ export const englishCrmMessages = {
         closed_anonymous:
           "This quotation can no longer be answered online. Please contact whoever sent it to you.",
         landing: {
+          stamp: {
+            open: "Open",
+            accepted: "Accepted",
+            rejected: "Declined",
+            superseded: "Superseded",
+            expired: "Expired",
+          },
           company_fallback: "you",
           sections: "Sections",
           start: "Start the proposal",
+          continue: "Continue",
+          plain_cover_title: "A proposal prepared for %{company}",
+          plain_cover_body:
+            "Here is the quotation we prepared, with every detail of the proposal.",
           skip_to_quote: "View the quotation directly",
           view_quote: "View quotation",
+          slide_label: "Slide %{number} of %{total}",
           scroll_hint: "Scroll to read the proposal",
           back_to_top: "Back to top",
           quote_eyebrow: "Commercial proposal",
@@ -923,6 +997,10 @@ export const englishCrmMessages = {
       },
     },
     tax_rates: {
+      field_categories: {
+        tax: "Tax",
+        rate: "Rate and use",
+      },
       name: "Tax rate |||| Tax rates",
       forcedCaseName: "Tax rate",
       fields: {
@@ -1042,6 +1120,8 @@ export const englishCrmMessages = {
         empty_value: "(empty)",
         load_more: "Load older events",
         events: {
+          quote_status_changed: "Quotation status changed",
+          quote_commented: "The customer wrote back",
           // Not a task event: the timeline is shared, and this is how a deal's
           // stage transition is labelled on it.
           deal_stage_changed: "Stage changed",
@@ -1230,6 +1310,92 @@ export const englishCrmMessages = {
     },
   },
   crm: {
+    portal_slides: {
+      templates: {
+        label: "Template",
+        active: "Shown in quotations",
+        active_short: "active",
+        activate: "Use in quotations",
+        activated: "From now on, every quotation issued shows this template.",
+        locked: "Default · read-only",
+        save_as: "Save as",
+        save_as_title: "Save a copy of this template",
+        copy_name: "Copy of %{name}",
+        new: "New",
+        new_title: "New template",
+        name: "Name",
+        more: "More actions",
+        rename: "Rename",
+        delete: "Delete template",
+        delete_active: "Delete (make another one active first)",
+        delete_title: "Delete “%{name}”?",
+        delete_content:
+          "Its slides are deleted with it. Quotations already issued keep showing them.",
+        locked_hint:
+          "This is the portal's original presentation, shown exactly as designed. It cannot be edited; “Save as” creates an editable version built from free boxes.",
+        preview: "View full screen",
+        cover: "Cover",
+        sample_company: "your company",
+      },
+      title: "Customer portal",
+      description:
+        "The slides a customer sees before the quotation. Keep as many templates as you like and choose which one quotations show; each issued quotation keeps the slides as they were that day. Texts may use {company}, {contact}, {quote} and {brand}.",
+      saved: "Saved",
+      saving: "Saving…",
+      save_failed: "Not saved",
+      empty_deck:
+        "No slides yet: customers open straight on a simple cover and the quotation. Add a slide to present your company first.",
+      add_first: "Add the first slide",
+      add_slide: "Add slide",
+      filmstrip_label: "Slides",
+      slide_n: "Slide %{number}",
+      move_up: "Move up",
+      move_down: "Move down",
+      duplicate: "Duplicate",
+      delete_slide: "Delete slide",
+      delete_title: "Delete this slide?",
+      delete_content:
+        "Quotations already issued keep showing it; new ones will not.",
+      canvas_label: "Slide editor",
+      canvas_hint:
+        "Drag a box to move it, drag its handles to resize it, double-click a text to write. Arrow keys nudge the selected box, Delete removes it.",
+      empty_slide:
+        "An empty slide. Add a text, a picture or a video from the bar above.",
+      text_label: "Text",
+      text_placeholder: "Double-click to write",
+      new_text: "Write here",
+      add_text: "Text",
+      add_media: "Picture or video",
+      toolbar_hint: "Select a box on the slide to change it.",
+      text_size: "Text size",
+      text_align: "Alignment",
+      align: {
+        left: "Align left",
+        center: "Centre",
+        right: "Align right",
+      },
+      text_color: "Text colour",
+      color: {
+        light: "Light text",
+        dark: "Dark text",
+      },
+      alt_label: "Description",
+      alt_placeholder: "Describe it (for screen readers)",
+      bring_front: "Bring to front",
+      send_back: "Send to back",
+      delete_box: "Remove from the slide",
+      errors: {
+        upload_type:
+          "Use a picture (JPG, PNG, WebP, GIF, AVIF) or a video (MP4, WebM).",
+        upload_too_large:
+          "Too large: pictures up to 10 MB, videos up to 50 MB.",
+        upload_failed: "The file could not be uploaded. Try again.",
+        demo_upload:
+          "Pictures and videos cannot be uploaded in the demo: there is no storage behind it.",
+        save_failed:
+          "The slide could not be saved. Check your connection and try again.",
+      },
+    },
     notifications: {
       title: "Notifications",
       empty: "You are all caught up",
@@ -1330,7 +1496,40 @@ export const englishCrmMessages = {
       },
       welcome_title: "Welcome to Atomic CRM",
     },
+    form_section: {
+      product: "What it is and how it is sold",
+      pricing: "List price, currency and tax",
+      product_internal: "Notes for the team, and whether it is offered",
+      price_list_general: "Code, currency and whether it applies by default",
+      price_list_validity: "When the prices apply, and what is worth knowing",
+      tax_identity: "How it appears on quotes",
+      tax_rate: "Percentage, order and availability",
+      team_identity: "Name and what the team does",
+      team_budget: "What the team is expected to sell, and over which period",
+      sale_identity: "Name and sign-in email",
+      sale_access: "Role, and whether the account can sign in",
+      identity: "Who this person is",
+      position: "Their role and company",
+      reach: "How to reach them",
+      contact_misc: "Background and account owner",
+      company_contact: "Website, LinkedIn and phone",
+      company_context: "Sector, size and revenue",
+      address: "Where the company is",
+      company_misc: "Notes, links and account owner",
+      qualification: "Where the lead came from and how warm it is",
+      linked_to: "The company and the people involved",
+      deal_misc: "Amount, close date, stage and owner",
+    },
+    form_page: {
+      create_hint: "Fields marked * are required.",
+      edit_hint: "Changes are saved when you click Save.",
+      unsaved_changes: "Unsaved changes",
+    },
     common: {
+      see_all_tasks: "See all tasks",
+      no_results: "No results",
+      no_results_hint: "Try another search or clear the filters.",
+      record_count: "%{smart_count} record |||| %{smart_count} records",
       activity: "Activity",
       added: "added",
       details: "Details",
@@ -1366,6 +1565,11 @@ export const englishCrmMessages = {
       load_more: "Load more activity",
     },
     analytics: {
+      view: {
+        label: "Chart or table",
+        chart: "Chart",
+        table: "Table",
+      },
       title: "Analytics",
       see_teams_dashboard: "Team budgets →",
       load_error: "These figures could not be loaded. Try again in a moment.",
@@ -1881,6 +2085,34 @@ export const englishCrmMessages = {
         unweighted_short: "%{amount} unweighted",
       },
       latest_activity: "Latest Activity",
+      delta: {
+        today: "vs. yesterday",
+        this_week: "vs. last week",
+        this_month: "vs. last month",
+        this_quarter: "vs. last quarter",
+        this_year: "vs. last year",
+        points: "%{value} pts",
+        no_change: "No change",
+        basis_hint:
+          "Compared with the same stretch of the previous period, up to the same day",
+      },
+      trend_won: "Won per month, last 6 months",
+      trend_win_rate: "Win rate per month, last 6 months",
+      pipeline: {
+        title: "Pipeline by stage",
+        subtitle: "Open deals now; the period above does not apply",
+        view_board: "Open the board",
+        empty: "No open deals.",
+        weighted: "Weighted %{amount}",
+      },
+      closing: {
+        title: "Closing in the next 30 days",
+        subtitle: "By expected close date",
+        empty: "No deal is expected to close in the next 30 days.",
+        overdue:
+          "%{smart_count} open deal is past its close date |||| %{smart_count} open deals are past their close date",
+        more: "%{smart_count} more |||| %{smart_count} more",
+      },
       trend_basis:
         "Last 6 months · created by open date, won and lost by expected close",
       latest_activity_error: "Error loading latest activity",
@@ -1942,6 +2174,23 @@ export const englishCrmMessages = {
       title: "Import Data",
     },
     settings: {
+      deal_quote_rules: {
+        title: "Pipeline and quotations",
+        help: "Where a quotation raised against a deal moves the deal. A deal already won or lost is never reopened.",
+        saved: "Rule saved",
+        save_error: "The rule could not be saved",
+        no_move: "Do not move the deal",
+        unknown_stage: "%{stage} (no longer a stage)",
+        triggers: {
+          sent: "The quotation is sent (its link is created)",
+          viewed: "The customer opens it",
+          commented: "The customer writes back",
+          negotiating: "It goes into negotiation",
+          accepted: "The customer accepts it",
+          rejected: "The customer declines it (and no other is open)",
+          expired: "It expires (and no other is open)",
+        },
+      },
       about: "About",
       companies: {
         sectors: "Sectors",
@@ -2015,6 +2264,8 @@ export const englishCrmMessages = {
       help: "Help center",
       search: "Search",
       toggle: "Toggle navigation",
+      collapse: "Collapse",
+      expand: "Expand",
       groups: {
         home: "Home",
         sales: "Sales",

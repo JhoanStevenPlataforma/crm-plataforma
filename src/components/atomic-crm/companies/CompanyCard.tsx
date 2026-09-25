@@ -31,18 +31,24 @@ export const CompanyCard = (props: { record?: Company }) => {
         id: record.id,
         type: "show",
       })}
-      className="no-underline"
+      className="block h-full no-underline"
     >
-      <Card className="h-[200px] flex flex-col justify-between p-4 hover:bg-muted">
-        <div className="flex flex-col items-center gap-1">
+      {/* Lifts rather than greys on hover: the card is a door to the
+          company, and the raise says so before the pointer settles. */}
+      <Card className="group/company h-full gap-0 overflow-hidden py-0 transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-raised">
+        <div className="flex flex-1 flex-col items-center gap-2 px-4 pt-6 pb-5 text-center">
           <CompanyAvatar />
-          <div className="text-center mt-1">
-            <h6 className="text-sm font-medium">{record.name}</h6>
-            <p className="text-xs text-muted-foreground">{sectorLabel}</p>
+          <div className="flex min-w-0 max-w-full flex-col gap-0.5">
+            <h6 className="truncate text-sm font-semibold transition-colors group-hover/company:text-brand">
+              {record.name}
+            </h6>
+            <p className="truncate text-xs text-muted-foreground">
+              {sectorLabel ?? " "}
+            </p>
           </div>
         </div>
-        <div className="flex flex-row w-full justify-between gap-2">
-          <div className="flex items-center">
+        <div className="flex h-11 items-center justify-between gap-2 border-t border-border/70 bg-surface-muted/60 px-4">
+          <div className="flex min-w-0 items-center">
             {record.nb_contacts ? (
               <ReferenceManyField reference="contacts" target="company_id">
                 <AvatarGroupIterator />
@@ -50,10 +56,18 @@ export const CompanyCard = (props: { record?: Company }) => {
             ) : null}
           </div>
           {record.nb_deals ? (
-            <div className="flex items-center ml-2 gap-0.5">
-              <Handshake className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium">{record.nb_deals}</span>
-              <span className="text-xs text-muted-foreground">
+            <div
+              className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+              title={translate("resources.deals.name", {
+                smart_count: record.nb_deals ?? 0,
+                _: "Deal |||| Deals",
+              })}
+            >
+              <Handshake className="size-3.5" />
+              <span className="font-semibold text-foreground tabular-nums">
+                {record.nb_deals}
+              </span>
+              <span className="hidden xl:inline">
                 {translate("resources.deals.name", {
                   smart_count: record.nb_deals ?? 0,
                   _: "Deal |||| Deals",

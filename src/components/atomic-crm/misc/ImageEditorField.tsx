@@ -60,7 +60,7 @@ const ImageEditorField = (props: ImageEditorFieldProps) => {
           ) : (
             <img
               {...commonProps}
-              className="cursor-pointer object-cover"
+              className="cursor-pointer object-contain p-2"
               style={{ width, height }}
               alt={translate("crm.image_editor.editable_content", {
                 _: "Editable content",

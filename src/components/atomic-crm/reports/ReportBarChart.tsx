@@ -3,7 +3,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { ChartCard } from "../misc/ChartCard";
 import {
   barDefaults,
-  bottomLegend,
+  horizontalBarProps,
   useCategoricalPalette,
 } from "../misc/chartTheme";
 
@@ -55,6 +55,12 @@ export const ReportBarChart = ({
       isEmpty={rows.length === 0}
       emptyLabel={emptyLabel}
       height={height}
+      // In the header, beside the title. A single series needs no legend:
+      // the title names it and the axis names every bar.
+      legend={seriesLabels.map((label, i) => ({
+        label,
+        color: palette[i % palette.length],
+      }))}
     >
       <ResponsiveBar
         data={rows}
@@ -68,37 +74,37 @@ export const ReportBarChart = ({
         groupMode={groupMode}
         margin={
           layout === "horizontal"
-            ? {
-                top: 10,
-                right: 24,
-                bottom: seriesLabels.length > 1 ? 56 : 32,
-                left: 140,
-              }
+            ? { top: 4, right: 24, bottom: 28, left: 140 }
             : {
-                top: 10,
-                right: 24,
-                bottom: seriesLabels.length > 1 ? 70 : 56,
+                top: 8,
+                right: 8,
+                bottom: rows.length > 6 ? 56 : 28,
                 left: 68,
               }
         }
         {...barDefaults}
+        {...(layout === "horizontal" ? horizontalBarProps : {})}
         label={
           formatValue
             ? (datum) => formatValue(Number(datum.value ?? 0))
             : undefined
         }
         valueFormat={formatValue}
+        gridYValues={layout === "horizontal" ? undefined : 4}
+        gridXValues={layout === "horizontal" ? 4 : undefined}
         axisBottom={{
           tickSize: 0,
-          tickPadding: 8,
+          tickPadding: 10,
+          tickValues: layout === "horizontal" ? 4 : undefined,
           // Long category names on a vertical axis overlap past six bars. The
           // rotation is the cheapest fix that keeps every label readable.
           tickRotation: layout === "vertical" && rows.length > 6 ? -35 : 0,
         }}
-        axisLeft={{ tickSize: 0, tickPadding: 8 }}
-        // A single series needs no legend: the title names it and the axis
-        // names every bar.
-        legends={seriesLabels.length > 1 ? bottomLegend : undefined}
+        axisLeft={{
+          tickSize: 0,
+          tickPadding: 10,
+          tickValues: layout === "horizontal" ? undefined : 4,
+        }}
       />
     </ChartCard>
   );

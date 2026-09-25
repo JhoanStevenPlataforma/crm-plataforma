@@ -79,70 +79,68 @@ export const LeadList = () => {
   ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <LeadStats />
-
-      <List
-        title={false}
-        perPage={25}
-        sort={{ field: "created_at", order: "DESC" }}
-        filters={leadFilters}
-        actions={<LeadListActions />}
-        pagination={<ListPagination rowsPerPageOptions={[10, 25, 50, 100]} />}
-      >
-        <DataTable>
-          <DataTable.Col
-            source="last_name"
-            label="resources.leads.fields.name"
-            render={(record: Lead) =>
-              `${record.first_name ?? ""} ${record.last_name ?? ""}`.trim() ||
-              translate("resources.leads.unnamed")
-            }
-          />
-          <DataTable.Col
-            source="company_name"
-            label="resources.leads.fields.company"
-          >
-            <LeadCompanyField />
-          </DataTable.Col>
-          <DataTable.Col source="email" />
-          <DataTable.Col source="status">
-            <LeadStatusBadge choices={leadStatuses} />
-          </DataTable.Col>
-          {/* Sortable: ranking the desk by score is the whole reason a score
+    // The KPI strip sits between the heading and the list: the header keeps
+    // the title, the count and the actions on one row above it.
+    <List
+      summary={<LeadStats />}
+      perPage={25}
+      sort={{ field: "created_at", order: "DESC" }}
+      filters={leadFilters}
+      actions={<LeadListActions />}
+      pagination={<ListPagination rowsPerPageOptions={[10, 25, 50, 100]} />}
+    >
+      <DataTable>
+        <DataTable.Col
+          source="last_name"
+          label="resources.leads.fields.name"
+          render={(record: Lead) =>
+            `${record.first_name ?? ""} ${record.last_name ?? ""}`.trim() ||
+            translate("resources.leads.unnamed")
+          }
+        />
+        <DataTable.Col
+          source="company_name"
+          label="resources.leads.fields.company"
+        >
+          <LeadCompanyField />
+        </DataTable.Col>
+        <DataTable.Col source="email" />
+        <DataTable.Col source="status">
+          <LeadStatusBadge choices={leadStatuses} />
+        </DataTable.Col>
+        {/* Sortable: ranking the desk by score is the whole reason a score
               column earns its width. */}
-          <DataTable.Col source="score">
-            <LeadScoreField />
-          </DataTable.Col>
-          <DataTable.Col
-            source="source"
-            render={(record: Lead) =>
-              leadSources.find((choice) => choice.value === record.source)
-                ?.label ?? record.source
-            }
-          />
-          <DataTable.Col source="sales_id">
-            <ReferenceField source="sales_id" reference="sales" />
-          </DataTable.Col>
-          <DataTable.Col source="created_at">
-            <DateField source="created_at" />
-          </DataTable.Col>
-          {/* No `source`, so the header stays blank and the column does not
+        <DataTable.Col source="score">
+          <LeadScoreField />
+        </DataTable.Col>
+        <DataTable.Col
+          source="source"
+          render={(record: Lead) =>
+            leadSources.find((choice) => choice.value === record.source)
+              ?.label ?? record.source
+          }
+        />
+        <DataTable.Col source="sales_id">
+          <ReferenceField source="sales_id" reference="sales" />
+        </DataTable.Col>
+        <DataTable.Col source="created_at">
+          <DateField source="created_at" />
+        </DataTable.Col>
+        {/* No `source`, so the header stays blank and the column does not
               offer a sort on something that is not a value. */}
-          <DataTable.Col
-            label="resources.leads.fields.actions"
-            disableSort
-            headerClassName="text-right"
-            cellClassName="text-right"
-          >
-            <LeadRowActions />
-          </DataTable.Col>
-        </DataTable>
+        <DataTable.Col
+          label="resources.leads.fields.actions"
+          disableSort
+          headerClassName="text-right"
+          cellClassName="text-right"
+        >
+          <LeadRowActions />
+        </DataTable.Col>
+      </DataTable>
 
-        <BulkActionsToolbar>
-          <LeadBulkActionButtons />
-        </BulkActionsToolbar>
-      </List>
-    </div>
+      <BulkActionsToolbar>
+        <LeadBulkActionButtons />
+      </BulkActionsToolbar>
+    </List>
   );
 };

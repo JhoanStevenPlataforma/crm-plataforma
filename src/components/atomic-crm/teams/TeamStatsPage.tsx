@@ -131,7 +131,7 @@ export const TeamStatsPage = () => {
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-xl font-semibold">{team.name}</h1>
+          <h1 className="text-2xl leading-tight font-semibold">{team.name}</h1>
           <p className="text-xs text-muted-foreground">
             {team.budget_period_start
               ? `${team.budget_period_start} - ${team.budget_period_end}`

@@ -7,15 +7,18 @@ import {
   useListContext,
   useNotify,
 } from "ra-core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useViewportFill } from "../misc/useViewportFill";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { isDealStageGateError } from "../providers/commons/dealStageGate";
 import type { CrmDataProvider } from "../providers/types";
 import type { CrmRole, Deal } from "../types";
+import { DealBoardSignalsProvider } from "./DealBoardSignals";
 import { DealColumn } from "./DealColumn";
 import { planDealDrop, type DropTarget } from "./dealDrop";
 import { DealStageChangeDialog } from "./DealStageChangeDialog";
+import { closedDealStages, summarizePipeline } from "./pipelineFigures";
 import type { DealsByStage } from "./stages";
 import { getDealsByStage } from "./stages";
 
@@ -33,7 +36,7 @@ type PendingStageMove = {
 };
 
 export const DealListContent = () => {
-  const { dealStages } = useConfigurationContext();
+  const { dealStages, dealPipelineStatuses } = useConfigurationContext();
   const { data: unorderedDeals, isPending, refetch } = useListContext<Deal>();
   const dataProvider = useDataProvider<CrmDataProvider>();
   const notify = useNotify();
@@ -43,6 +46,7 @@ export const DealListContent = () => {
   );
   const [pendingMove, setPendingMove] = useState<PendingStageMove | null>(null);
   const [isMoving, setIsMoving] = useState(false);
+  const [boardRef, boardHeight] = useViewportFill();
   const { identity } = useGetIdentity();
 
   // Read the rule for THIS move, from the same function that will decide it.
@@ -73,6 +77,23 @@ export const DealListContent = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unorderedDeals]);
+
+  const closedStages = useMemo(
+    () => closedDealStages(dealPipelineStatuses),
+    [dealPipelineStatuses],
+  );
+  // Folded from the list data, so each column's share of the open pipeline
+  // follows the board's filters.
+  const summary = useMemo(
+    () =>
+      summarizePipeline(
+        unorderedDeals ?? [],
+        dealStages,
+        closedStages,
+        new Date(),
+      ),
+    [unorderedDeals, dealStages, closedStages],
+  );
 
   if (isPending) return null;
 
@@ -148,17 +169,33 @@ export const DealListContent = () => {
 
   return (
     <>
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4">
-          {dealStages.map((stage) => (
-            <DealColumn
-              stage={stage.value}
-              deals={dealsByStage[stage.value]}
-              key={stage.value}
-            />
-          ))}
-        </div>
-      </DragDropContext>
+      {/* The board is the module: no figures band above it (the dashboard
+          carries those), so it starts right under the filters. */}
+      <div className="flex flex-col">
+        <DealBoardSignalsProvider deals={unorderedDeals ?? []}>
+          <DragDropContext onDragEnd={onDragEnd}>
+            {/* The board scrolls inside itself, both ways, and ends at the
+                bottom of the viewport: its sideways scrollbar is always on
+                screen instead of below the last card of the longest column.
+                It is the one scroll container the drag library auto-scrolls. */}
+            <div
+              ref={boardRef}
+              style={{ height: boardHeight }}
+              className="-mx-1 flex items-start gap-3 overflow-auto overscroll-contain px-1 pb-3"
+            >
+              {dealStages.map((stage) => (
+                <DealColumn
+                  stage={stage.value}
+                  deals={dealsByStage[stage.value]}
+                  openAmount={summary.openAmount}
+                  isClosed={closedStages.includes(stage.value)}
+                  key={stage.value}
+                />
+              ))}
+            </div>
+          </DragDropContext>
+        </DealBoardSignalsProvider>
+      </div>
 
       {pendingMove ? (
         <DealStageChangeDialog

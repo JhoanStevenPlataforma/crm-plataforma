@@ -9,6 +9,7 @@ import {
   useHasDashboard,
   useResourceContext,
   useResourceDefinition,
+  useTranslate,
 } from "ra-core";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
@@ -51,6 +52,7 @@ export const Edit = ({
   actions,
   children,
   className,
+  contentClassName,
   disableBreadcrumb,
   title,
   ...rest
@@ -59,6 +61,7 @@ export const Edit = ({
     <EditView
       actions={actions}
       className={className}
+      contentClassName={contentClassName}
       disableBreadcrumb={disableBreadcrumb}
       title={title}
     >
@@ -68,6 +71,9 @@ export const Edit = ({
 );
 
 export interface EditViewProps {
+  /** Width of the centred column; `max-w-4xl` by default. Wider for a
+   *  screen with tables beside its form (a quote's lines, a price list). */
+  contentClassName?: string;
   disableBreadcrumb?: boolean;
   title?: ReactNode | string | false;
   actions?: ReactNode;
@@ -81,6 +87,7 @@ export interface EditViewProps {
  * @internal
  */
 export const EditView = ({
+  contentClassName = "max-w-4xl",
   disableBreadcrumb,
   title,
   actions,
@@ -96,6 +103,7 @@ export const EditView = ({
     );
   }
   const getResourceLabel = useGetResourceLabel();
+  const translate = useTranslate();
   const listLabel = getResourceLabel(resource, 2);
   const createPath = useCreatePath();
   const listLink = createPath({
@@ -114,7 +122,8 @@ export const EditView = ({
   }
 
   return (
-    <>
+    // Centred, like every record form: title and form share one axis.
+    <div className={cn("mx-auto flex w-full flex-col", contentClassName)}>
       {!disableBreadcrumb && (
         <Breadcrumb>
           {hasDashboard && (
@@ -132,13 +141,18 @@ export const EditView = ({
       )}
       <div
         className={cn(
-          "flex justify-between items-start flex-wrap gap-2 my-2",
+          "mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3",
           className,
         )}
       >
-        <h2 className="text-2xl font-bold tracking-tight">
-          {title !== undefined ? title : context.defaultTitle}
-        </h2>
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-[1.75rem] leading-tight font-semibold">
+            {title !== undefined ? title : context.defaultTitle}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {translate("crm.form_page.edit_hint", { _: "" })}
+          </p>
+        </div>
         {actions ?? (
           <div className="flex justify-end items-center gap-2">
             {hasShow ? <ShowButton /> : null}
@@ -146,7 +160,7 @@ export const EditView = ({
           </div>
         )}
       </div>
-      <div className="my-2">{children}</div>
-    </>
+      <div>{children}</div>
+    </div>
   );
 };

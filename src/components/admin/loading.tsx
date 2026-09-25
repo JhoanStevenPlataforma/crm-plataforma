@@ -1,10 +1,11 @@
 import { Translate, useTimeout } from "ra-core";
-import { Spinner } from "./spinner";
+
+import { HermesLoader } from "@/components/ui/hermes-loader";
 
 /**
  * Loading indicator used for slow element or page loads.
  *
- * Displays a spinner and customizable loading messages.
+ * Displays the Hermes caduceus and customizable loading messages.
  * Automatically shown by the default Layout when page loading takes more than 1 second.
  * Works as a fallback for React Suspense boundaries.
  *
@@ -19,13 +20,18 @@ export const Loading = (props: LoadingProps) => {
   } = props;
   const oneSecondHasPassed = useTimeout(delay);
   return oneSecondHasPassed ? (
-    <div className="flex flex-col justify-center items-center h-full" {...rest}>
-      <div className="text-center font-sans color-muted pt-1 pb-1">
-        <Spinner size="large" className="width-9 height-9" />
-        <h5 className="mt-3 text-2xl text-secondary-foreground">
+    <div
+      role="status"
+      className="flex h-full flex-col items-center justify-center gap-5 py-10 animate-in fade-in-0 duration-300"
+      {...rest}
+    >
+      {/* The messages below name the wait, so the drawing stays silent. */}
+      <HermesLoader size="lg" label={null} />
+      <div className="flex flex-col items-center gap-1 text-center">
+        <p className="text-sm font-medium text-foreground">
           <Translate i18nKey={loadingPrimary}>{loadingPrimary}</Translate>
-        </h5>
-        <p className="text-primary">
+        </p>
+        <p className="text-xs text-muted-foreground">
           <Translate i18nKey={loadingSecondary}>{loadingSecondary}</Translate>
         </p>
       </div>

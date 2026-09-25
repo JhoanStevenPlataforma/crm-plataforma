@@ -9,7 +9,7 @@
  */
 export {
   barDefaults,
-  bottomLegend,
+  horizontalBarProps,
   nivoTheme,
   useChartPalette,
   type ChartPalette,

@@ -5,7 +5,7 @@ import type { FormProps } from "ra-core";
 import { Form } from "ra-core";
 import { cn } from "@/lib/utils";
 import { CancelButton } from "@/components/admin/cancel-button";
-import { SaveButton } from "@/components/admin/form";
+import { FormDirtyState, SaveButton } from "@/components/admin/form";
 
 /**
  * A simple form layout with vertical stacking, validation, and default toolbar.
@@ -33,7 +33,13 @@ export const SimpleForm = ({
   ...rest
 }: SimpleFormProps) => (
   <Form
-    className={cn(`flex flex-col gap-4 w-full max-w-lg`, className)}
+    // On its own surface: a form floating on the page ground reads as
+    // unfinished. Forms already inside a Card pass `FORM_IN_CARD_CLASS`.
+    className={cn(
+      "flex w-full flex-col gap-4 rounded-xl border border-border/80 bg-card p-6 shadow-card",
+      FORM_EDGE_CLASS,
+      className,
+    )}
     {...rest}
   >
     {children}
@@ -65,13 +71,14 @@ export const FormToolbar = ({
   <div
     {...rest}
     className={cn(
-      "sticky pt-4 pb-4 md:block md:pt-2 md:pb-0 bottom-0 bg-linear-to-b from-transparent to-background to-10%",
+      "sticky pt-4 pb-4 md:block md:pt-2 md:pb-0 bottom-0 bg-linear-to-b from-transparent to-card to-10%",
       className,
     )}
     role="toolbar"
   >
     {Children.count(children) === 0 ? (
-      <div className="flex flex-row gap-2 justify-end">
+      <div className="flex flex-row items-center gap-2 justify-end">
+        <FormDirtyState className="max-sm:hidden" />
         <CancelButton />
         <SaveButton />
       </div>
@@ -92,4 +99,20 @@ export interface FormToolbarProps extends React.HTMLAttributes<HTMLDivElement> {
   className?: string;
 }
 
-const defaultFormToolbar = <FormToolbar />;
+// The form's own footer: full-bleed to the card edges, a hairline above,
+// and sticky so Save stays reachable on a long form.
+const defaultFormToolbar = (
+  <FormToolbar className="-mx-6 -mb-6 mt-2 rounded-b-xl border-t border-border/70 bg-card/95 bg-none px-6 py-3 backdrop-blur md:py-3" />
+);
+
+/** For a `SimpleForm` already inside a Card: drops its own surface. */
+export const FORM_IN_CARD_CLASS =
+  "rounded-none border-0 bg-transparent p-0 shadow-none before:hidden";
+
+/**
+ * The amber hairline along the top of a record form's card: the brand as
+ * light on an edge, as on the portal, never as a fill. No `overflow-hidden`
+ * to clip it, which would break the sticky footer, so it is inset instead.
+ */
+export const FORM_EDGE_CLASS =
+  "relative before:pointer-events-none before:absolute before:inset-x-8 before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-brand/60 before:to-transparent";

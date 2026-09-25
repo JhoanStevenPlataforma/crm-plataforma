@@ -4,6 +4,7 @@ import {
   DEFAULT_DASHBOARD_PERIOD,
   greetingFor,
   parseDashboardPeriod,
+  previousRangeForDashboardPeriod,
   rangeForDashboardPeriod,
 } from "./dashboardPeriod";
 
@@ -68,6 +69,44 @@ describe("rangeForDashboardPeriod", () => {
     expect(rangeForDashboardPeriod("this_month", lastDay)).toEqual({
       from: "2026-12-01",
       to: "2026-12-31",
+    });
+  });
+});
+
+describe("previousRangeForDashboardPeriod", () => {
+  // Thursday 24 September 2026.
+  const today = new Date(2026, 8, 24, 15, 0);
+
+  test("compares this month with the same days of last month", () => {
+    expect(previousRangeForDashboardPeriod("this_month", today)).toEqual({
+      from: "2026-08-01",
+      to: "2026-08-24",
+    });
+  });
+
+  test("clamps to the end of a shorter previous month", () => {
+    expect(
+      previousRangeForDashboardPeriod("this_month", new Date(2026, 2, 31)),
+    ).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+  });
+
+  test("compares this week with last week up to the same weekday", () => {
+    expect(previousRangeForDashboardPeriod("this_week", today)).toEqual({
+      from: "2026-09-14",
+      to: "2026-09-17",
+    });
+  });
+
+  test("compares today with yesterday, and a quarter by days elapsed", () => {
+    expect(previousRangeForDashboardPeriod("today", today)).toEqual({
+      from: "2026-09-23",
+      to: "2026-09-23",
+    });
+    expect(previousRangeForDashboardPeriod("this_quarter", today)).toEqual({
+      // 85 days into Q3, so 85 days into Q2: equal-length windows, even
+      // though July and August are one day longer than April and May.
+      from: "2026-04-01",
+      to: "2026-06-25",
     });
   });
 });

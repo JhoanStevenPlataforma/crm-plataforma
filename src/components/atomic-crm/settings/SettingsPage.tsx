@@ -1,25 +1,21 @@
 /* eslint-disable react-refresh/only-export-components */
 import { RotateCcw, Save } from "lucide-react";
 import type { RaRecord } from "ra-core";
-import {
-  EditBase,
-  Form,
-  useGetList,
-  useInput,
-  useNotify,
-  useTranslate,
-} from "ra-core";
+import { EditBase, Form, useGetList, useNotify, useTranslate } from "ra-core";
 import { useCallback, useMemo } from "react";
 import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toSlug } from "@/lib/toSlug";
+import { cn } from "@/lib/utils";
 import { ArrayInput } from "@/components/admin/array-input";
 import { AutocompleteInput } from "@/components/admin/autocomplete-input";
 import { SimpleFormIterator } from "@/components/admin/simple-form-iterator";
 import { TextInput } from "@/components/admin/text-input";
 
+import { ColorInput } from "../misc/ColorInput";
+import { DealQuoteStageRules } from "./DealQuoteStageRules";
 import ImageEditorField from "../misc/ImageEditorField";
 import {
   useConfigurationContext,
@@ -27,6 +23,7 @@ import {
   type ConfigurationContextValue,
 } from "../root/ConfigurationContext";
 import { defaultConfiguration } from "../root/defaultConfiguration";
+import { useActiveSection } from "./useActiveSection";
 
 const SECTIONS = [
   {
@@ -40,6 +37,11 @@ const SECTIONS = [
     fallback: "Companies",
   },
   { id: "deals", label: "resources.deals.name", fallback: "Deals" },
+  {
+    id: "deal-quote-rules",
+    label: "crm.settings.deal_quote_rules.title",
+    fallback: "Pipeline and quotations",
+  },
   { id: "notes", label: "resources.notes.name", fallback: "Notes" },
   { id: "tasks", label: "resources.tasks.name", fallback: "Tasks" },
   { id: "products", label: "resources.products.name", fallback: "Products" },
@@ -192,8 +194,11 @@ const SettingsForm = () => {
   );
 };
 
+const SECTION_IDS = SECTIONS.map((section) => section.id);
+
 const SettingsFormFields = () => {
   const translate = useTranslate();
+  const activeSection = useActiveSection(SECTION_IDS);
   const currencyChoices = useMemo(() => getCurrencyChoices(), []);
   const {
     watch,
@@ -253,8 +258,9 @@ const SettingsFormFields = () => {
     <div className="flex gap-8 mt-4 pb-20">
       {/* Left navigation */}
       <nav className="hidden md:block w-48 shrink-0">
-        <div className="sticky top-4 space-y-1">
-          <h1 className="text-2xl font-semibold px-3 mb-2">
+        {/* Below the sticky topbar (56px), not under it. */}
+        <div className="sticky top-20 space-y-0.5">
+          <h1 className="mb-3 px-3 text-2xl font-semibold tracking-tight">
             {translate("crm.settings.title")}
           </h1>
           {SECTIONS.map((section) => (
@@ -266,7 +272,12 @@ const SettingsFormFields = () => {
                   .getElementById(section.id)
                   ?.scrollIntoView({ behavior: "smooth" });
               }}
-              className="block w-full text-left px-3 py-1 text-sm rounded-md hover:text-foreground hover:bg-muted transition-colors"
+              aria-current={activeSection === section.id ? "true" : undefined}
+              className={cn(
+                "relative block w-full rounded-lg px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                activeSection === section.id &&
+                  "bg-brand-tint font-medium text-brand-strong hover:bg-brand-tint hover:text-brand-strong",
+              )}
             >
               {translate(section.label, { smart_count: 2 })}
             </button>
@@ -277,9 +288,9 @@ const SettingsFormFields = () => {
       {/* Main content */}
       <div className="flex-1 min-w-0 max-w-2xl space-y-6">
         {/* Branding */}
-        <Card id="branding">
+        <Card id="branding" className="scroll-mt-20">
           <CardContent className="space-y-4">
-            <h2 className="text-xl font-semibold text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-tight">
               {translate("crm.settings.sections.branding")}
             </h2>
             <TextInput source="title" label="crm.settings.app_title" />
@@ -313,14 +324,14 @@ const SettingsFormFields = () => {
         </Card>
 
         {/* Companies */}
-        <Card id="companies">
+        <Card id="companies" className="scroll-mt-20">
           <CardContent className="space-y-4">
-            <h2 className="text-xl font-semibold text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-tight">
               {translate("resources.companies.name", {
                 smart_count: 2,
               })}
             </h2>
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.companies.sectors")}
             </h3>
             <ArrayInput
@@ -336,14 +347,14 @@ const SettingsFormFields = () => {
         </Card>
 
         {/* Deals */}
-        <Card id="deals">
+        <Card id="deals" className="scroll-mt-20">
           <CardContent className="space-y-4">
-            <h2 className="text-xl font-semibold text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-tight">
               {translate("resources.deals.name", {
                 smart_count: 2,
               })}
             </h2>
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.deals.currency")}
             </h3>
             <AutocompleteInput
@@ -356,7 +367,7 @@ const SettingsFormFields = () => {
 
             <Separator />
 
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.deals.stages")}
             </h3>
             <ArrayInput
@@ -372,7 +383,7 @@ const SettingsFormFields = () => {
 
             <Separator />
 
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.deals.pipeline_statuses")}
             </h3>
             <p className="text-sm text-muted-foreground">
@@ -413,7 +424,7 @@ const SettingsFormFields = () => {
 
             <Separator />
 
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.deals.categories")}
             </h3>
             <ArrayInput
@@ -429,15 +440,18 @@ const SettingsFormFields = () => {
           </CardContent>
         </Card>
 
+        {/* Where a quotation's events move its deal */}
+        <DealQuoteStageRules />
+
         {/* Notes */}
-        <Card id="notes">
+        <Card id="notes" className="scroll-mt-20">
           <CardContent className="space-y-4">
-            <h2 className="text-xl font-semibold text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-tight">
               {translate("resources.notes.name", {
                 smart_count: 2,
               })}
             </h2>
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.notes.statuses")}
             </h3>
             <ArrayInput source="noteStatuses" label={false} helperText={false}>
@@ -450,14 +464,14 @@ const SettingsFormFields = () => {
         </Card>
 
         {/* Tasks */}
-        <Card id="tasks">
+        <Card id="tasks" className="scroll-mt-20">
           <CardContent className="space-y-4">
-            <h2 className="text-xl font-semibold text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-tight">
               {translate("resources.tasks.name", {
                 smart_count: 2,
               })}
             </h2>
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.tasks.types")}
             </h3>
             <ArrayInput source="taskTypes" label={false} helperText={false}>
@@ -470,14 +484,14 @@ const SettingsFormFields = () => {
 
         {/* Products: labels, not tables (quotes §2.1). A value removed here
             stays on the products that use it; lists show it raw. */}
-        <Card id="products">
+        <Card id="products" className="scroll-mt-20">
           <CardContent className="space-y-4">
-            <h2 className="text-xl font-semibold text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-tight">
               {translate("resources.products.name", {
                 smart_count: 2,
               })}
             </h2>
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.products.units")}
             </h3>
             <ArrayInput source="productUnits" label={false} helperText={false}>
@@ -488,7 +502,7 @@ const SettingsFormFields = () => {
 
             <Separator />
 
-            <h3 className="text-lg font-medium text-muted-foreground">
+            <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.products.categories")}
             </h3>
             <ArrayInput
@@ -544,18 +558,5 @@ const SettingsFormFields = () => {
         </div>
       </div>
     </div>
-  );
-};
-
-/** A minimal color picker input compatible with ra-core's useInput. */
-const ColorInput = ({ source }: { source: string }) => {
-  const { field } = useInput({ source });
-  return (
-    <input
-      type="color"
-      {...field}
-      value={field.value || "#000000"}
-      className="w-9 h-9 shrink-0 cursor-pointer appearance-none rounded border bg-transparent p-0.5 [&::-webkit-color-swatch-wrapper]:cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:cursor-pointer [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:cursor-pointer [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none"
-    />
   );
 };

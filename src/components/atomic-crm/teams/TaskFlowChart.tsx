@@ -2,7 +2,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useTranslate } from "ra-core";
 
 import { TeamChartCard } from "./TeamChartCard";
-import { barDefaults, bottomLegend, useChartPalette } from "./teamChartTheme";
+import { barDefaults, useChartPalette } from "./teamChartTheme";
 import type { TaskFlowPoint } from "./taskStats";
 import { formatMonthLabel } from "./teamStats";
 
@@ -38,8 +38,12 @@ export const TaskFlowChart = ({
     [createdLabel]: point.created,
   }));
 
+  const seriesKeys = [completedLabel, createdLabel];
+  const seriesColors = [palette.good, palette.inFlight];
+
   return (
     <TeamChartCard
+      legend={seriesKeys.map((label, i) => ({ label, color: seriesColors[i] }))}
       title={title}
       isEmpty={points.length === 0}
       emptyLabel={translate("crm.teams_dashboard.no_tasks")}
@@ -47,12 +51,11 @@ export const TaskFlowChart = ({
       <ResponsiveBar
         data={data}
         indexBy="month"
-        keys={[completedLabel, createdLabel]}
+        keys={seriesKeys}
         groupMode="grouped"
-        colors={[palette.good, palette.inFlight]}
-        margin={{ top: 20, right: 20, bottom: 50, left: 50 }}
+        colors={seriesColors}
+        margin={{ top: 20, right: 20, bottom: 28, left: 50 }}
         {...barDefaults}
-        legends={bottomLegend}
       />
     </TeamChartCard>
   );

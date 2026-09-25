@@ -502,3 +502,23 @@ create or replace trigger quote_portal_events_immutable
 create or replace trigger quote_portal_events_notify
     after insert on public.quote_portal_events
     for each row execute function public.quote_portal_events_notify();
+
+-- Customer portal slides: limits, box shape, the default template's lock.
+create or replace trigger portal_slides_guard
+    before insert or update or delete on public.portal_slides
+    for each row execute function public.portal_slides_guard();
+
+create or replace trigger portal_templates_guard
+    before insert or update or delete on public.portal_templates
+    for each row execute function public.portal_templates_guard();
+
+-- The deal follows its quotations (`sync_deal_from_quote()`).
+create or replace trigger quotes_sync_deal
+    after update of status_key on public.quotes
+    for each row
+    when (old.status_key is distinct from new.status_key)
+    execute function public.quotes_sync_deal();
+
+create or replace trigger quote_portal_events_sync_deal
+    after insert on public.quote_portal_events
+    for each row execute function public.quote_portal_events_sync_deal();

@@ -1,5 +1,5 @@
 import { useGetIdentity, useGetList, useTranslate } from "ra-core";
-import { BarChart3, Plus, Printer } from "lucide-react";
+import { Plus, Printer } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -17,6 +17,7 @@ import {
   reportPath,
   reportPrintPath,
 } from "./reportsPath";
+import { PageHeader } from "@/components/admin/page-header";
 
 /**
  * The library: every question this installation knows how to ask.
@@ -152,52 +153,50 @@ export const ReportsLibrary = () => {
 
   return (
     <div className="flex flex-col gap-8 mt-1">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <BarChart3 className="text-muted-foreground w-6 h-6" />
-          <div>
-            <h1 className="text-xl font-semibold text-muted-foreground">
-              {translate("crm.reports.title")}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              {translate("crm.reports.subtitle")}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Appears only once something is ticked. A permanently visible
+      <PageHeader
+        className="mb-0"
+        title={translate("crm.reports.title")}
+        description={translate("crm.reports.subtitle")}
+        actions={
+          <div className="flex items-center gap-2">
+            {/* Appears only once something is ticked. A permanently visible
               "export 0 reports" button is a control that spends most of its
               life disabled, which teaches people to ignore it. */}
-          {selected.length > 0 ? (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setSelected([])}>
-                {translate("ra.action.clear_input_value")}
-              </Button>
-              <Button asChild size="sm">
-                <Link to={reportPrintPath(selected)}>
-                  <Printer className="h-3.5 w-3.5" />
-                  {translate("crm.reports.export_selected", {
-                    smart_count: selected.length,
-                  })}
-                </Link>
-              </Button>
-            </>
-          ) : null}
-          {/* The two screens answer different questions and say so: the summary
+            {selected.length > 0 ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelected([])}
+                >
+                  {translate("ra.action.clear_input_value")}
+                </Button>
+                <Button asChild size="sm">
+                  <Link to={reportPrintPath(selected)}>
+                    <Printer className="h-3.5 w-3.5" />
+                    {translate("crm.reports.export_selected", {
+                      smart_count: selected.length,
+                    })}
+                  </Link>
+                </Button>
+              </>
+            ) : null}
+            {/* The two screens answer different questions and say so: the summary
               is where a problem is noticed, this is where it is investigated. */}
-          <Button asChild variant="outline" size="sm">
-            <Link to={ANALYTICS_PATH}>
-              {translate("crm.reports.see_analytics")}
-            </Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link to={REPORT_NEW_PATH}>
-              <Plus className="h-3.5 w-3.5" />
-              {translate("crm.reports.new")}
-            </Link>
-          </Button>
-        </div>
-      </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to={ANALYTICS_PATH}>
+                {translate("crm.reports.see_analytics")}
+              </Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link to={REPORT_NEW_PATH}>
+                <Plus className="h-3.5 w-3.5" />
+                {translate("crm.reports.new")}
+              </Link>
+            </Button>
+          </div>
+        }
+      />
 
       {error ? (
         <p className="text-sm text-destructive">

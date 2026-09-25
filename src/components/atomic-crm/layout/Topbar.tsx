@@ -28,12 +28,17 @@ export const Topbar = () => {
   const translate = useTranslate();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-surface px-4">
+    // Frosted rather than opaque: a scrolled list slides under it and stays
+    // faintly visible, so the bar reads as a layer above the page instead of
+    // a band cut out of it.
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/70 px-4 backdrop-blur-xl backdrop-saturate-150 lg:px-6">
+      {/* Mobile only: there the sidebar is a sheet and this opens it. On
+          desktop the collapse control lives inside the sidebar itself. */}
       <SidebarTrigger
-        className="-ml-1"
+        className="-ml-1 md:hidden"
         aria-label={translate("crm.navigation.toggle")}
       />
-      <Separator orientation="vertical" className="mr-1 !h-4" />
+      <Separator orientation="vertical" className="mr-3 !h-4 md:hidden" />
 
       <div className="flex min-w-0 flex-1 items-center" id="breadcrumb" />
 

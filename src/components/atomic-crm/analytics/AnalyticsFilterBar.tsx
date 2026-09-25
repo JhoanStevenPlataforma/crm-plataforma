@@ -19,6 +19,7 @@ import {
   rangeForPreset,
   type AnalyticsFilters,
 } from "./analyticsFilters";
+import { cn } from "@/lib/utils";
 
 /** Enough for any realistic team, and the roster is tiny either way. */
 const OPTIONS_PER_PAGE = 200;
@@ -85,17 +86,25 @@ export const AnalyticsFilterBar = ({
   const activePreset = presetOf(filters);
 
   return (
-    <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+    // One surface for the whole scope of the screen, so it reads as a single
+    // control rather than five loose fields floating over the charts.
+    <div className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-xl border border-border/80 bg-card p-3 shadow-card">
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
           {translate("crm.analytics.filters.period")}
         </span>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex h-9 flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {ANALYTICS_PRESETS.map((preset) => (
             <Button
               key={preset}
               size="sm"
-              variant={activePreset === preset ? "secondary" : "ghost"}
+              variant="ghost"
+              aria-pressed={activePreset === preset}
+              className={cn(
+                "h-8 rounded-md px-3 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground",
+                activePreset === preset &&
+                  "bg-card text-foreground shadow-card hover:bg-card",
+              )}
               onClick={() => apply({ ...filters, ...rangeForPreset(preset) })}
             >
               {translate(`crm.analytics.presets.${preset}`)}
@@ -106,12 +115,12 @@ export const AnalyticsFilterBar = ({
 
       <div className="flex items-end gap-2">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
             {translate("crm.analytics.filters.from")}
           </span>
           <Input
             type="date"
-            className="w-40"
+            className="w-36"
             value={filters.from}
             max={filters.to}
             onChange={(event) =>
@@ -121,12 +130,12 @@ export const AnalyticsFilterBar = ({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
             {translate("crm.analytics.filters.to")}
           </span>
           <Input
             type="date"
-            className="w-40"
+            className="w-36"
             value={filters.to}
             min={filters.from}
             onChange={(event) =>
@@ -139,7 +148,7 @@ export const AnalyticsFilterBar = ({
 
       {canFilterByOwner ? (
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
             {translate("crm.analytics.filters.owner")}
           </span>
           <Select
@@ -151,7 +160,7 @@ export const AnalyticsFilterBar = ({
               })
             }
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -170,7 +179,7 @@ export const AnalyticsFilterBar = ({
 
       {showTeam ? (
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
             {translate("crm.analytics.filters.team")}
           </span>
           <Select
@@ -182,7 +191,7 @@ export const AnalyticsFilterBar = ({
               })
             }
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

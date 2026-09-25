@@ -2,7 +2,7 @@ import { AlertCircleIcon } from "lucide-react";
 import { Form, required, useTranslate } from "ra-core";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Spinner } from "@/components/ui/spinner";
+import { HermesLoader } from "@/components/ui/hermes-loader";
 import { FileField, FileInput } from "@/components/admin";
 import {
   type ImportFromJsonErrorState,
@@ -23,17 +23,16 @@ import {
   useImportFromJson,
 } from "./useImportFromJson";
 import sampleFile from "./import-sample.json?url";
+import { PageHeader } from "@/components/admin/page-header";
 
 export const ImportPage = () => {
   const translate = useTranslate();
   const [importState, importFile, reset] = useImportFromJson();
 
   return (
-    <div className="max-w-2xl mx-auto mt-8">
+    <div className="max-w-2xl">
+      <PageHeader title={translate("crm.import.title")} />
       <Card>
-        <CardHeader>
-          <CardTitle>{translate("crm.import.title")}</CardTitle>
-        </CardHeader>
         <CardContent>
           {importState.status === "idle" ? (
             <ImportFromJsonIdle importFile={importFile} translate={translate} />
@@ -148,7 +147,9 @@ const ImportFromJsonStatus = ({
   translate: (key: string, options?: any) => string;
 }) => (
   <>
-    <Spinner />
+    <div className="flex justify-center">
+      <HermesLoader orientation="horizontal" size="md" label={null} />
+    </div>
     <p className="my-4 text-sm text-center text-muted-foreground">
       {translate("crm.import.status.in_progress", {
         _: "Import in progress, please don't navigate away from this page.",

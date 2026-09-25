@@ -1,6 +1,7 @@
 import { MoreVertical } from "lucide-react";
 import {
   useDeleteWithUndoController,
+  useLocaleState,
   useNotify,
   useTranslate,
   useUpdate,
@@ -17,7 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
+import { calendarDaysBetween, formatRelativeDay } from "../misc/relativeTime";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Task as TData, TaskStatusKey } from "../types";
 import { CancelTaskDialog } from "./CancelTaskDialog";
@@ -40,14 +43,22 @@ import { useTransitionTask } from "./useTransitionTask";
 export const Task = ({
   task,
   showContact,
+  compact = false,
 }: {
   task: TData;
   showContact?: boolean;
+  /**
+   * One line of title and a relative due date ("tomorrow", "5 months ago"):
+   * the dashboard panel, where a timestamp to the second and three lines of
+   * description turned a to-do list into a wall of text.
+   */
+  compact?: boolean;
 }) => {
   const isMobile = useIsMobile();
   const { taskTypes } = useConfigurationContext();
   const notify = useNotify();
   const translate = useTranslate();
+  const [locale = "en"] = useLocaleState();
 
   const [openEdit, setOpenEdit] = useState(false);
   const [pendingCancel, setPendingCancel] = useState<TaskStatusKey | null>(
@@ -124,30 +135,52 @@ export const Task = ({
             className="mt-1"
             aria-label={translate("resources.tasks.actions.complete")}
           />
-          <div className={`grow ${isDone ? "line-through" : ""}`}>
-            <div className="text-sm flex flex-wrap items-center gap-x-1.5 gap-y-1">
-              {typeLabel && task.type_key !== "none" && (
-                <span className="font-semibold text-sm">{typeLabel}</span>
+          <div
+            className={cn(
+              "grow",
+              compact && "min-w-0",
+              isDone && "line-through",
+            )}
+          >
+            <div
+              className={cn(
+                "text-sm flex items-center gap-x-1.5 gap-y-1",
+                compact ? "min-w-0" : "flex-wrap",
               )}
-              <span>{task.title}</span>
+            >
+              {typeLabel && task.type_key !== "none" && (
+                <span className="font-semibold text-sm shrink-0">
+                  {typeLabel}
+                </span>
+              )}
+              <span className={cn(compact && "truncate")}>{task.title}</span>
               <TaskPriorityBadge task={task} />
               <TaskStatusBadge task={task} />
             </div>
 
-            {task.description && (
+            {!compact && task.description && (
               <p className="text-xs text-muted-foreground line-clamp-2">
                 {task.description}
               </p>
             )}
 
             <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>
-                {translate("resources.tasks.fields.due_short")}
-                &nbsp;
-                <DateField source="due_date" record={task} showDate showTime />
-              </span>
+              {compact ? (
+                <CompactDue dueDate={task.due_date} locale={locale} />
+              ) : (
+                <span>
+                  {translate("resources.tasks.fields.due_short")}
+                  &nbsp;
+                  <DateField
+                    source="due_date"
+                    record={task}
+                    showDate
+                    showTime
+                  />
+                </span>
+              )}
               {showContact && <TaskRelatedLink task={task} />}
-              <TaskTraceabilityBadges task={task} />
+              {compact ? null : <TaskTraceabilityBadges task={task} />}
             </div>
           </div>
         </div>
@@ -229,5 +262,29 @@ export const Task = ({
         />
       )}
     </>
+  );
+};
+
+const CompactDue = ({
+  dueDate,
+  locale,
+}: {
+  dueDate?: string | null;
+  locale: string;
+}) => {
+  if (!dueDate) return null;
+  const date = new Date(dueDate);
+  const now = new Date();
+  return (
+    <time
+      dateTime={dueDate}
+      title={date.toLocaleString(locale)}
+      className={cn(
+        "text-xs tabular-nums",
+        calendarDaysBetween(date, now) < 0 && "font-medium text-destructive",
+      )}
+    >
+      {formatRelativeDay(date, locale, now)}
+    </time>
   );
 };

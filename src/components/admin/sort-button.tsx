@@ -1,6 +1,6 @@
 import * as React from "react";
 import { memo } from "react";
-import { ArrowUpDown, ChevronDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from "lucide-react";
 import {
   shallowEqual,
   useListSortContext,
@@ -112,10 +112,25 @@ const SortButtonComponent = (props: SortButtonProps) => {
         </TooltipProvider>
       ) : (
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9" {...rest}>
+          {/* The field and an arrow, not the sentence: "Sort by company
+              name ascending" took a third of the header row. The sentence
+              stays as the accessible name and the tooltip. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5"
+            aria-label={buttonLabel}
+            title={buttonLabel}
+            {...rest}
+          >
             {icon}
-            <span className="ml-2">{buttonLabel}</span>
-            <ChevronDown className="ml-2 h-4 w-4" />
+            <span className="max-w-40 truncate">{fieldLabel}</span>
+            {sort.order === "ASC" ? (
+              <ArrowUp className="size-3.5 text-brand" />
+            ) : (
+              <ArrowDown className="size-3.5 text-brand" />
+            )}
+            <ChevronDown className="size-3.5 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
       )}

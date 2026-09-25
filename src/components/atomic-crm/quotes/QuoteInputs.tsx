@@ -91,7 +91,7 @@ export const QuoteInputs = () => {
     <div className="flex flex-col gap-4 w-full">
       <TextInput source="title" helperText={false} />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-3">
         <ReferenceInput source="company_id" reference="companies">
           <SelectInput
             label="resources.quotes.fields.company_id"
@@ -118,7 +118,7 @@ export const QuoteInputs = () => {
         </ReferenceInput>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-3">
         <ReferenceInput source="deal_id" reference="deals">
           <SelectInput
             label="resources.quotes.fields.deal_id"

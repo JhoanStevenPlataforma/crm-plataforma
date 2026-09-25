@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { ArrowUp } from "lucide-react";
 
 import { PORTAL_EMAIL_PATTERN } from "./QuotePortalAcceptDialog";
 import {
@@ -15,6 +16,7 @@ import {
   type QuotePortalErrorKey,
   type QuotePortalThreadComment,
 } from "./quotePortalClient";
+import { fx } from "./quotePortalFx";
 
 /** What `quote_portal_comment()` accepts; a longer body is refused there. */
 const MAX_BODY_LENGTH = 4000;
@@ -102,16 +104,27 @@ export const QuotePortalComments = ({
       aria-labelledby="quote-portal-comments-title"
       className="quote-print-hide flex flex-col overflow-hidden rounded-3xl border bg-card text-sm text-card-foreground shadow-xl shadow-foreground/5"
     >
-      <header className="flex items-center gap-2.5 border-b px-5 py-4">
-        <span
-          aria-hidden
-          className={cn(
-            "size-2.5 rounded-full",
-            canComment
-              ? "bg-success ring-4 ring-success/15"
-              : "bg-muted-foreground",
-          )}
-        />
+      <header
+        className={cn(
+          "flex items-center gap-2.5 border-b px-5 py-4",
+          // FX-21: the panel's header on the dark ground of the letterhead.
+          fx(21) && "dark border-white/10 bg-background text-foreground",
+        )}
+      >
+        <span aria-hidden className="relative flex size-2.5">
+          {canComment && fx(22) ? (
+            // FX-22: the "online" dot breathes.
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60 motion-reduce:hidden" />
+          ) : null}
+          <span
+            className={cn(
+              "relative inline-flex size-2.5 rounded-full",
+              canComment
+                ? "bg-success ring-4 ring-success/15"
+                : "bg-muted-foreground",
+            )}
+          />
+        </span>
         <h2 id="quote-portal-comments-title" className="font-bold">
           {translate("resources.quotes.portal.comments.title")}
         </h2>
@@ -168,7 +181,7 @@ export const QuotePortalComments = ({
               if (isValid && !isPending) void submit();
             }}
           >
-            <div className="flex flex-col gap-1.5">
+            <div className="relative flex flex-col gap-1.5">
               <Label
                 htmlFor="quote-portal-comment-body"
                 className="text-xs text-muted-foreground"
@@ -180,12 +193,30 @@ export const QuotePortalComments = ({
                 value={body}
                 rows={4}
                 maxLength={MAX_BODY_LENGTH}
-                className="min-h-28 rounded-xl"
+                className={cn(
+                  "min-h-28",
+                  // FX-23: a message bubble, with room for the send button.
+                  fx(23) ? "rounded-3xl pr-14 pb-12" : "rounded-xl",
+                )}
                 onChange={(event) => {
                   setBody(event.target.value);
                   setIsSent(false);
                 }}
               />
+              {fx(23) ? (
+                // FX-23: the round send button, inside the message box.
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!isValid || isPending}
+                  aria-label={translate(
+                    "resources.quotes.portal.comments.submit",
+                  )}
+                  className="absolute right-2.5 bottom-2.5 size-10 rounded-full bg-brand text-brand-foreground shadow-lg shadow-brand/30 transition hover:scale-105 hover:bg-brand/90"
+                >
+                  <ArrowUp className="size-5" strokeWidth={2.5} />
+                </Button>
+              ) : null}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="flex min-w-0 flex-col gap-1.5">
@@ -200,7 +231,10 @@ export const QuotePortalComments = ({
                   value={name}
                   autoComplete="name"
                   maxLength={200}
-                  className="rounded-xl text-xs"
+                  className={cn(
+                    "text-xs",
+                    fx(23) ? "rounded-full px-4" : "rounded-xl",
+                  )}
                   onChange={(event) => setName(event.target.value)}
                 />
               </div>
@@ -217,7 +251,10 @@ export const QuotePortalComments = ({
                   value={email}
                   autoComplete="email"
                   maxLength={320}
-                  className="rounded-xl text-xs"
+                  className={cn(
+                    "text-xs",
+                    fx(23) ? "rounded-full px-4" : "rounded-xl",
+                  )}
                   onChange={(event) => setEmail(event.target.value)}
                 />
               </div>
@@ -233,14 +270,16 @@ export const QuotePortalComments = ({
               </p>
             ) : null}
 
-            <Button
-              type="submit"
-              disabled={!isValid || isPending}
-              className="mt-1 w-full rounded-xl bg-brand font-bold text-brand-foreground hover:bg-brand/90"
-            >
-              {translate("resources.quotes.portal.comments.submit")}
-              <span aria-hidden>→</span>
-            </Button>
+            {fx(23) ? null : (
+              <Button
+                type="submit"
+                disabled={!isValid || isPending}
+                className="mt-1 w-full rounded-xl bg-brand font-bold text-brand-foreground hover:bg-brand/90"
+              >
+                {translate("resources.quotes.portal.comments.submit")}
+                <span aria-hidden>→</span>
+              </Button>
+            )}
           </form>
         ) : (
           <p className="text-xs text-muted-foreground">

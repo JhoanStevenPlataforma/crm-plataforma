@@ -42,11 +42,15 @@ export const ToggleFilterButton = ({
   const handleClick = () => setFilters(toggleFilter(value, filterValues));
   return (
     <Button
-      variant={isSelected ? "secondary" : "ghost"}
+      variant="ghost"
       onClick={handleClick}
+      aria-pressed={isSelected}
       className={cn(
         "cursor-pointer",
-        "flex flex-row items-center justify-between gap-2 px-2.5 w-full",
+        "flex flex-row items-center justify-between gap-2 px-2.5 w-full font-normal text-muted-foreground",
+        // The chosen option wears the brand tint, like the active menu item.
+        isSelected &&
+          "bg-brand-tint font-medium text-brand-strong hover:bg-brand-tint hover:text-brand-strong dark:hover:bg-brand-tint",
         className,
       )}
       size={size}

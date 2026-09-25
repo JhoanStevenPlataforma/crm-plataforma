@@ -32,6 +32,7 @@ import type { Contact } from "../types";
 import { Avatar } from "./Avatar";
 import { ContactAside } from "./ContactAside";
 import { MobileBackButton } from "../misc/MobileBackButton";
+import { RecordBreadcrumb } from "../misc/RecordBreadcrumb";
 
 export const ContactShow = (props: ShowBaseProps = {}) => {
   const isMobile = useIsMobile();
@@ -242,15 +243,16 @@ const ContactShowContent = () => {
 
   return (
     <div className="mt-2 mb-2 flex gap-8">
+      <RecordBreadcrumb resource="contacts" />
       <div className="flex-1">
         <Card>
           <CardContent>
-            <div className="flex">
+            <div className="-mx-6 mb-2 flex items-center border-b px-6 pb-5">
               <Avatar />
-              <div className="ml-2 flex-1">
-                <h5 className="text-xl font-semibold">
+              <div className="ml-3 flex-1">
+                <h1 className="text-2xl leading-tight font-semibold tracking-tight">
                   <RecordRepresentation />
-                </h5>
+                </h1>
                 <div className="inline-flex text-sm text-muted-foreground">
                   {record.title && record.company_id != null
                     ? `${translate("resources.contacts.position_at", {

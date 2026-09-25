@@ -27,7 +27,13 @@ export type TimelineEvent = {
   id: string;
   occurred_at: string;
   event_type: string;
-  source: "task" | "contact_note" | "deal_note" | "deal_stage_change";
+  source:
+    | "task"
+    | "contact_note"
+    | "deal_note"
+    | "deal_stage_change"
+    | "quote_status_change"
+    | "quote_portal_event";
   task_id?: Identifier | null;
   actor_sales_id?: Identifier | null;
   actor_kind: "user" | "system" | "automation" | "integration" | "import";

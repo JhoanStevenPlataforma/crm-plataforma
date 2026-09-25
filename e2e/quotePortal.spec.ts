@@ -125,7 +125,11 @@ test.describe("quote portal", () => {
     await page.goto(`/#/quote#${token}`);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByText(quote.quote_number)).toBeVisible();
+    // On the sheet: the letterhead bar and the section heading print the
+    // number too, and the sheet is the document the customer answers.
+    await expect(
+      page.getByRole("article").getByText(quote.quote_number),
+    ).toBeVisible();
     await expect(page.getByText("Kit de instalación")).toBeVisible();
 
     // 2 × €1,200,000. The SYMBOL is the assertion, not the digits: `$` here
@@ -150,7 +154,11 @@ test.describe("quote portal", () => {
 
     await page.goto(`/#/quote#${token}`);
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(quote.quote_number)).toBeVisible();
+    // On the sheet: the letterhead bar and the section heading print the
+    // number too, and the sheet is the document the customer answers.
+    await expect(
+      page.getByRole("article").getByText(quote.quote_number),
+    ).toBeVisible();
 
     // The portal cannot tell a rep from the customer — it has no session, on
     // purpose — so every open is recorded and a `sent` quote becomes `viewed`

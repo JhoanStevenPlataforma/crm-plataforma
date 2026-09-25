@@ -1,5 +1,10 @@
 import { Plus } from "lucide-react";
-import { CanAccess, useGetIdentity, useTranslate } from "ra-core";
+import {
+  CanAccess,
+  useGetIdentity,
+  useLocaleState,
+  useTranslate,
+} from "ra-core";
 import { Link } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +38,12 @@ export const DashboardHeader = ({
 }) => {
   const translate = useTranslate();
   const { identity } = useGetIdentity();
+  const [locale] = useLocaleState();
+  const today = new Date().toLocaleDateString(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 
   // First name only. "Good morning, Jhoan Steven Plata" reads like a summons.
   const name = identity?.fullName?.trim().split(" ")[0] ?? "";
@@ -43,7 +54,11 @@ export const DashboardHeader = ({
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex min-w-0 flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
+        {/* The portal's eyebrow: today's date, tracked out in amber. */}
+        <p className="text-[0.6875rem] font-semibold tracking-[0.18em] text-brand uppercase">
+          {today}
+        </p>
+        <h1 className="text-[2rem] leading-tight font-semibold">
           {translate(greetingKey, { name })}
         </h1>
         {/* Holds its line while the figures load, so the cards below do not
@@ -63,7 +78,7 @@ export const DashboardHeader = ({
           variant="outline"
           size="sm"
           aria-label={translate("crm.dashboard.period.label")}
-          className="bg-surface"
+          className="rounded-lg bg-surface shadow-card"
         >
           {DASHBOARD_PERIODS.map((item) => (
             <ToggleGroupItem

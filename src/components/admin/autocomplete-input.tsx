@@ -226,7 +226,8 @@ export const AutocompleteInput = (
                 role="combobox"
                 aria-expanded={open}
                 aria-labelledby={uniqueId}
-                className="w-full justify-between h-auto py-1.75 font-normal"
+                // Dressed as a field, not a button: it is filled in, not pressed.
+                className="w-full justify-between h-auto rounded-lg border-input bg-field py-1.75 font-normal shadow-card hover:border-border-strong hover:bg-field dark:border-input dark:bg-field dark:hover:bg-field data-[state=open]:border-ring/70 data-[state=open]:bg-surface"
               >
                 {selectedChoice ? (
                   getInputText(selectedChoice)

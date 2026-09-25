@@ -14,7 +14,7 @@ export function DashboardActivityLog() {
         <div className="mr-3 flex">
           <Clock className="text-muted-foreground w-6 h-6" />
         </div>
-        <h2 className="text-xl font-semibold text-muted-foreground">
+        <h2 className="text-lg font-semibold">
           {translate("crm.dashboard.latest_activity", {
             _: "Latest Activity",
           })}

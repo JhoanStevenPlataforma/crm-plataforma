@@ -8,8 +8,10 @@ import { formatMoney, formatMonthLabel } from "../misc/reporting";
 import { SectionCard } from "../misc/SectionCard";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Contact, ContactNote } from "../types";
+import { ClosingSoon } from "./ClosingSoon";
 import { DashboardHeader } from "./DashboardHeader";
 import { DashboardKpis } from "./DashboardKpis";
+import { DashboardPipeline } from "./DashboardPipeline";
 import { DashboardStepper } from "./DashboardStepper";
 import {
   DASHBOARD_PERIOD_PARAM,
@@ -99,7 +101,15 @@ export const Dashboard = () => {
         </p>
       ) : null}
 
-      <DashboardKpis stats={stats} />
+      <DashboardKpis stats={stats} period={period} />
+
+      {/* Where the money is, and what is due to land: the pipeline read as a
+          whole, then the deals the next forecast call will ask about. Neither
+          follows the period control; each caption says so. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <DashboardPipeline stages={stats.stages} isPending={stats.isPending} />
+        <ClosingSoon />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* Left: how the money moved, then how it moved. Right: who to call
@@ -146,8 +156,11 @@ export const Dashboard = () => {
             // it is NOT scoped by the control above. Saying so is the
             // difference between a caption and a misleading screen.
             subtitle={translate("crm.analytics.basis.unfiltered")}
+            // Two lines of each note: enough to recognise it, and the feed
+            // stays level with the right-hand column instead of doubling it.
+            className="[&_[data-slot=activity-note]]:line-clamp-2"
           >
-            <ActivityLog pageSize={10} />
+            <ActivityLog pageSize={6} />
           </SectionCard>
         </div>
 

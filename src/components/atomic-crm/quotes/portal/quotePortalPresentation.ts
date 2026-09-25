@@ -2,6 +2,7 @@ import certificationsImage from "./assets/certifications.webp";
 import companyImage from "./assets/company.webp";
 import coverImage from "./assets/cover.webp";
 import purposeImage from "./assets/purpose.webp";
+import type { QuotePortalIconName } from "./quotePortalIcons";
 
 /**
  * The presentation a customer reads BEFORE the quotation: a cover and a run of
@@ -22,11 +23,26 @@ import purposeImage from "./assets/purpose.webp";
  * reaches a page anybody holding a link can open.
  */
 
+/**
+ * How a picture fills its frame. `contain` shows all of it at its own
+ * proportions; `cover` fills a frame as tall as the slide allows and crops the
+ * rest, keeping `focus` (percent from the left / top) in view. `cover` suits a
+ * photograph with room around its subject — never a picture with text in it.
+ */
+export type QuotePortalImageFit =
+  | { fit: "contain" }
+  | { fit: "cover"; focus: { x: number; y: number } };
+
 export type QuotePortalMedia =
-  | { kind: "image"; url: string; alt: string }
+  | ({ kind: "image"; url: string; alt: string } & QuotePortalImageFit)
   | { kind: "video"; url: string; poster?: string; alt: string };
 
-export type QuotePortalHighlight = { title: string; text: string };
+export type QuotePortalHighlight = {
+  title: string;
+  text: string;
+  /** FX-10: drawn beside the title. */
+  icon?: QuotePortalIconName;
+};
 
 export type QuotePortalSlide = {
   /** Stable, unique within the deck: the section's DOM id derives from it. */
@@ -81,18 +97,22 @@ export const DEFAULT_QUOTE_PRESENTATION: QuotePortalPresentation = {
       highlights: [
         {
           title: "Experiencia",
+          icon: "award",
           text: "Equipo especializado en producción y tecnología.",
         },
         {
           title: "Innovación",
+          icon: "idea",
           text: "Soluciones propias aplicadas a eventos y comunicación.",
         },
         {
           title: "Equipo",
+          icon: "team",
           text: "Profesionales trabajando de forma coordinada.",
         },
         {
           title: "Resultados",
+          icon: "growth",
           text: "Procesos orientados a crear valor para el cliente.",
         },
       ],
@@ -100,6 +120,9 @@ export const DEFAULT_QUOTE_PRESENTATION: QuotePortalPresentation = {
         kind: "image",
         url: companyImage,
         alt: "Plataforma Software en evento",
+        // 1080x336: too wide and too small to crop into a tall frame without
+        // cutting people out and blurring the rest. A taller photo fixes it.
+        fit: "contain",
       },
       mediaSide: "left",
     },
@@ -115,10 +138,12 @@ export const DEFAULT_QUOTE_PRESENTATION: QuotePortalPresentation = {
       highlights: [
         {
           title: "Soluciones propias",
+          icon: "chip",
           text: "Desarrollo tecnológico orientado a necesidades concretas.",
         },
         {
           title: "Nuevos modelos",
+          icon: "rocket",
           text: "Capacidad para construir nuevas formas de negocio.",
         },
       ],
@@ -126,6 +151,10 @@ export const DEFAULT_QUOTE_PRESENTATION: QuotePortalPresentation = {
         kind: "image",
         url: purposeImage,
         alt: "Propósito de Plataforma Software",
+        // Cropped in the file to the photograph: the source's right half
+        // repeated this slide's copy as pixels. `cover` keeps the team centred.
+        fit: "cover",
+        focus: { x: 50, y: 55 },
       },
       mediaSide: "right",
     },
@@ -140,22 +169,32 @@ export const DEFAULT_QUOTE_PRESENTATION: QuotePortalPresentation = {
       highlights: [
         {
           title: "ISO 9001:2015",
+          icon: "badge",
           text: "Procesos orientados a la calidad y mejora continua.",
         },
         {
           title: "ISO 27001",
+          icon: "shield",
           text: "Seguridad y privacidad de la información.",
         },
         {
           title: "Capacitación",
+          icon: "graduation",
           text: "Equipo preparado en conocimiento especializado.",
         },
-        { title: "Servicio", text: "Experiencia centrada en el cliente." },
+        {
+          title: "Servicio",
+          icon: "handshake",
+          text: "Experiencia centrada en el cliente.",
+        },
       ],
       media: {
         kind: "image",
         url: certificationsImage,
         alt: "Certificaciones y experiencia",
+        // Cropped in the file to the photograph and the logos: the source was
+        // a slide screenshot whose heading and text repeat this slide's copy.
+        fit: "contain",
       },
       mediaSide: "left",
     },
@@ -222,6 +261,7 @@ export const personalizePresentation = (
     title: fill(slide.title, values),
     paragraphs: slide.paragraphs.map((paragraph) => fill(paragraph, values)),
     highlights: slide.highlights.map((highlight) => ({
+      ...highlight,
       title: fill(highlight.title, values),
       text: fill(highlight.text, values),
     })),

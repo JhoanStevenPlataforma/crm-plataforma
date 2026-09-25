@@ -1,3 +1,4 @@
+import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,34 +37,41 @@ export const StatTile = ({
 }) => {
   const body = (
     <>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-[0.6875rem] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+        {label}
+      </p>
       <p
         className={cn(
-          "text-2xl font-semibold tabular-nums",
+          "mt-2 text-[1.625rem] leading-none font-semibold tracking-[-0.025em] tabular-nums",
           tone === "alert" && "text-destructive",
         )}
       >
         {value}
       </p>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
+      ) : null}
     </>
   );
 
   if (!to) {
     return (
-      <Card>
-        <CardContent className="p-4">{body}</CardContent>
+      <Card className="h-full gap-0 py-0">
+        <CardContent className="flex flex-col p-4">{body}</CardContent>
       </Card>
     );
   }
 
+  // A tile that leads somewhere says so: it lifts on hover and shows the
+  // arrow, so the reader can tell it from the plain figures around it.
   return (
-    <Card className="hover:border-primary/40 transition-colors">
+    <Card className="group/tile h-full gap-0 py-0 transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-px hover:border-border-strong hover:shadow-raised">
       <CardContent className="p-0">
         <Link
           to={to}
-          className="flex flex-col p-4 no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 rounded-xl"
+          className="relative flex flex-col rounded-xl p-4 text-inherit no-underline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
+          <ArrowUpRight className="absolute top-3.5 right-3.5 size-3.5 text-muted-foreground transition-colors group-hover/tile:text-brand" />
           {body}
         </Link>
       </CardContent>

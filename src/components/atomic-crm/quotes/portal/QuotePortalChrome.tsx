@@ -3,6 +3,7 @@ import { useTranslate } from "ra-core";
 
 import { cn } from "@/lib/utils";
 
+import { fx } from "./quotePortalFx";
 import { scrollToSection, useScrollProgressRef } from "./useQuotePortalScroll";
 
 export type QuotePortalSection = { id: string; label: string };
@@ -24,8 +25,13 @@ export const QuotePortalProgress = () => {
       // `transform`, not Tailwind's `scale-x-*`: those set the separate `scale`
       // property, which would multiply with the width written on scroll.
       style={{ transform: "scaleX(0)" }}
-      className="quote-print-hide fixed inset-x-0 top-0 z-50 h-[3px] origin-left bg-gradient-to-r from-brand to-brand-subtle"
-    />
+      className="quote-print-hide fixed inset-x-0 top-0 z-50 h-[3px] origin-left overflow-hidden bg-gradient-to-r from-brand to-brand-subtle"
+    >
+      {fx(24) ? (
+        // FX-24: a light sweeping along the bar.
+        <div className="qp-shimmer absolute inset-0" />
+      ) : null}
+    </div>
   );
 };
 
@@ -38,14 +44,26 @@ export const QuotePortalTopbar = ({
   brand,
   number,
   versionNumber,
+  isCompact,
 }: {
   brand: string;
   number: string;
   versionNumber: number;
+  /** FX-25: the reader has scrolled; the bar gets out of the way. */
+  isCompact: boolean;
 }) => {
+  const isShrunk = fx(25) && isCompact;
   const translate = useTranslate();
   return (
-    <header className="quote-print-hide dark fixed inset-x-0 top-2 z-40 mx-auto flex w-[calc(100%-1rem)] max-w-[1180px] items-center justify-between gap-3 rounded-2xl border border-white/10 bg-background/80 px-4 py-2.5 text-foreground shadow-xl backdrop-blur-lg sm:top-4 sm:w-[calc(100%-2rem)]">
+    <header
+      className={cn(
+        "quote-print-hide dark fixed inset-x-0 top-2 z-40 mx-auto flex w-[calc(100%-1rem)] items-center justify-between gap-3 rounded-2xl border border-white/10 px-4 text-foreground shadow-xl backdrop-blur-lg transition-all duration-500 sm:top-4 sm:w-[calc(100%-2rem)]",
+        isShrunk
+          ? // FX-25: narrower, lower and more transparent while reading.
+            "max-w-[980px] bg-background/70 py-1.5 sm:top-3"
+          : "max-w-[1180px] bg-background/80 py-2.5",
+      )}
+    >
       <span className="flex min-w-0 items-center gap-2.5 text-sm font-semibold">
         <span
           aria-hidden
@@ -98,7 +116,13 @@ export const QuotePortalMiniNav = ({
                 isActive && "bg-brand ring-4 ring-brand/15",
               )}
             />
-            <span className="pointer-events-none absolute left-6 rounded-md bg-foreground px-2 py-1.5 text-[10px] whitespace-nowrap text-background opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <span
+              className={cn(
+                "pointer-events-none absolute left-6 rounded-md bg-foreground px-2 py-1.5 text-[10px] whitespace-nowrap text-background opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
+                // FX-26: the section being read keeps its name in view.
+                fx(26) && isActive && "opacity-100",
+              )}
+            >
               {section.label}
             </span>
           </button>

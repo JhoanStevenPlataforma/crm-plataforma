@@ -242,6 +242,44 @@ describe("getList", () => {
     });
   });
 
+  it("should transform '@not.in' into a none-of match", async () => {
+    const getList = vi.fn();
+    const mockDataProvider = {
+      getList,
+    } as unknown as DataProvider;
+
+    getList.mockResolvedValueOnce([{ id: 1 }]);
+
+    const { getList: getListAdapter } =
+      withSupabaseFilterAdapter(mockDataProvider);
+
+    await getListAdapter("resource", {
+      filter: { "stage@not.in": "(won,lost)" },
+    });
+
+    expect(getList).toHaveBeenCalledWith("resource", {
+      filter: { stage_neq_any: ["won", "lost"] },
+    });
+  });
+
+  it("should transform '@ov' into an any-of match on the array", async () => {
+    const getList = vi.fn();
+    const mockDataProvider = {
+      getList,
+    } as unknown as DataProvider;
+
+    getList.mockResolvedValueOnce([{ id: 1 }]);
+
+    const { getList: getListAdapter } =
+      withSupabaseFilterAdapter(mockDataProvider);
+
+    await getListAdapter("resource", { filter: { "contact_ids@ov": "{3,7}" } });
+
+    expect(getList).toHaveBeenCalledWith("resource", {
+      filter: { contact_ids_inc_any: [3, 7] },
+    });
+  });
+
   it("should transform '@or'", async () => {
     const getList = vi.fn();
     const mockDataProvider = {

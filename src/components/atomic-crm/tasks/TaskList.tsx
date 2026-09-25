@@ -1,7 +1,8 @@
-import { useGetIdentity, useTranslate } from "ra-core";
+import { useGetIdentity, useGetResourceLabel, useTranslate } from "ra-core";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router";
 
+import { PageHeader } from "@/components/admin/page-header";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,6 +27,7 @@ import { parseTaskView, TASK_VIEWS } from "./taskViews";
  */
 export const TaskList = () => {
   const translate = useTranslate();
+  const getResourceLabel = useGetResourceLabel();
   const { identity } = useGetIdentity();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -51,6 +53,11 @@ export const TaskList = () => {
 
   return (
     <div className="flex flex-col gap-4">
+      <PageHeader
+        title={getResourceLabel("tasks", 2)}
+        className="mb-0"
+        actions={<AddTask selectContact />}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs value={view} onValueChange={(value) => setParam("view", value)}>
           <TabsList>
@@ -75,7 +82,6 @@ export const TaskList = () => {
               {translate("resources.tasks.filters.only_mine")}
             </Label>
           </div>
-          <AddTask selectContact />
         </div>
       </div>
 
@@ -83,6 +89,7 @@ export const TaskList = () => {
         <TasksListByDueDate
           entityFilter={filter}
           showContact
+          framed
           emptyPlaceholder={
             <p className="text-sm">
               {translate("resources.tasks.empty_list_hint")}

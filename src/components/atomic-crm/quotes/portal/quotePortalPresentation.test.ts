@@ -20,7 +20,7 @@ const deck: QuotePortalPresentation = {
       title: "Who works for {company}",
       paragraphs: ["First line for {company}\nSecond line"],
       highlights: [{ title: "{brand}", text: "Unknown {token} stays" }],
-      media: { kind: "image", url: "/team.webp", alt: "Team" },
+      media: { kind: "image", url: "/team.webp", alt: "Team", fit: "contain" },
       mediaSide: "left",
     },
   ],

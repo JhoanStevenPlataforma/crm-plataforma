@@ -190,6 +190,7 @@ const DealShowContent = () => {
               dealId={record.id}
               companyId={record.company_id}
               dealName={record.name}
+              amountSourceQuoteId={record.amount_source_quote_id}
             />
           </div>
 

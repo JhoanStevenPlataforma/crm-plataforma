@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@fontsource-variable/inter";
+/* The optical-size axis: Inter draws its tighter "Display" cut at heading
+   sizes on its own (font-optical-sizing: auto), with no second family. */
+@import "@fontsource-variable/inter/opsz.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -59,59 +61,87 @@
   --color-surface: var(--surface);
   --color-surface-foreground: var(--surface-foreground);
   --color-surface-muted: var(--surface-muted);
+  --color-field: var(--field);
   --color-border-strong: var(--border-strong);
+  --color-brand-glow: var(--brand-glow);
+  --color-sidebar-muted: var(--sidebar-muted);
+
+  --shadow-card: var(--elevation-card);
+  --shadow-raised: var(--elevation-raised);
+  --shadow-float: var(--elevation-float);
+  --shadow-brand: var(--elevation-brand);
+
+  /* HermesLoader (ui/hermes-loader.tsx). The braid slides by exactly one
+     wavelength of its drawing (60 user units), which lands it on an identical
+     picture: change one number and the other must follow, or the loop jumps. */
+  --animate-hermes-braid: hermes-braid 1.6s linear infinite;
+  --animate-hermes-breathe: hermes-breathe 2.4s ease-in-out infinite;
+
+  @keyframes hermes-braid {
+    to {
+      transform: translateY(-60px);
+    }
+  }
+  @keyframes hermes-breathe {
+    50% {
+      opacity: 0.45;
+    }
+  }
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
-  /* ---- brand ------------------------------------------------------------
-     Warm amber/bronze read off the product mark. It is an ACCENT, not a
-     ground: it appears on primary actions, the active navigation item, focus
-     rings and selected data, never on page backgrounds, table headers or
-     status badges, which carry their own semantic colours below. */
+  /* ---- "Midnight & Amber" -------------------------------------------------
+     The CRM and the customer portal speak one visual language: a deep ink
+     navy (hue ~268) as the structural colour, and amber as LIGHT rather than
+     paint -- a glow on the active item, the primary action, the focus ring.
+     The ink carries the sidebar in both themes, so the product reads the same
+     at a glance whichever mode a user prefers. Every text pair below is
+     measured (sRGB relative luminance), see docs/proposals/ui-redesign.md §4.4. */
+
+  /* ---- brand ------------------------------------------------------------ */
   --brand: oklch(0.5327 0.1226 57.37); /* #A0570F, 5.43:1 on white */
-  --brand-strong: oklch(0.4357 0.1008 56.18); /* #7A400A, text on tint    */
+  --brand-strong: oklch(0.4357 0.1008 56.18); /* #7A400A, 7.32:1 on tint */
   --brand-subtle: oklch(0.7811 0.1464 72.73); /* #F0A73A, marks           */
   --brand-foreground: oklch(1 0 0);
-  --brand-tint: oklch(0.9649 0.0186 75.32); /* #FBF2E6, active bg       */
+  --brand-tint: oklch(0.962 0.024 75); /* #FCF1E1, active bg       */
+  /* The lighter end of the primary button's gradient. White on it: 4.74:1. */
+  --brand-glow: oklch(0.565 0.128 59); /* #AC6011 */
 
-  /* ---- neutrals ---------------------------------------------------------
-     Biased slightly cool (hue ~257) so the warm brand reads as deliberate
-     against them rather than as a cast. The page ground is off-white, not
-     white: cards have to separate from it without a heavy shadow. */
-  --background: oklch(0.9722 0.0034 247.86); /* #F4F6F8 */
-  --foreground: oklch(0.2168 0.0109 260.68); /* #171A1F, 16.1:1 */
+  /* ---- ink neutrals -----------------------------------------------------
+     Cool and faintly blue rather than grey, so white cards read as paper
+     laid on a desk and the amber reads as warmth against it. */
+  --background: oklch(0.972 0.006 265); /* #F4F6FA */
+  --foreground: oklch(0.21 0.03 268); /* #121826, 16.37:1 */
   --surface: oklch(1 0 0);
-  --surface-foreground: oklch(0.2168 0.0109 260.68);
-  --surface-muted: oklch(0.9876 0.0017 247.84); /* #FAFBFC, table headers */
+  --surface-foreground: oklch(0.21 0.03 268);
+  --surface-muted: oklch(0.984 0.004 265); /* #F9FAFC, table headers */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2168 0.0109 260.68);
+  --card-foreground: oklch(0.21 0.03 268);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2168 0.0109 260.68);
+  --popover-foreground: oklch(0.21 0.03 268);
   --primary: oklch(0.5327 0.1226 57.37);
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.951 0.0063 255.48); /* #ECEFF3 */
-  --secondary-foreground: oklch(0.2168 0.0109 260.68);
-  --muted: oklch(0.951 0.0063 255.48);
-  --muted-foreground: oklch(
-    0.5456 0.023 257.51
-  ); /* #68717E, 4.56:1 on ground */
-  /* Generic hover stays NEUTRAL on purpose. Tinting every dropdown row amber
-     is how an accent turns into a theme. The brand tint is reserved for the
-     sidebar active item, below. */
-  --accent: oklch(0.951 0.0063 255.48);
-  --accent-foreground: oklch(0.2168 0.0109 260.68);
+  --secondary: oklch(0.948 0.008 265); /* #ECEEF4 */
+  --secondary-foreground: oklch(0.21 0.03 268);
+  --muted: oklch(0.948 0.008 265);
+  --muted-foreground: oklch(0.515 0.028 265); /* #606878, 5.19:1 on ground */
+  /* Generic hover stays NEUTRAL on purpose: an accent on every dropdown row
+     is how an accent turns into a theme. */
+  --accent: oklch(0.948 0.008 265);
+  --accent-foreground: oklch(0.21 0.03 268);
   --destructive: oklch(0.5353 0.1628 25.69); /* #B93B38, 5.61:1 */
-  --border: oklch(0.9145 0.0092 258.34); /* #DFE3E9 */
-  --border-strong: oklch(0.8549 0.0146 254.62); /* #C9D0D9 */
-  --input: oklch(0.9145 0.0092 258.34);
+  --border: oklch(0.912 0.012 265); /* #DEE2EA */
+  --border-strong: oklch(0.855 0.018 265); /* #C8CEDA */
+  --input: oklch(0.912 0.012 265);
+  /* A form field's resting ground: a shade off the card, so an empty field
+     reads as a slot to fill rather than a line drawn on paper. It turns to
+     `--surface` on focus, which is the field "lifting" to be written in. */
+  --field: oklch(0.984 0.004 265); /* #F9FAFC */
   --ring: oklch(0.5327 0.1226 57.37);
 
-  /* ---- semantic states --------------------------------------------------
-     Separate from the brand hue so "primary action" and "this went well"
-     never read as the same signal. Each verified at 4.5:1 or better as text
-     on white. */
+  /* ---- semantic states (unchanged, measured) --------------------------- */
   --success: oklch(0.5333 0.1094 162.91); /* #15805A, 4.92:1 */
   --success-foreground: oklch(1 0 0);
   --success-tint: oklch(0.9561 0.0152 171.05);
@@ -122,26 +152,42 @@
   --info-foreground: oklch(1 0 0);
   --info-tint: oklch(0.9531 0.0166 259.42);
 
-  /* Unused by the CRM own charts, which read misc/chartTheme.ts. Kept
-     coherent so a stock shadcn chart dropped in does not clash. */
+  /* Unused by the CRM's own charts, which read misc/chartTheme.ts. */
   --chart-1: oklch(0.5327 0.1226 57.37);
   --chart-2: oklch(0.5003 0.1521 258.67);
   --chart-3: oklch(0.5333 0.1094 162.91);
   --chart-4: oklch(0.5722 0.1226 70.23);
   --chart-5: oklch(0.5353 0.1628 25.69);
 
-  /* ---- sidebar ----------------------------------------------------------
-     White against the off-white page, separated by a border rather than a
-     shade: the navigation should read as a fixed edge, not as a panel
-     floating over the content. */
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.4144 0.0205 259.41);
-  --sidebar-primary: oklch(0.5327 0.1226 57.37);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.9649 0.0186 75.32);
-  --sidebar-accent-foreground: oklch(0.4357 0.1008 56.18);
-  --sidebar-border: oklch(0.9145 0.0092 258.34);
-  --sidebar-ring: oklch(0.5327 0.1226 57.37);
+  /* ---- sidebar: ink in BOTH themes --------------------------------------
+     The navigation is the fixed edge of the product, so it takes the
+     structural colour. The active item is amber light on ink (9.93:1). */
+  --sidebar: oklch(0.175 0.03 270); /* #0B101E */
+  --sidebar-foreground: oklch(0.76 0.02 265); /* #ABB1BE, 8.84:1 */
+  --sidebar-muted: oklch(0.61 0.025 265); /* #7C8393, section labels 5.01:1 */
+  --sidebar-primary: oklch(0.84 0.14 76); /* #FEBD56 */
+  --sidebar-primary-foreground: oklch(0.2165 0.0398 76.87);
+  --sidebar-accent: oklch(0.24 0.035 270); /* #191E30, hover / active row */
+  --sidebar-accent-foreground: oklch(0.97 0.005 265);
+  --sidebar-border: oklch(0.255 0.03 270);
+  --sidebar-ring: oklch(0.84 0.14 76);
+
+  /* ---- elevation --------------------------------------------------------
+     Two soft layers (a contact shadow and an ambient one) instead of one
+     grey smear: the card sits ON the ground rather than floating over it. */
+  --elevation-card:
+    0 1px 2px 0 rgb(18 24 38 / 0.04), 0 1px 3px 0 rgb(18 24 38 / 0.05);
+  --elevation-raised:
+    0 1px 2px 0 rgb(18 24 38 / 0.04), 0 12px 32px -12px rgb(18 24 38 / 0.18);
+  --elevation-float:
+    0 2px 4px 0 rgb(18 24 38 / 0.04), 0 24px 48px -16px rgb(18 24 38 / 0.22);
+  --elevation-brand:
+    0 1px 0 0 rgb(255 255 255 / 0.18) inset,
+    0 6px 16px -6px color-mix(in oklch, var(--brand) 55%, transparent);
+
+  /* ---- ambient light behind the content (see .app-canvas) -------------- */
+  --canvas-glow-warm: color-mix(in oklch, var(--brand-subtle) 14%, transparent);
+  --canvas-glow-cool: color-mix(in oklch, var(--info) 7%, transparent);
 
   --avatar-0: oklch(0.85 0.08 240);
   --avatar-1: oklch(0.88 0.1 340);
@@ -156,47 +202,48 @@
 }
 
 .dark {
-  /* Not the light palette inverted. The amber that clears 5.4:1 on white
-     drops below 2:1 on a near-black ground, so the brand moves UP the ramp
-     here and takes dark text on solid fills. */
-  --brand: oklch(0.7434 0.1317 66.87); /* #E39A46, 7.46:1 */
+  /* The portal's night: deep navy grounds, the brand moved UP the ramp so it
+     still clears 7:1, and dark text on solid amber fills. */
+  --brand: oklch(0.7434 0.1317 66.87); /* #E39A46, 7.75:1 on surface */
   --brand-strong: oklch(0.7811 0.1464 72.73);
   --brand-subtle: oklch(0.6899 0.1307 67.8);
-  --brand-foreground: oklch(0.2165 0.0398 76.87);
-  --brand-tint: oklch(0.252 0.0248 68.99);
+  --brand-foreground: oklch(0.2165 0.0398 76.87); /* 7.49:1 on brand */
+  --brand-tint: oklch(0.25 0.035 65);
+  --brand-glow: oklch(0.8 0.14 72);
 
-  --background: oklch(0.1808 0.0095 255.64); /* #0F1216 */
-  --foreground: oklch(0.9484 0.0046 258.32); /* #ECEEF1, 15.0:1 */
-  --surface: oklch(0.2168 0.0109 260.68); /* #171A1F */
-  --surface-foreground: oklch(0.9484 0.0046 258.32);
-  --surface-muted: oklch(0.2468 0.0146 261.66);
-  --card: oklch(0.2168 0.0109 260.68);
-  --card-foreground: oklch(0.9484 0.0046 258.32);
-  --popover: oklch(0.2168 0.0109 260.68);
-  --popover-foreground: oklch(0.9484 0.0046 258.32);
+  --background: oklch(0.16 0.022 268); /* #090D17 */
+  --foreground: oklch(0.955 0.008 265); /* #EDF0F6 */
+  --surface: oklch(0.2 0.024 268); /* #111621 */
+  --surface-foreground: oklch(0.955 0.008 265);
+  --surface-muted: oklch(0.225 0.024 268); /* #171B27 */
+  --card: oklch(0.2 0.024 268);
+  --card-foreground: oklch(0.955 0.008 265);
+  --popover: oklch(0.215 0.026 268);
+  --popover-foreground: oklch(0.955 0.008 265);
   --primary: oklch(0.7434 0.1317 66.87);
   --primary-foreground: oklch(0.2165 0.0398 76.87);
-  --secondary: oklch(0.2753 0.0165 259.78); /* #232830 */
-  --secondary-foreground: oklch(0.9484 0.0046 258.32);
-  --muted: oklch(0.2753 0.0165 259.78);
-  --muted-foreground: oklch(0.64 0.0208 255.58); /* #848D99, 5.19:1 */
-  --accent: oklch(0.2753 0.0165 259.78);
-  --accent-foreground: oklch(0.9484 0.0046 258.32);
-  --destructive: oklch(0.6858 0.1498 23.73); /* #E8706C, 5.79:1 */
-  --border: oklch(0.3036 0.0161 259.8);
-  --border-strong: oklch(0.3728 0.0196 257.26);
-  --input: oklch(0.3036 0.0161 259.8);
+  --secondary: oklch(0.255 0.026 268);
+  --secondary-foreground: oklch(0.955 0.008 265);
+  --muted: oklch(0.255 0.026 268);
+  --muted-foreground: oklch(0.69 0.022 265); /* #959BA9, 6.53:1 */
+  --accent: oklch(0.255 0.026 268);
+  --accent-foreground: oklch(0.955 0.008 265);
+  --destructive: oklch(0.6858 0.1498 23.73); /* 6.01:1 */
+  --border: oklch(0.29 0.024 268); /* #262B38 */
+  --border-strong: oklch(0.36 0.026 268);
+  --input: oklch(0.29 0.024 268);
+  --field: oklch(0.175 0.023 268); /* recessed below the card, #0D111B */
   --ring: oklch(0.7434 0.1317 66.87);
 
-  --success: oklch(0.7115 0.1297 164); /* #3FBB8C, 7.22:1 */
-  --success-foreground: oklch(0.2168 0.0109 260.68);
-  --success-tint: oklch(0.2503 0.0275 167.53);
-  --warning: oklch(0.7514 0.135 78.87);
-  --warning-foreground: oklch(0.2168 0.0109 260.68);
-  --warning-tint: oklch(0.257 0.027 81.03);
-  --info: oklch(0.7025 0.1279 258.28); /* #6CA0EE, 6.56:1 */
-  --info-foreground: oklch(0.2168 0.0109 260.68);
-  --info-tint: oklch(0.241 0.0306 256.87);
+  --success: oklch(0.7115 0.1297 164); /* 7.51:1 */
+  --success-foreground: oklch(0.21 0.03 268);
+  --success-tint: oklch(0.25 0.035 167);
+  --warning: oklch(0.7514 0.135 78.87); /* 8.06:1 */
+  --warning-foreground: oklch(0.21 0.03 268);
+  --warning-tint: oklch(0.255 0.032 80);
+  --info: oklch(0.7025 0.1279 258.28); /* 6.82:1 */
+  --info-foreground: oklch(0.21 0.03 268);
+  --info-tint: oklch(0.245 0.04 258);
 
   --chart-1: oklch(0.7434 0.1317 66.87);
   --chart-2: oklch(0.7025 0.1279 258.28);
@@ -204,14 +251,31 @@
   --chart-4: oklch(0.7514 0.135 78.87);
   --chart-5: oklch(0.6858 0.1498 23.73);
 
-  --sidebar: oklch(0.2168 0.0109 260.68);
-  --sidebar-foreground: oklch(0.7893 0.0149 254.63);
-  --sidebar-primary: oklch(0.7434 0.1317 66.87);
+  /* A step darker than the page, so the edge still reads in dark mode. */
+  --sidebar: oklch(0.135 0.022 268); /* #050811 */
+  --sidebar-foreground: oklch(0.76 0.02 265); /* 9.32:1 */
+  --sidebar-muted: oklch(0.61 0.025 265);
+  --sidebar-primary: oklch(0.84 0.14 76);
   --sidebar-primary-foreground: oklch(0.2165 0.0398 76.87);
-  --sidebar-accent: oklch(0.252 0.0248 68.99);
-  --sidebar-accent-foreground: oklch(0.7811 0.1464 72.73);
-  --sidebar-border: oklch(0.3036 0.0161 259.8);
-  --sidebar-ring: oklch(0.7434 0.1317 66.87);
+  --sidebar-accent: oklch(0.215 0.03 270);
+  --sidebar-accent-foreground: oklch(0.97 0.005 265);
+  --sidebar-border: oklch(0.235 0.026 268);
+  --sidebar-ring: oklch(0.84 0.14 76);
+
+  /* In the dark a shadow disappears; a hairline of light on the top edge is
+     what separates a card from the ground instead. */
+  --elevation-card:
+    0 1px 0 0 rgb(255 255 255 / 0.035) inset, 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --elevation-raised:
+    0 1px 0 0 rgb(255 255 255 / 0.05) inset, 0 16px 36px -14px rgb(0 0 0 / 0.7);
+  --elevation-float:
+    0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 28px 56px -18px rgb(0 0 0 / 0.8);
+  --elevation-brand:
+    0 1px 0 0 rgb(255 255 255 / 0.3) inset,
+    0 8px 22px -8px color-mix(in oklch, var(--brand) 60%, transparent);
+
+  --canvas-glow-warm: color-mix(in oklch, var(--brand) 9%, transparent);
+  --canvas-glow-cool: color-mix(in oklch, var(--info) 10%, transparent);
 
   --avatar-0: oklch(0.35 0.12 240);
   --avatar-1: oklch(0.38 0.14 340);
@@ -273,9 +337,156 @@ input[type="time"] {
   }
   body {
     @apply bg-background text-foreground font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Inter's disambiguating forms: a flat-topped 3 and 4, a tailed l, an
+       open 6/9. Figures in a CRM are read, not glanced at. */
+    font-feature-settings: "cv01", "cv02", "cv03", "cv04", "cv05", "ss03";
+    font-optical-sizing: auto;
+  }
+  /* Headings take the display cut and tighten as they grow. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
+  h1 {
+    letter-spacing: -0.025em;
+  }
+  /* Selected text in the brand tint, readable in both themes. */
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 28%, transparent);
+  }
+  /* Thin, quiet scrollbars that take the theme's own border colour. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* The ink sidebar keeps its scrollbar on its own ramp. */
+  [data-sidebar="sidebar"] * {
+    scrollbar-color: var(--sidebar-border) transparent;
+  }
+  [data-sidebar="sidebar"] *::-webkit-scrollbar-thumb {
+    background-color: var(--sidebar-border);
   }
 }
 
 body {
   font-family: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ---- the application canvas ----------------------------------------------
+   The ground behind every screen. Two very faint pools of light -- warm at
+   the top right, cool at the top left, the portal cover's washes at a tenth
+   of the strength -- and a dot grid that fades out below the fold. Fixed to
+   the viewport so it never scrolls with a long list, and painted once. */
+.app-canvas {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      60rem 28rem at 100% -6rem,
+      var(--canvas-glow-warm),
+      transparent 70%
+    ),
+    radial-gradient(
+      48rem 24rem at 0% -8rem,
+      var(--canvas-glow-cool),
+      transparent 70%
+    );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+.app-canvas::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--foreground) 9%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, black 0, transparent 22rem);
+}
+.app-canvas > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* A thin amber line along the top of a surface -- the portal's progress bar,
+   reused as the mark of "this is the headline". */
+.brand-edge {
+  position: relative;
+}
+.brand-edge::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--brand-subtle) 30%,
+    var(--brand) 70%,
+    transparent
+  );
+  opacity: 0.85;
+}
+
+/* ---- chart marks (misc/chartMarks.tsx) -----------------------------------
+   Each bar is drawn rounded on every corner and extended past its baseline by
+   the radius; clipping that overshoot leaves the base square and only the data
+   end rounded. Clip insets match BAR_RADIUS. */
+.crm-bar-up rect {
+  clip-path: inset(0 0 4px 0);
+}
+.crm-bar-down rect {
+  clip-path: inset(4px 0 0 0);
+}
+.crm-bar-right rect {
+  clip-path: inset(0 0 0 4px);
+}
+/* Hover: the pointed mark keeps full strength, its neighbours step back. */
+.crm-bar rect {
+  transition: opacity 150ms ease;
+}
+svg:has(.crm-bar:hover) .crm-bar:not(:hover) rect {
+  opacity: 0.42;
+}
+
+/* Enter motion for page content: a short rise, once. */
+@keyframes crm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.crm-rise {
+  animation: crm-rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-rise {
+    animation: none;
+  }
 }

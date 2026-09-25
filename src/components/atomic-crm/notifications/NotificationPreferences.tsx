@@ -145,7 +145,7 @@ export const NotificationPreferences = () => {
   return (
     <Card>
       <CardContent className="space-y-4">
-        <h2 className="text-xl font-semibold text-muted-foreground">
+        <h2 className="text-lg font-semibold">
           {translate("crm.notifications.preferences.title")}
         </h2>
         <p className="text-sm text-muted-foreground">

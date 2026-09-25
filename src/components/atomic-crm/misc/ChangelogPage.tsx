@@ -1,11 +1,12 @@
 import { useTranslate } from "ra-core";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileContent } from "../layout/MobileContent";
 import MobileHeader from "../layout/MobileHeader";
 import { Markdown } from "./Markdown";
 import changelogContent from "../../../../CHANGELOG.md?raw";
 import { MobileBackButton } from "./MobileBackButton";
+import { PageHeader } from "@/components/admin/page-header";
 
 export const ChangelogPage = () => {
   const translate = useTranslate();
@@ -30,11 +31,9 @@ export const ChangelogPage = () => {
   }
 
   return (
-    <div className="max-w-3xl mx-auto my-8">
+    <div className="max-w-3xl">
+      <PageHeader title={translate("crm.changelog.title")} />
       <Card>
-        <CardHeader>
-          <CardTitle>{translate("crm.changelog.title")}</CardTitle>
-        </CardHeader>
         <CardContent>
           <Markdown>{changelogContent}</Markdown>
         </CardContent>

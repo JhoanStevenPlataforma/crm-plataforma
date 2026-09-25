@@ -139,7 +139,10 @@ export const RadioButtonGroupInput = (inProps: RadioButtonGroupInputProps) => {
           {...rest}
           value={field.value || ""}
           onValueChange={field.onChange}
-          className={cn("flex", row ? "flex-row gap-4" : "flex-col gap-2")}
+          className={cn(
+            "flex",
+            row ? "flex-row flex-wrap gap-2" : "flex-col gap-2",
+          )}
           disabled={disabled || readOnly}
         >
           {allChoices?.map((choice) => {
@@ -147,7 +150,16 @@ export const RadioButtonGroupInput = (inProps: RadioButtonGroupInputProps) => {
             const isDisabled = disabled || readOnly || getDisableValue(choice);
 
             return (
-              <div key={value} className="flex items-center space-x-2">
+              // In a row, each choice is a small card: the whole chip is the
+              // target and the checked one takes the brand tint.
+              <div
+                key={value}
+                className={cn(
+                  "flex items-center gap-2",
+                  row &&
+                    "rounded-lg border border-input bg-field px-3 py-2 shadow-card transition-colors has-[[data-state=checked]]:border-brand/50 has-[[data-state=checked]]:bg-brand-tint hover:border-border-strong",
+                )}
+              >
                 <RadioGroupItem
                   value={value}
                   id={`${id}-${value}`}

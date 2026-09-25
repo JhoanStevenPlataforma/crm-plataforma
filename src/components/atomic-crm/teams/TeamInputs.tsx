@@ -1,8 +1,10 @@
 import { required, useTranslate } from "ra-core";
+import { Target, UsersRound } from "lucide-react";
 import { DateInput } from "@/components/admin/date-input";
 import { NumberInput } from "@/components/admin/number-input";
 import { TextInput } from "@/components/admin/text-input";
 
+import { FormSection } from "../misc/FormSection";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { currentYearPeriod } from "./teamBudget";
 
@@ -24,31 +26,45 @@ export const TeamInputs = () => {
   const period = currentYearPeriod();
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      <TextInput source="name" validate={required()} helperText={false} />
-      <TextInput source="description" multiline helperText={false} />
+    <div className="flex flex-col gap-10 w-full">
+      <FormSection
+        icon={UsersRound}
+        title={translate("resources.teams.field_categories.team")}
+        description={translate("crm.form_section.team_identity")}
+      >
+        <TextInput source="name" validate={required()} helperText={false} />
+        <TextInput source="description" multiline helperText={false} />
+      </FormSection>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-3">
-        <NumberInput
-          source="budget"
-          min={0}
-          step={1000}
-          className="sm:flex-1"
-          helperText={translate("resources.teams.budget.helper", { currency })}
-        />
-        <DateInput
-          source="budget_start"
-          className="sm:flex-1"
-          defaultValue={period.start}
-          helperText={false}
-        />
-        <DateInput
-          source="budget_end"
-          className="sm:flex-1"
-          defaultValue={period.end}
-          helperText={false}
-        />
-      </div>
+      <FormSection
+        icon={Target}
+        title={translate("resources.teams.field_categories.budget")}
+        description={translate("crm.form_section.team_budget")}
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:gap-3">
+          <NumberInput
+            source="budget"
+            min={0}
+            step={1000}
+            className="sm:flex-1"
+            helperText={translate("resources.teams.budget.helper", {
+              currency,
+            })}
+          />
+          <DateInput
+            source="budget_start"
+            className="sm:flex-1"
+            defaultValue={period.start}
+            helperText={false}
+          />
+          <DateInput
+            source="budget_end"
+            className="sm:flex-1"
+            defaultValue={period.end}
+            helperText={false}
+          />
+        </div>
+      </FormSection>
     </div>
   );
 };

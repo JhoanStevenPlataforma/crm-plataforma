@@ -1,30 +1,20 @@
 import { useMutation } from "@tanstack/react-query";
 import {
+  RecordContextProvider,
   useDataProvider,
   useEditController,
   useNotify,
-  useRecordContext,
   useRedirect,
   useTranslate,
 } from "ra-core";
 import type { SubmitHandler } from "react-hook-form";
 import { SimpleForm } from "@/components/admin/simple-form";
-import { CancelButton } from "@/components/admin/cancel-button";
-import { SaveButton } from "@/components/admin/form";
-import { Card, CardContent } from "@/components/ui/card";
 
+import { FormPage } from "../misc/FormPage";
+import { FormPageHeader } from "../misc/FormPageHeader";
 import type { CrmDataProvider } from "../providers/types";
-import type { Sale, SalesFormData } from "../types";
+import type { SalesFormData } from "../types";
 import { SalesInputs } from "./SalesInputs";
-
-function EditToolbar() {
-  return (
-    <div className="flex justify-end gap-4">
-      <CancelButton />
-      <SaveButton />
-    </div>
-  );
-}
 
 export function SalesEdit() {
   const { record } = useEditController();
@@ -69,32 +59,15 @@ export function SalesEdit() {
   };
 
   return (
-    <div className="max-w-lg w-full mx-auto mt-8">
-      <Card>
-        <CardContent>
-          <SimpleForm
-            toolbar={<EditToolbar />}
-            onSubmit={onSubmit as SubmitHandler<any>}
-            record={record}
-          >
-            <SaleEditTitle />
-            <SalesInputs />
-          </SimpleForm>
-        </CardContent>
-      </Card>
-    </div>
+    // The header names the user through the record context, which
+    // `useEditController` alone does not provide.
+    <RecordContextProvider value={record}>
+      <FormPage narrow>
+        <FormPageHeader mode="edit" />
+        <SimpleForm onSubmit={onSubmit as SubmitHandler<any>} record={record}>
+          <SalesInputs />
+        </SimpleForm>
+      </FormPage>
+    </RecordContextProvider>
   );
 }
-
-const SaleEditTitle = () => {
-  const record = useRecordContext<Sale>();
-  const translate = useTranslate();
-  if (!record) return null;
-  return (
-    <h2 className="text-lg font-semibold mb-4">
-      {translate("resources.sales.edit.title", {
-        name: `${record.first_name} ${record.last_name}`,
-      })}
-    </h2>
-  );
-};

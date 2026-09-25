@@ -1,46 +1,34 @@
+import { useTranslate } from "ra-core";
+
+import { HermesLoader } from "@/components/ui/hermes-loader";
 import { cn } from "@/lib/utils";
-import type { VariantProps } from "class-variance-authority";
-import { cva } from "class-variance-authority";
-import { Loader2 } from "lucide-react";
 
-const spinnerVariants = cva("flex-col items-center justify-center", {
-  variants: {
-    show: {
-      true: "flex",
-      false: "hidden",
-    },
-  },
-  defaultVariants: {
-    show: true,
-  },
-});
+const SIZE = { small: "sm", medium: "md", large: "lg" } as const;
 
-const loaderVariants = cva("animate-spin text-primary", {
-  variants: {
-    size: {
-      small: "size-6",
-      medium: "size-8",
-      large: "size-12",
-    },
-  },
-  defaultVariants: {
-    size: "medium",
-  },
-});
-
-interface SpinnerContentProps
-  extends VariantProps<typeof spinnerVariants>,
-    VariantProps<typeof loaderVariants> {
+interface SpinnerContentProps {
+  size?: keyof typeof SIZE;
+  show?: boolean;
   className?: string;
 }
 
 /**
- * Animated spinner component for loading states.
+ * Inline loading indicator: the Hermes caduceus laid on its side, a message
+ * in transit. For a whole page waiting on content, use `Loading`.
  */
-export function Spinner({ size, show, className }: SpinnerContentProps) {
+export function Spinner({
+  size = "medium",
+  show = true,
+  className,
+}: SpinnerContentProps) {
+  const translate = useTranslate();
+  if (!show) return null;
   return (
-    <span className={spinnerVariants({ show })}>
-      <Loader2 className={cn(loaderVariants({ size }), className)} />
+    <span className={cn("inline-flex items-center justify-center", className)}>
+      <HermesLoader
+        orientation="horizontal"
+        size={SIZE[size]}
+        label={translate("ra.page.loading")}
+      />
     </span>
   );
 }

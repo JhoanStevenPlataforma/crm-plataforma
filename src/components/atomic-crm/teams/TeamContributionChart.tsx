@@ -3,7 +3,11 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { formatAttainment, formatMoney } from "./teamBudget";
 import { TeamChartCard } from "./TeamChartCard";
-import { barDefaults, useChartPalette } from "./teamChartTheme";
+import {
+  barDefaults,
+  useChartPalette,
+  horizontalBarProps,
+} from "./teamChartTheme";
 import type { ContributionPoint } from "./memberContribution";
 
 /**
@@ -50,6 +54,7 @@ export const TeamContributionChart = ({
         colors={[palette.good]}
         margin={{ top: 10, right: 30, bottom: 40, left: 150 }}
         {...barDefaults}
+        {...horizontalBarProps}
         labelSkipWidth={56}
         label={(datum) =>
           `${formatMoney(datum.value ?? 0, currency)} · ${formatAttainment(

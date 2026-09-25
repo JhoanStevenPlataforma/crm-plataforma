@@ -4,6 +4,8 @@ import type {
   ContactNote,
   DealNote,
   DealStageChange,
+  Quote,
+  QuoteStatusChange,
   Task,
   TaskEntityType,
   TaskEvent,
@@ -44,14 +46,24 @@ export const getTimelineEvents = async (
   entityType?: TaskEntityType,
   entityId?: Identifier,
 ): Promise<TimelineEvent[]> => {
-  const [events, tasks, contactNotes, dealNotes, stageChanges] =
-    await Promise.all([
-      listAll<TaskEvent>(dataProvider, "task_events"),
-      listAll<Task>(dataProvider, "tasks"),
-      listAll<ContactNote>(dataProvider, "contact_notes"),
-      listAll<DealNote>(dataProvider, "deal_notes"),
-      listAll<DealStageChange>(dataProvider, "deal_stage_changes"),
-    ]);
+  const [
+    events,
+    tasks,
+    contactNotes,
+    dealNotes,
+    stageChanges,
+    quoteChanges,
+    quotes,
+  ] = await Promise.all([
+    listAll<TaskEvent>(dataProvider, "task_events"),
+    listAll<Task>(dataProvider, "tasks"),
+    listAll<ContactNote>(dataProvider, "contact_notes"),
+    listAll<DealNote>(dataProvider, "deal_notes"),
+    listAll<DealStageChange>(dataProvider, "deal_stage_changes"),
+    listAll<QuoteStatusChange>(dataProvider, "quote_status_changes"),
+    listAll<Quote>(dataProvider, "quotes"),
+  ]);
+  const quoteById = new Map(quotes.map((quote) => [String(quote.id), quote]));
 
   const taskById = new Map(tasks.map((task) => [String(task.id), task]));
 
@@ -117,7 +129,8 @@ export const getTimelineEvents = async (
     source: "deal_stage_change",
     task_id: null,
     actor_sales_id: change.sales_id ?? null,
-    actor_kind: "user",
+    actor_kind:
+      change.source === "quote" && change.sales_id == null ? "system" : "user",
     entity_type: "deal",
     entity_id: change.deal_id,
     payload: {
@@ -127,14 +140,50 @@ export const getTimelineEvents = async (
       deal_id: change.deal_id,
       attachments: change.attachments ?? null,
       override_reason: change.override_reason ?? null,
+      source: change.source ?? "manual",
+      quote_id: change.quote_id ?? null,
+      quote_number:
+        change.quote_id != null
+          ? (quoteById.get(String(change.quote_id))?.quote_number ?? null)
+          : null,
     },
   }));
+
+  // A quotation's status changes, on the deal it was raised against: the
+  // view's `quote_status_change:deal:` arm.
+  const fromQuoteChanges: TimelineEvent[] = quoteChanges.flatMap((change) => {
+    const quote = quoteById.get(String(change.quote_id));
+    if (quote?.deal_id == null) return [];
+    return [
+      {
+        id: `quote_status_change:deal:${change.id}`,
+        occurred_at: change.changed_at,
+        event_type: "quote.status_changed",
+        source: "quote_status_change",
+        task_id: null,
+        actor_sales_id: change.sales_id ?? null,
+        actor_kind: change.actor_kind === "internal" ? "user" : "system",
+        entity_type: "deal",
+        entity_id: quote.deal_id,
+        payload: {
+          quote_id: change.quote_id,
+          quote_number: quote.quote_number,
+          from_status: change.from_status ?? null,
+          to_status: change.to_status,
+          reason: change.reason ?? null,
+          actor_kind: change.actor_kind,
+          override_reason: change.override_reason ?? null,
+        },
+      },
+    ];
+  });
 
   const all = [
     ...fromTasks,
     ...fromContactNotes,
     ...fromDealNotes,
     ...fromStageChanges,
+    ...fromQuoteChanges,
   ];
 
   const filtered =

@@ -1,6 +1,5 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb as BaseBreadcrumb,
   BreadcrumbEllipsis,
@@ -62,11 +61,8 @@ export const Breadcrumb = ({ children, ref }: BreadcrumbProps) => {
   if (!breadcrumbPortal) return null;
   return createPortal(
     <>
-      <Separator
-        decorative
-        orientation="vertical"
-        className="data-[orientation=vertical]:h-4 mr-4"
-      />
+      {/* No separator of its own: the topbar draws the one between the
+          sidebar trigger and this slot, and two read as a double rule. */}
       <BaseBreadcrumb ref={ref}>
         <BreadcrumbList>
           {isMobile && React.Children.count(children) > 2 ? (

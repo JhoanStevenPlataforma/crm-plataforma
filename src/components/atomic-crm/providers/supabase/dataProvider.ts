@@ -43,6 +43,7 @@ import {
   TASK_ATTACHMENTS_BUCKET,
 } from "../commons/taskAttachments";
 import { getIsInitialized } from "./authProvider";
+import { uploadPortalMedia } from "./portalMedia";
 import { createQuoteMethods } from "./quoteMethods";
 import { subscribeToQuoteChanges, type Unsubscribe } from "./quoteRealtime";
 import { stripQuoteVirtuals, updateDraftVersionFields } from "./quoteWrites";
@@ -893,6 +894,35 @@ const getDataProviderWithCustomMethods = () => {
       onChange: () => void,
     ): Promise<Unsubscribe> =>
       subscribeToQuoteChanges(getSupabaseClient(), quoteId, onChange),
+    /** A picture or video for a customer-portal slide; returns its path. */
+    uploadPortalMedia: (file: File): Promise<string> =>
+      uploadPortalMedia(getSupabaseClient(), file),
+    /** Makes a portal template the one every quotation shows (admins). */
+    activatePortalTemplate: async (templateId: Identifier): Promise<void> => {
+      const { error } = await getSupabaseClient().rpc(
+        "activate_portal_template",
+        { p_template_id: templateId },
+      );
+      if (error) {
+        console.error("activate_portal_template.error", error);
+        throw new Error("crm.portal_slides.errors.save_failed");
+      }
+    },
+    /** "Save as": a copy of a template and all its slides; returns its id. */
+    duplicatePortalTemplate: async (
+      templateId: Identifier,
+      name: string,
+    ): Promise<number> => {
+      const { data, error } = await getSupabaseClient().rpc(
+        "duplicate_portal_template",
+        { p_template_id: templateId, p_name: name },
+      );
+      if (error) {
+        console.error("duplicate_portal_template.error", error);
+        throw new Error("crm.portal_slides.errors.save_failed");
+      }
+      return data as number;
+    },
     async getConfiguration(): Promise<ConfigurationContextValue> {
       const { data } = await baseDataProvider.getOne("configuration", {
         id: 1,

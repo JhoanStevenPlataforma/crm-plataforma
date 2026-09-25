@@ -11,6 +11,7 @@ import {
   createFakeQuotePortal,
   PORTAL_TOKEN,
   portalPayload,
+  portalSlidesSample,
 } from "./quotePortalFixtures";
 
 const meta = {
@@ -55,6 +56,20 @@ const unanswerable = (
 
 /** Sent, and waiting for an answer. */
 export const Open = () => <Portal />;
+
+/** Issued with the default template: the original designed presentation. */
+export const StandardPresentation = () => (
+  <Portal
+    options={{ payload: { ...portalPayload, standard_presentation: true } }}
+  />
+);
+
+/** Issued with the company's slides: the slides, then the quotation. */
+export const WithSlides = () => (
+  <Portal
+    options={{ payload: { ...portalPayload, slides: portalSlidesSample } }}
+  />
+);
 
 /** Answered on an earlier visit. */
 export const Accepted = () => (

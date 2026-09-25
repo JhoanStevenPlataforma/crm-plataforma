@@ -1,3 +1,8 @@
+import type { DealQuoteStageRule } from "../dealQuoteSync";
+import type {
+  PortalSlide,
+  PortalTemplate,
+} from "../../../quotes/portal/portalSlides";
 import type {
   Company,
   Contact,
@@ -126,5 +131,8 @@ export interface Db {
   // with, because both are records of something that happened.
   quote_status_changes: QuoteStatusChange[];
   quote_access_tokens: QuoteAccessToken[];
+  deal_quote_stage_rules: DealQuoteStageRule[];
   configuration: Array<{ id: number; config: ConfigurationContextValue }>;
+  portal_templates: PortalTemplate[];
+  portal_slides: PortalSlide[];
 }

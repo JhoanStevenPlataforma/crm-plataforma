@@ -43,6 +43,8 @@ import products from "../products";
 import quotes from "../quotes";
 import { QuotePortalPage } from "../quotes/portal/QuotePortalPage";
 import { QuotePrintPage } from "../quotes/QuotePrintPage";
+import { PortalSlidesPage } from "../portal/PortalSlidesPage";
+import { StandardPresentationPreview } from "../portal/StandardPresentationPreview";
 import sales from "../sales";
 import taxRates from "../taxRates";
 import teams from "../teams";
@@ -290,10 +292,17 @@ const DesktopAdmin = (
             has no session, and the page takes its branding from the server's
             payload rather than from the configuration loader. */}
         <Route path={QuotePortalPage.path} element={<QuotePortalPage />} />
+        {/* The default portal template, full screen, for the admin to preview. */}
+        <Route
+          path={StandardPresentationPreview.path}
+          element={<StandardPresentationPreview />}
+        />
       </CustomRoutes>
 
       <CustomRoutes>
         <Route path={ProfilePage.path} element={<ProfilePage />} />
+        {/* The customer portal's slides (quote-portal-presentation.md §7). */}
+        <Route path={PortalSlidesPage.path} element={<PortalSlidesPage />} />
         <Route path={SettingsPage.path} element={<SettingsPage />} />
         <Route path={ImportPage.path} element={<ImportPage />} />
         <Route path={ChangelogPage.path} element={<ChangelogPage />} />
@@ -371,6 +380,8 @@ const DesktopAdmin = (
       <Resource name="quote_transitions" />
       <Resource name="quote_access_tokens_summary" />
       <Resource name="price_book" />
+      <Resource name="portal_templates" />
+      <Resource name="portal_slides" />
     </Admin>
   );
 };

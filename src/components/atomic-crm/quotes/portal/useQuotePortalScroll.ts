@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from "react";
 /** How far down the page the "back to top" button starts to earn its place. */
 const TO_TOP_THRESHOLD_PX = 700;
 
+/** FX-25: how far the reader scrolls before the letterhead bar compacts. */
+const COMPACT_THRESHOLD_PX = 40;
+
 /**
  * Brings a section of the portal into view.
  *
@@ -37,10 +40,14 @@ export const useQuotePortalScroll = (
     sectionIds[0] ?? null,
   );
   const [isPastFold, setIsPastFold] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const idsKey = sectionIds.join("|");
 
   useEffect(() => {
-    const onScroll = () => setIsPastFold(window.scrollY > TO_TOP_THRESHOLD_PX);
+    const onScroll = () => {
+      setIsPastFold(window.scrollY > TO_TOP_THRESHOLD_PX);
+      setIsScrolled(window.scrollY > COMPACT_THRESHOLD_PX);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -66,7 +73,7 @@ export const useQuotePortalScroll = (
     return () => observer.disconnect();
   }, [idsKey, isReady]);
 
-  return { activeId, isPastFold };
+  return { activeId, isPastFold, isScrolled };
 };
 
 /** The reading-progress bar's width, written straight to the element. */

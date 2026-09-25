@@ -5,6 +5,7 @@ import {
   QUOTE_REJECTION_REASONS,
   type QuoteRejectionReason,
 } from "../../types/quotes";
+import { portalSlideSchema } from "./portalSlides";
 
 /**
  * How the customer portal page talks to the `quote-portal` edge function
@@ -24,7 +25,7 @@ const nullableText = z.string().nullable();
 const snapshotObject = z.record(z.string(), z.unknown()).nullable();
 
 /** `quote_portal_document()`, group for group (02_functions.sql). */
-const payloadSchema = z.object({
+export const payloadSchema = z.object({
   // The hash of everything else here, and what the poll compares (§6.5).
   etag: z.string(),
   quote: z.object({
@@ -75,6 +76,13 @@ const payloadSchema = z.object({
     }),
   ),
   branding: z.object({ title: nullableText, logo_url: nullableText }),
+  // The company's slides, frozen at issue (quote-portal-presentation.md §7).
+  // A deck this page cannot vouch for is DROPPED, not fatal: the customer then
+  // reads the quotation behind the plain cover rather than not at all.
+  slides: z.array(portalSlideSchema).catch([]),
+  // Issued while the default template was active: the original designed
+  // presentation, which the build ships and the page draws itself.
+  standard_presentation: z.boolean().catch(false),
   actions: z.object({
     can_accept: z.boolean(),
     can_reject: z.boolean(),

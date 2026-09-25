@@ -1283,3 +1283,59 @@ create policy "Quote portal events follow their quote for reads"
               and q.sales_id = (select public.current_sale_id())
         )
     );
+
+--
+-- Customer portal slides: everyone signed in reads them (a rep sees what the
+-- customer will), only admins change them -- the deck is the company's voice.
+--
+alter table public.portal_templates enable row level security;
+
+create policy "Portal templates are readable by authenticated users"
+    on public.portal_templates for select to authenticated
+    using (true);
+
+create policy "Portal templates can be added by admins"
+    on public.portal_templates for insert to authenticated
+    with check ((select public.is_admin()));
+
+create policy "Portal templates can be updated by admins"
+    on public.portal_templates for update to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));
+
+create policy "Portal templates can be deleted by admins"
+    on public.portal_templates for delete to authenticated
+    using ((select public.is_admin()));
+
+alter table public.portal_slides enable row level security;
+
+create policy "Portal slides are readable by authenticated users"
+    on public.portal_slides for select to authenticated
+    using (true);
+
+create policy "Portal slides can be added by admins"
+    on public.portal_slides for insert to authenticated
+    with check ((select public.is_admin()));
+
+create policy "Portal slides can be updated by admins"
+    on public.portal_slides for update to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));
+
+create policy "Portal slides can be deleted by admins"
+    on public.portal_slides for delete to authenticated
+    using ((select public.is_admin()));
+
+-- The quotation→stage rules: read by everybody (the board explains why a deal
+-- moved), written by admins only — like `deal_stage_requirements`, a change
+-- here moves every deal of the organisation, and it leaves no trace.
+alter table public.deal_quote_stage_rules enable row level security;
+
+create policy "Deal quote stage rules are readable by everyone"
+    on public.deal_quote_stage_rules for select to authenticated
+    using (true);
+
+create policy "Deal quote stage rules are maintained by admins"
+    on public.deal_quote_stage_rules for all to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));

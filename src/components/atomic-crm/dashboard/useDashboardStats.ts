@@ -14,6 +14,7 @@ import type {
   TaskStockStat,
 } from "../types";
 import {
+  previousRangeForDashboardPeriod,
   rangeForDashboardPeriod,
   type DashboardPeriod,
 } from "./dashboardPeriod";
@@ -43,6 +44,12 @@ export interface DashboardStats {
   pipeline: { nbDeals: number; amount: number };
   /** Created / won / lost inside the selected period. */
   totals: DealPeriodTotals;
+  /**
+   * The same figures over the same stretch of the previous period (see
+   * `previousRangeForDashboardPeriod`), for the KPI deltas. Undefined until
+   * loaded: a delta against zeroes that are really "not yet" is a lie.
+   */
+  previousTotals: DealPeriodTotals | undefined;
   leads: { nbCreated: number; nbConverted: number; rate: number | null };
   /** Open task counts. `overdue` is a SUBSET of `open`, never a sibling. */
   workload: { open: number; overdue: number; dueNext7d: number };
@@ -75,6 +82,15 @@ export const useDashboardStats = (period: DashboardPeriod): DashboardStats => {
     p_sales_id: null,
     p_team_id: null,
   });
+  // One more call for the comparison. It does not hold up the page: the KPI
+  // cards render without their delta until it arrives.
+  const previousRange = previousRangeForDashboardPeriod(period);
+  const previousFlow = useAnalyticsQuery<DealFlowStat>("deal_flow_stats", {
+    p_from: previousRange.from,
+    p_to: previousRange.to,
+    p_sales_id: null,
+    p_team_id: null,
+  });
   const leads = useAnalyticsQuery<LeadFlowStat>("lead_flow_stats", {
     ...range,
     p_sales_id: null,
@@ -98,6 +114,9 @@ export const useDashboardStats = (period: DashboardPeriod): DashboardStats => {
   return {
     pipeline: pipelineTotal(stages.data),
     totals: periodTotals(flow.data),
+    previousTotals: previousFlow.data
+      ? periodTotals(previousFlow.data)
+      : undefined,
     leads: {
       nbCreated: leadFigures.nbCreated,
       nbConverted: leadFigures.nbConverted,

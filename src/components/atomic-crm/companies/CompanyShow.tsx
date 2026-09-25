@@ -43,6 +43,7 @@ import {
   ContextInfo,
 } from "./CompanyAside";
 import { CompanyAvatar } from "./CompanyAvatar";
+import { RecordBreadcrumb } from "../misc/RecordBreadcrumb";
 
 export const CompanyShow = () => {
   const isMobile = useIsMobile();
@@ -112,12 +113,15 @@ const CompanyShowContent = () => {
 
   return (
     <div className="mt-2 flex pb-2 gap-8">
+      <RecordBreadcrumb resource="companies" />
       <div className="flex-1">
         <Card>
           <CardContent>
-            <div className="flex mb-3">
+            <div className="mb-4 flex items-center">
               <CompanyAvatar />
-              <h5 className="text-xl ml-2 flex-1">{record.name}</h5>
+              <h1 className="ml-3 flex-1 text-2xl leading-tight font-semibold tracking-tight">
+                {record.name}
+              </h1>
             </div>
             <Tabs defaultValue={currentTab} onValueChange={handleTabChange}>
               <TabsList

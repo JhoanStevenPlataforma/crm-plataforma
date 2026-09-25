@@ -18,6 +18,7 @@
  * mirrored, because those are the ones a demo would otherwise misrepresent.
  */
 
+import { syncDealFromQuote } from "./dealQuoteSync";
 import type { DataProvider, Identifier } from "ra-core";
 
 import { quoteAmounts } from "../../quotes/quoteMath";
@@ -401,6 +402,13 @@ const applyQuoteStatus = async (
     data: { status_key: toStatus, updated_at: new Date().toISOString() },
     previousData: quote,
   });
+  // `quotes_sync_deal`, which demo mode has no trigger for.
+  await syncDealFromQuote(
+    dataProvider,
+    quoteId,
+    toStatus,
+    options.salesId ?? null,
+  );
   return data;
 };
 

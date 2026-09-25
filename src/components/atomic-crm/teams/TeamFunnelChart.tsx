@@ -4,7 +4,11 @@ import { useTranslate } from "ra-core";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { formatMoney } from "./teamBudget";
 import { TeamChartCard } from "./TeamChartCard";
-import { barDefaults, useChartPalette } from "./teamChartTheme";
+import {
+  barDefaults,
+  useChartPalette,
+  horizontalBarProps,
+} from "./teamChartTheme";
 import type { FunnelPoint } from "./teamStats";
 
 /**
@@ -60,6 +64,7 @@ export const TeamFunnelChart = ({
         colors={[palette.inFlight]}
         margin={{ top: 10, right: 30, bottom: 40, left: 130 }}
         {...barDefaults}
+        {...horizontalBarProps}
         labelSkipWidth={24}
         label={(datum) =>
           translate("crm.teams_dashboard.funnel_label", {

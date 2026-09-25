@@ -1,3 +1,5 @@
+import { addDays } from "date-fns/addDays";
+import { differenceInCalendarDays } from "date-fns/differenceInCalendarDays";
 import { endOfMonth } from "date-fns/endOfMonth";
 import { endOfQuarter } from "date-fns/endOfQuarter";
 import { endOfWeek } from "date-fns/endOfWeek";
@@ -6,6 +8,11 @@ import { startOfMonth } from "date-fns/startOfMonth";
 import { startOfQuarter } from "date-fns/startOfQuarter";
 import { startOfWeek } from "date-fns/startOfWeek";
 import { startOfYear } from "date-fns/startOfYear";
+import { subDays } from "date-fns/subDays";
+import { subMonths } from "date-fns/subMonths";
+import { subQuarters } from "date-fns/subQuarters";
+import { subWeeks } from "date-fns/subWeeks";
+import { subYears } from "date-fns/subYears";
 
 /**
  * The dashboard's period selector, and the only place its ranges are computed.
@@ -94,6 +101,65 @@ export const rangeForDashboardPeriod = (
         to: toIsoDay(endOfMonth(today)),
       };
   }
+};
+
+/**
+ * The same stretch of the PREVIOUS period, up to the same point: on the 24th,
+ * "this month" is compared with the 1st–24th of last month, not with all of
+ * it. Comparing a period in progress with a finished one reports a fall on the
+ * first day of every month — the classic dashboard lie.
+ *
+ * The span is clamped to the previous period's own end (the 31st of March has
+ * no counterpart in February). "Today" compares with yesterday.
+ */
+export const previousRangeForDashboardPeriod = (
+  period: DashboardPeriod,
+  today: Date = new Date(),
+): { from: string; to: string } => {
+  if (period === "today") {
+    const yesterday = subDays(today, 1);
+    return { from: toIsoDay(yesterday), to: toIsoDay(yesterday) };
+  }
+  const bounds = PERIOD_BOUNDS[period];
+  const start = bounds.start(today);
+  const previousStart = bounds.back(start);
+  const elapsedDays = differenceInCalendarDays(today, start);
+  const sameDay = addDays(previousStart, elapsedDays);
+  const previousEnd = bounds.end(previousStart);
+  return {
+    from: toIsoDay(previousStart),
+    to: toIsoDay(sameDay > previousEnd ? previousEnd : sameDay),
+  };
+};
+
+const PERIOD_BOUNDS: Record<
+  Exclude<DashboardPeriod, "today">,
+  {
+    start: (date: Date) => Date;
+    end: (date: Date) => Date;
+    back: (start: Date) => Date;
+  }
+> = {
+  this_week: {
+    start: (date) => startOfWeek(date, { weekStartsOn: WEEK_STARTS_ON }),
+    end: (date) => endOfWeek(date, { weekStartsOn: WEEK_STARTS_ON }),
+    back: (start) => subWeeks(start, 1),
+  },
+  this_month: {
+    start: startOfMonth,
+    end: endOfMonth,
+    back: (start) => subMonths(start, 1),
+  },
+  this_quarter: {
+    start: startOfQuarter,
+    end: endOfQuarter,
+    back: (start) => subQuarters(start, 1),
+  },
+  this_year: {
+    start: startOfYear,
+    end: endOfYear,
+    back: (start) => subYears(start, 1),
+  },
 };
 
 /**

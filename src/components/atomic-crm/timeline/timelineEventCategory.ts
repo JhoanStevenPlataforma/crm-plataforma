@@ -17,6 +17,8 @@ export type TimelineCategory =
 
 const COMMUNICATION = new Set([
   "note.created",
+  // The customer writing back on a quotation, shown on its deal.
+  "quote.commented",
   "reminder.sent",
   "reminder.failed",
   "reminder.acknowledged",
@@ -54,6 +56,8 @@ const COLLABORATION = new Set([
  */
 const LIFECYCLE = new Set([
   "deal.stage_changed",
+  // Where the deal's quotation stands is part of the deal's story.
+  "quote.status_changed",
   "task.created",
   "task.started",
   "task.waiting",

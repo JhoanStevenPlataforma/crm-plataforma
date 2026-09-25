@@ -70,6 +70,10 @@ import {
 } from "./taskDependencyCallbacks";
 import { taskReminderCallbacks } from "./taskReminderCallbacks";
 import { getTimelineEvents } from "./timelineEvents";
+import type {
+  PortalSlide,
+  PortalTemplate,
+} from "../../quotes/portal/portalSlides";
 
 const TASK_MARKED_AS_DONE = "TASK_MARKED_AS_DONE";
 const TASK_MARKED_AS_UNDONE = "TASK_MARKED_AS_UNDONE";
@@ -472,6 +476,60 @@ export const createDataProvider = ({
      * every write made here already refreshes the page that made it.
      */
     subscribeToQuoteChanges: async () => () => {},
+    /**
+     * No storage behind the demo: a slide's picture or video has nowhere to
+     * live, so the editor says so instead of pretending.
+     */
+    uploadPortalMedia: async (): Promise<string> => {
+      throw new Error("crm.portal_slides.errors.demo_upload");
+    },
+    /** `activate_portal_template()`, demo-side: exactly one active. */
+    activatePortalTemplate: async (templateId: Identifier): Promise<void> => {
+      const { data: templates } =
+        await baseDataProvider.getList<PortalTemplate>("portal_templates", {
+          pagination: { page: 1, perPage: 1000 },
+          sort: { field: "id", order: "ASC" },
+          filter: {},
+        });
+      for (const template of templates) {
+        const isActive = String(template.id) === String(templateId);
+        if (template.is_active !== isActive) {
+          await baseDataProvider.update("portal_templates", {
+            id: template.id,
+            data: { is_active: isActive },
+            previousData: template,
+          });
+        }
+      }
+    },
+    /** `duplicate_portal_template()`, demo-side. */
+    duplicatePortalTemplate: async (
+      templateId: Identifier,
+      name: string,
+    ): Promise<number> => {
+      const { data: copy } = await baseDataProvider.create<PortalTemplate>(
+        "portal_templates",
+        { data: { name: name.trim(), is_active: false, is_system: false } },
+      );
+      const { data: slides } = await baseDataProvider.getList<PortalSlide>(
+        "portal_slides",
+        {
+          pagination: { page: 1, perPage: 1000 },
+          sort: { field: "position", order: "ASC" },
+          filter: { template_id: templateId },
+        },
+      );
+      for (const slide of slides) {
+        await baseDataProvider.create("portal_slides", {
+          data: {
+            template_id: copy.id,
+            position: slide.position,
+            elements: slide.elements,
+          },
+        });
+      }
+      return copy.id;
+    },
     unarchiveDeal: async (deal: Deal) => {
       // get all deals where stage is the same as the deal to unarchive
       const { data: deals } = await baseDataProvider.getList<Deal>("deals", {

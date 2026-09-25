@@ -1,4 +1,3 @@
-import { BarChart3 } from "lucide-react";
 import { useCanAccess, useGetList, useTranslate } from "ra-core";
 import { Navigate } from "react-router";
 
@@ -16,6 +15,7 @@ import { sumWorkload, workloadByTeam, workloadByTeamId } from "./taskWorkload";
 import { TeamsOverviewCharts } from "./TeamsOverviewCharts";
 import { TeamsTable } from "./TeamsTable";
 import { TEAMS_DASHBOARD_PATH } from "./teamsDashboardPath";
+import { PageHeader } from "@/components/admin/page-header";
 
 /** Teams fetched in one page. Beyond this the dashboard says so rather than lying. */
 const TEAMS_PER_PAGE = 200;
@@ -89,12 +89,10 @@ export const TeamsDashboard = () => {
 
   return (
     <div className="flex flex-col gap-6 mt-1">
-      <div className="flex items-center gap-3">
-        <BarChart3 className="text-muted-foreground w-6 h-6" />
-        <h1 className="text-xl font-semibold text-muted-foreground">
-          {translate("crm.teams_dashboard.title")}
-        </h1>
-      </div>
+      <PageHeader
+        className="mb-0"
+        title={translate("crm.teams_dashboard.title")}
+      />
 
       {/* Silent truncation is the failure mode this replaces: past the page
           size the totals below would quietly stop being totals. */}

@@ -21,6 +21,7 @@ import { quoteEditPath, quotePrintPath } from "./quotePaths";
 import { useQuoteDocument } from "./useQuoteDocument";
 import { useQuoteRealtime } from "./useQuoteRealtime";
 import "./quotePrint.css";
+import { RecordBreadcrumb } from "../misc/RecordBreadcrumb";
 
 /**
  * A quotation's own page: the document, its versions, its moves, its links and
@@ -71,9 +72,10 @@ const QuoteShowContent = () => {
 
   return (
     <div className="quote-print-root flex flex-col gap-4">
+      <RecordBreadcrumb resource="quotes" />
       <div className="quote-print-hide flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <h1 className="text-xl font-semibold">
+          <h1 className="text-2xl leading-tight font-semibold">
             {quote.title
               ? `${quote.quote_number} — ${quote.title}`
               : quote.quote_number}

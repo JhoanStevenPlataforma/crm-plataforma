@@ -28,7 +28,6 @@ import {
   ArrowUpCircle,
   PlusCircle,
   Trash,
-  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -284,16 +283,23 @@ export const AddItemButton = (props: React.ComponentProps<"button">) => {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
+          {/* A labelled button, not a bare icon: "+" alone under a list of
+              emails does not say what it adds, and is a small target. */}
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={() => add()}
             aria-label={translate("ra.action.add")}
-            className={cn("button-add", `button-add-${source}`, className)}
+            className={cn(
+              "button-add h-8 gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-foreground",
+              `button-add-${source}`,
+              className,
+            )}
             {...rest}
           >
-            <PlusCircle className="h-5 w-5" />
+            <PlusCircle className="size-4" />
+            {translate("ra.action.add")}
           </Button>
         </TooltipTrigger>
         <TooltipContent>{translate("ra.action.add")}</TooltipContent>
@@ -447,14 +453,17 @@ export const RemoveItemButton = (props: React.ComponentProps<"button">) => {
             variant="ghost"
             size="icon"
             onClick={() => remove()}
+            aria-label={translate("ra.action.remove")}
+            // Quiet until pointed at: a row of red circles beside every email
+            // shouts "danger" at a form that has nothing wrong with it.
             className={cn(
-              "button-remove",
+              "button-remove size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
               `button-remove-${source}-${index}`,
               className,
             )}
             {...rest}
           >
-            <XCircle className="h-5 w-5 text-red-500" />
+            <Trash className="size-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>{translate("ra.action.remove")}</TooltipContent>

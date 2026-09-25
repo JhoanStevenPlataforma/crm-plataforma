@@ -33,6 +33,13 @@ export function transformFilter(filter: Record<string, any>) {
       continue;
     }
 
+    // None of the listed values (PostgREST `not.in`).
+    if (key.endsWith("@not.in")) {
+      transformedFilters[`${key.slice(0, -7)}_neq_any`] =
+        transformInFilter(value);
+      continue;
+    }
+
     if (key.endsWith("@in")) {
       transformedFilters[`${key.slice(0, -3)}_eq_any`] =
         transformInFilter(value);
@@ -41,6 +48,13 @@ export function transformFilter(filter: Record<string, any>) {
 
     if (key.endsWith("@cs")) {
       transformedFilters[`${key.slice(0, -3)}`] =
+        transformContainsFilter(value);
+      continue;
+    }
+
+    // Array overlap: the record's array shares at least one value with the list.
+    if (key.endsWith("@ov")) {
+      transformedFilters[`${key.slice(0, -3)}_inc_any`] =
         transformContainsFilter(value);
       continue;
     }

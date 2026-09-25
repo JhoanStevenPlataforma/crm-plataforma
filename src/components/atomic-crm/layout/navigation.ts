@@ -1,24 +1,30 @@
 import {
   BarChart3,
+  BriefcaseBusiness,
   Building2,
   Contact,
   FileBarChart,
   FileSignature,
   FileText,
+  Handshake,
   Import,
   LayoutDashboard,
   ListTodo,
   Package,
   Percent,
   PieChart,
+  Presentation,
   Settings,
+  SlidersHorizontal,
   Tags,
   Target,
+  TrendingUp,
   UserPlus,
   Users,
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { matchPath } from "react-router";
 
 import { ANALYTICS_PATH } from "../analytics/analyticsPath";
 import { REPORTS_PATH } from "../reports/reportsPath";
@@ -78,6 +84,12 @@ export type NavSection = {
   key: string;
   /** Section heading; the six groups the CRM is organised into. */
   labelKey: string;
+  /**
+   * The section's glyph on the collapsed rail, where a section with several
+   * items is ONE button opening a flyout, not a column of every item's icon.
+   * A single-item section links straight to its item and uses the item's icon.
+   */
+  icon: LucideIcon;
   items: NavItem[];
 };
 
@@ -85,6 +97,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     key: "home",
     labelKey: "crm.navigation.groups.home",
+    icon: LayoutDashboard,
     items: [
       {
         key: "dashboard",
@@ -99,6 +112,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     key: "sales",
     labelKey: "crm.navigation.groups.sales",
+    icon: BriefcaseBusiness,
     items: [
       // Leads sit before deals: they are the top of the funnel and convert into
       // a contact, a company and an opportunity.
@@ -156,6 +170,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     key: "customers",
     labelKey: "crm.navigation.groups.customers",
+    icon: Handshake,
     items: [
       {
         key: "contacts",
@@ -180,6 +195,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     key: "activities",
     labelKey: "crm.navigation.groups.activities",
+    icon: ListTodo,
     items: [
       // The task page already carries its own list / kanban / calendar tabs, so
       // the section holds one entry rather than repeating those three here.
@@ -197,6 +213,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     key: "analytics",
     labelKey: "crm.navigation.groups.analytics",
+    icon: TrendingUp,
     items: [
       // Ungated on purpose: every aggregate behind this page is SECURITY
       // INVOKER, so a rep sees their own figures and a manager sees the
@@ -239,6 +256,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     key: "settings",
     labelKey: "crm.navigation.groups.settings",
+    icon: SlidersHorizontal,
     items: [
       {
         key: "sales",
@@ -269,6 +287,16 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: Percent,
         access: { resource: "tax_rates", action: "edit" },
       },
+      // The slides a customer reads before every quotation. Admins edit them.
+      {
+        key: "portal",
+        labelKey: "crm.portal_slides.title",
+        to: "/portal",
+        match: "/portal",
+        matchEnd: true,
+        icon: Presentation,
+        access: { resource: "portal_templates", action: "edit" },
+      },
       {
         key: "preferences",
         labelKey: "crm.settings.title",
@@ -294,3 +322,12 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
 ];
+
+/**
+ * Whether `pathname` lights `item` up. The same rule `useMatch` applies, as a
+ * plain function so a whole section can be tested in one pass (the collapsed
+ * rail lights a section when any of its items is active).
+ */
+export const isNavItemActive = (item: NavItem, pathname: string): boolean =>
+  matchPath({ path: item.match, end: item.matchEnd ?? false }, pathname) !=
+  null;

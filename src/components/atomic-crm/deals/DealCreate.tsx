@@ -75,7 +75,13 @@ export const DealCreate = ({ open }: { open: boolean }) => {
   return (
     <Dialog open={open} onOpenChange={() => handleClose()}>
       <DialogContent className="lg:max-w-4xl overflow-y-auto max-h-9/10 top-1/20 translate-y-0">
-        <Create resource="deals" mutationOptions={{ onSuccess }}>
+        {/* No breadcrumb: inside a dialog it was drawn into the page's
+            topbar on top of the board's own trail. */}
+        <Create
+          resource="deals"
+          mutationOptions={{ onSuccess }}
+          disableBreadcrumb
+        >
           <Form
             defaultValues={{
               sales_id: identity?.id,
@@ -84,8 +90,12 @@ export const DealCreate = ({ open }: { open: boolean }) => {
             }}
           >
             <DealInputs />
-            <FormToolbar>
-              <SaveButton />
+            {/* The same full-bleed footer as every record form; Save only, the
+                dialog's close button is the cancel. */}
+            <FormToolbar className="-mx-6 -mb-6 mt-8 rounded-b-[inherit] border-t border-border/70 bg-card/95 bg-none px-6 py-3 backdrop-blur md:py-3">
+              <div className="flex justify-end">
+                <SaveButton />
+              </div>
             </FormToolbar>
           </Form>
         </Create>

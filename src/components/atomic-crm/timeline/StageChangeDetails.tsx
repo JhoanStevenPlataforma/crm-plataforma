@@ -6,6 +6,7 @@ import { AttachmentList } from "../notes/NoteAttachments";
 import type { CrmDataProvider } from "../providers/types";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { AttachmentNote, TimelineEvent } from "../types";
+import { QuoteReference } from "./QuoteEventDetails";
 
 /**
  * The body of a `deal.stage_changed` entry: where the deal went, why, and with
@@ -34,6 +35,12 @@ export const StageChangeDetails = ({ event }: { event: TimelineEvent }) => {
   const reason = readString(payload.reason);
   const attachments = readAttachments(payload.attachments);
   const overrideReason = readString(payload.override_reason);
+  // Moved by a quotation's event (`sync_deal_from_quote()`): the reason is the
+  // event's key, `quote:<event>`, rendered as a sentence.
+  const quoteEvent =
+    payload.source === "quote" && reason?.startsWith("quote:")
+      ? reason.slice("quote:".length)
+      : null;
 
   /**
    * Files written since the bucket became private carry a `path` and no `src`,
@@ -74,7 +81,16 @@ export const StageChangeDetails = ({ event }: { event: TimelineEvent }) => {
         </div>
       ) : null}
 
-      {reason ? (
+      {quoteEvent ? (
+        <p className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span>
+            {translate(`resources.deals.stage_change.by_quote.${quoteEvent}`, {
+              _: translate("resources.deals.stage_change.by_quote.generic"),
+            })}
+          </span>
+          <QuoteReference event={event} />
+        </p>
+      ) : reason ? (
         <p className="text-sm whitespace-pre-line">{reason}</p>
       ) : (
         <p className="text-sm text-muted-foreground italic">

@@ -7,10 +7,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import type { Sale, TaskEntityType, TimelineEvent } from "../types";
+import { QuoteEventDetails } from "./QuoteEventDetails";
 import { StageChangeDetails } from "./StageChangeDetails";
 import { isDefaultVisible } from "./timelineEventCategory";
 
 const PAGE_SIZE = 25;
+
+/**
+ * What the customer did on a quotation (answered, wrote back): nobody in the
+ * CRM acted, and "System" would be the wrong word for a person.
+ */
+const isCustomerEvent = (event: TimelineEvent) =>
+  event.event_type === "quote.commented" ||
+  (event.event_type === "quote.status_changed" &&
+    event.payload?.actor_kind === "customer");
 
 const eventLabelKey = (eventType: string) =>
   `resources.tasks.history.events.${eventType.replace(/\./g, "_")}`;
@@ -79,7 +89,11 @@ export const EntityTimeline = ({
                 })}
               </span>
 
-              {event.actor_sales_id != null ? (
+              {isCustomerEvent(event) ? (
+                <span className="text-sm text-muted-foreground">
+                  {translate("resources.deals.quote_history.by_customer")}
+                </span>
+              ) : event.actor_sales_id != null ? (
                 <ReferenceField<TimelineEvent, Sale>
                   source="actor_sales_id"
                   reference="sales"
@@ -101,7 +115,7 @@ export const EntityTimeline = ({
                 </span>
               )}
 
-              {event.actor_kind !== "user" && (
+              {event.actor_kind !== "user" && !isCustomerEvent(event) && (
                 <Badge variant="outline" className="text-[10px]">
                   {event.actor_kind}
                 </Badge>
@@ -110,6 +124,9 @@ export const EntityTimeline = ({
 
             {event.event_type === "deal.stage_changed" ? (
               <StageChangeDetails event={event} />
+            ) : null}
+            {event.event_type.startsWith("quote.") ? (
+              <QuoteEventDetails event={event} />
             ) : null}
 
             <DateField

@@ -14,7 +14,7 @@ import {
   ValidationError,
   warning,
 } from "ra-core";
-import { Loader2, Save } from "lucide-react";
+import { CircleAlert, Loader2, Save } from "lucide-react";
 import * as LabelPrimitive from "@radix-ui/react-label";
 import { Slot } from "@radix-ui/react-slot";
 import { FormProvider, useFormContext, useFormState } from "react-hook-form";
@@ -64,7 +64,9 @@ function FormField({ className, id, name, ...props }: FormItemProps) {
     <FormItemContext.Provider value={contextValue}>
       <div
         data-slot="form-item"
-        className={cn("grid gap-2", className)}
+        // `content-start`: stretched beside a taller sibling (one with helper text),
+        // the grid would spread the spare height between label and input.
+        className={cn("grid content-start gap-2", className)}
         role="group"
         {...props}
       />
@@ -87,7 +89,12 @@ function FormLabel({
     <Label
       data-slot="form-label"
       data-error={!!error}
-      className={cn("data-[error=true]:text-destructive", className)}
+      // The required marker ra-core's FieldTitle appends (an aria-hidden
+      // "*") takes the destructive hue, so required fields read at a glance.
+      className={cn(
+        "data-[error=true]:text-destructive [&_span[aria-hidden=true]]:text-destructive",
+        className,
+      )}
       htmlFor={formItemId}
       {...props}
     />
@@ -120,7 +127,7 @@ function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
     <div
       data-slot="form-description"
       id={formDescriptionId}
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-muted-foreground text-xs leading-relaxed", className)}
       {...props}
     />
   );
@@ -138,9 +145,13 @@ const FormError = ({ className, ...props }: React.ComponentProps<"p">) => {
     <p
       data-slot="form-message"
       id={formMessageId}
-      className={cn("text-destructive text-sm", className)}
+      className={cn(
+        "text-destructive flex items-center gap-1.5 text-xs font-medium",
+        className,
+      )}
       {...props}
     >
+      <CircleAlert className="size-3.5 shrink-0" aria-hidden />
       <ValidationError error={err} />
     </p>
   );
@@ -251,6 +262,44 @@ const SaveButton = <RecordType extends RaRecord = RaRecord>(
 
 const defaultIcon = <Save className="h-4 w-4" />;
 
+/**
+ * The left end of a form's action bar: says the form holds edits Save has not
+ * written yet, so leaving the page is a decision rather than an accident. The
+ * live region is always mounted so the change is announced.
+ */
+const FormDirtyState = ({ className }: { className?: string }) => {
+  const translate = useTranslate();
+  const { watch } = useFormContext();
+  const { isDirty, isSubmitting } = useFormState();
+  // `isDirty` alone lights up on a create form before anybody types: defaults
+  // that arrive after mount (the current user as owner) count as edits. Only
+  // a change the user made (`type === "change"`; `setValue` has no type) does.
+  const [hasUserEdited, setHasUserEdited] = React.useState(false);
+  React.useEffect(() => {
+    const subscription = watch((_values, { type }) => {
+      if (type === "change") setHasUserEdited(true);
+    });
+    return () => subscription.unsubscribe();
+  }, [watch]);
+  const isShown = hasUserEdited && isDirty && !isSubmitting;
+
+  return (
+    <div role="status" className={cn("mr-auto flex items-center", className)}>
+      {isShown ? (
+        <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground animate-in fade-in-0">
+          <span
+            aria-hidden
+            className="size-1.5 rounded-full bg-brand ring-[3px] ring-brand/20"
+          />
+          {translate("crm.form_page.unsaved_changes", {
+            _: "Unsaved changes",
+          })}
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
 interface Props<
   RecordType extends RaRecord = RaRecord,
   MutationOptionsError = unknown,
@@ -286,5 +335,6 @@ export {
   FormControl,
   FormDescription,
   FormError,
+  FormDirtyState,
   SaveButton,
 };

@@ -7,11 +7,12 @@ import type { CreateBaseProps } from "ra-core";
 import {
   CreateBase,
   Translate,
-  useCreateContext,
   useCreatePath,
   useGetResourceLabel,
   useHasDashboard,
+  useLocaleState,
   useResourceContext,
+  useTranslate,
 } from "ra-core";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
@@ -43,6 +44,7 @@ export const Create = ({
   actions,
   children,
   className,
+  contentClassName,
   disableBreadcrumb,
   title,
   ...rest
@@ -51,6 +53,7 @@ export const Create = ({
     <CreateView
       actions={actions}
       className={className}
+      contentClassName={contentClassName}
       disableBreadcrumb={disableBreadcrumb}
       title={title}
     >
@@ -60,6 +63,9 @@ export const Create = ({
 );
 
 export type CreateViewProps = {
+  /** Width of the centred column; `max-w-4xl` by default. Wider for a
+   *  screen with tables beside its form (a quote's lines, a price list). */
+  contentClassName?: string;
   actions?: ReactNode;
   disableBreadcrumb?: boolean;
   children: ReactNode;
@@ -73,14 +79,13 @@ export type CreateViewProps = {
  * @internal
  */
 export const CreateView = ({
+  contentClassName = "max-w-4xl",
   actions,
   disableBreadcrumb,
   title,
   children,
   className,
 }: CreateViewProps) => {
-  const context = useCreateContext();
-
   const resource = useResourceContext();
   if (!resource) {
     throw new Error(
@@ -89,6 +94,13 @@ export const CreateView = ({
   }
   const getResourceLabel = useGetResourceLabel();
   const listLabel = getResourceLabel(resource, 2);
+  const translate = useTranslate();
+  const [locale = "en"] = useLocaleState();
+  // ra-core's default title keeps the menu's capital ("Crear Producto");
+  // sentence case reads as a sentence, in every locale this CRM ships.
+  const defaultTitle = translate("ra.page.create", {
+    name: getResourceLabel(resource, 1).toLocaleLowerCase(locale),
+  });
   const createPath = useCreatePath();
   const listLink = createPath({
     resource,
@@ -97,7 +109,8 @@ export const CreateView = ({
   const hasDashboard = useHasDashboard();
 
   return (
-    <>
+    // Centred, like every record form: title and form share one axis.
+    <div className={cn("mx-auto flex w-full flex-col", contentClassName)}>
       {!disableBreadcrumb && (
         <Breadcrumb>
           {hasDashboard && (
@@ -117,16 +130,21 @@ export const CreateView = ({
       )}
       <div
         className={cn(
-          "flex justify-between items-start flex-wrap gap-2 my-2",
+          "mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3",
           className,
         )}
       >
-        <h2 className="text-2xl font-bold tracking-tight">
-          {title !== undefined ? title : context.defaultTitle}
-        </h2>
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-[1.75rem] leading-tight font-semibold">
+            {title !== undefined ? title : defaultTitle}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {translate("crm.form_page.create_hint", { _: "" })}
+          </p>
+        </div>
         {actions}
       </div>
-      <div className="my-2">{children}</div>
-    </>
+      <div>{children}</div>
+    </div>
   );
 };

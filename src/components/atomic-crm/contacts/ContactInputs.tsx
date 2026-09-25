@@ -1,4 +1,10 @@
 import {
+  AtSign,
+  BriefcaseBusiness,
+  NotebookPen,
+  UserRound,
+} from "lucide-react";
+import {
   email,
   required,
   useRecordContext,
@@ -29,6 +35,7 @@ import {
   translateContactGenderLabel,
   translatePersonalInfoTypeLabel,
 } from "./contactModel.ts";
+import { FormSection } from "../misc/FormSection";
 
 export const ContactInputs = () => {
   const isMobile = useIsMobile();
@@ -55,42 +62,66 @@ export const ContactInputs = () => {
   );
 };
 
+/**
+ * Offered when creating a contact: male and female. "Non-binary" stays a valid
+ * stored value (imports, older records), so a contact that already carries it
+ * still shows it when edited instead of silently losing the choice.
+ */
+const OFFERED_GENDERS = ["male", "female"];
+
 const ContactIdentityInputs = () => {
   const translate = useTranslate();
+  const record = useRecordContext<Contact>();
+  const genders = contactGender.filter(
+    (gender) =>
+      OFFERED_GENDERS.includes(gender.value) || gender.value === record?.gender,
+  );
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.contacts.field_categories.identity")}
-      </h6>
+    <FormSection
+      icon={UserRound}
+      title={translate("resources.contacts.field_categories.identity")}
+      description={translate("crm.form_section.identity")}
+    >
       <RadioButtonGroupInput
         label={false}
         row
         source="gender"
-        choices={contactGender}
+        choices={genders}
         helperText={false}
         optionText={(choice) => translateContactGenderLabel(choice, translate)}
         translateChoice={false}
         optionValue="value"
         defaultValue={contactGender[0].value}
       />
-      <TextInput source="first_name" validate={required()} helperText={false} />
-      <TextInput source="last_name" validate={required()} helperText={false} />
-    </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextInput
+          source="first_name"
+          validate={required()}
+          helperText={false}
+        />
+        <TextInput
+          source="last_name"
+          validate={required()}
+          helperText={false}
+        />
+      </div>
+    </FormSection>
   );
 };
 
 const ContactPositionInputs = () => {
   const translate = useTranslate();
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.contacts.field_categories.position")}
-      </h6>
+    <FormSection
+      icon={BriefcaseBusiness}
+      title={translate("resources.contacts.field_categories.position")}
+      description={translate("crm.form_section.position")}
+    >
       <TextInput source="title" helperText={false} />
       <ReferenceInput source="company_id" reference="companies" perPage={10}>
         <AutocompleteCompanyInput label="resources.contacts.fields.company_id" />
       </ReferenceInput>
-    </div>
+    </FormSection>
   );
 };
 
@@ -139,10 +170,11 @@ const ContactPersonalInformationInputs = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.contacts.field_categories.personal_info")}
-      </h6>
+    <FormSection
+      icon={AtSign}
+      title={translate("resources.contacts.field_categories.personal_info")}
+      description={translate("crm.form_section.reach")}
+    >
       <ArrayInput source="email_jsonb" helperText={false}>
         <SimpleFormIterator
           inline
@@ -167,7 +199,7 @@ const ContactPersonalInformationInputs = () => {
             optionText="name"
             choices={personalInfoTypes}
             defaultValue="Work"
-            className="w-24 min-w-24"
+            className="w-32 min-w-32"
           />
         </SimpleFormIterator>
       </ArrayInput>
@@ -192,7 +224,7 @@ const ContactPersonalInformationInputs = () => {
             optionText="name"
             choices={personalInfoTypes}
             defaultValue="Work"
-            className="w-24 min-w-24"
+            className="w-32 min-w-32"
           />
         </SimpleFormIterator>
       </ArrayInput>
@@ -201,21 +233,22 @@ const ContactPersonalInformationInputs = () => {
         helperText={false}
         validate={isLinkedinUrl}
       />
-    </div>
+    </FormSection>
   );
 };
 
 const ContactMiscInputs = () => {
   const translate = useTranslate();
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.contacts.field_categories.misc")}
-      </h6>
+    <FormSection
+      icon={NotebookPen}
+      title={translate("resources.contacts.field_categories.misc")}
+      description={translate("crm.form_section.contact_misc")}
+    >
       <TextInput source="background" multiline helperText={false} />
       <BooleanInput source="has_newsletter" helperText={false} />
       <SaleInput />
-    </div>
+    </FormSection>
   );
 };
 

@@ -60,10 +60,13 @@ export const resolveKanbanDrop = (result: {
  * neutral — priority owns the loud colours (§16).
  */
 export const KANBAN_COLUMN_CLASS: Record<string, string> = {
-  pending: "text-slate-600 dark:text-slate-300",
-  scheduled: "text-sky-600 dark:text-sky-400",
-  in_progress: "text-blue-600 dark:text-blue-400",
-  waiting: "text-amber-600 dark:text-amber-400",
-  blocked: "text-red-600 dark:text-red-400",
-  completed: "text-green-600 dark:text-green-400",
+  // The lane's marker (a dot and the lane's top edge), in the semantic
+  // tokens: grey waits, blue moves, amber is stuck on somebody else, red is
+  // stuck, green is done. The lane title itself stays in the text colour.
+  pending: "bg-muted-foreground",
+  scheduled: "bg-info",
+  in_progress: "bg-info",
+  waiting: "bg-warning",
+  blocked: "bg-destructive",
+  completed: "bg-success",
 };

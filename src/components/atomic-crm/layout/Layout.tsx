@@ -30,10 +30,11 @@ export const Layout = ({ children }: { children: ReactNode }) => {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset className="min-w-0 bg-background">
+      {/* `app-canvas`: the ground with its ambient light (index.css). */}
+      <SidebarInset className="app-canvas min-w-0">
         <Topbar />
         <main
-          className="flex min-w-0 flex-1 flex-col gap-4 p-4 lg:p-6"
+          className="flex min-w-0 flex-1 flex-col gap-4 p-4 lg:px-8 lg:py-6"
           id="main-content"
         >
           <ErrorBoundary FallbackComponent={Error}>

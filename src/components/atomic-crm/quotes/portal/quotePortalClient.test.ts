@@ -1,5 +1,9 @@
 import { createQuotePortalClient } from "./quotePortalClient";
-import { PORTAL_TOKEN, portalPayload } from "./quotePortalFixtures";
+import {
+  PORTAL_TOKEN,
+  portalPayload,
+  portalSlidesSample,
+} from "./quotePortalFixtures";
 
 type SentRequest = { url: string; init: RequestInit };
 
@@ -126,5 +130,57 @@ describe("createQuotePortalClient", () => {
         key: "quote_portal_unavailable",
       });
     }
+  });
+});
+
+describe("the slides in the payload", () => {
+  const withSlides = (slides: unknown) =>
+    serverAnswering(200, { data: { ...portalPayload, slides } });
+
+  it("passes the company's slides through intact", async () => {
+    const { client } = withSlides(portalSlidesSample);
+
+    const payload = await client.view(PORTAL_TOKEN);
+
+    expect(payload.slides).toEqual(portalSlidesSample);
+  });
+
+  it.each([
+    [
+      "a picture served from anywhere but the portal bucket",
+      { path: "https://evil.example/pixel.png" },
+    ],
+    ["a path climbing out of slides/", { path: "slides/../brand/logo.svg" }],
+    ["a key the renderer does not know", { onclick: "alert(1)" }],
+    ["a position that is not a number", { x: "10" }],
+  ])(
+    "drops a deck carrying %s, and still opens the quotation",
+    async (_, override) => {
+      const [first, ...rest] = portalSlidesSample;
+      const tampered = [
+        {
+          elements: [
+            { ...first.elements[0], ...override },
+            ...first.elements.slice(1),
+          ],
+        },
+        ...rest,
+      ];
+      const { client } = withSlides(tampered);
+
+      const payload = await client.view(PORTAL_TOKEN);
+
+      expect(payload.slides).toEqual([]);
+      expect(payload.quote.number).toBe(portalPayload.quote.number);
+    },
+  );
+
+  it("reads a payload from before the slides existed as a deck with none", async () => {
+    const { slides: _, ...older } = portalPayload;
+    const { client } = serverAnswering(200, { data: older });
+
+    const payload = await client.view(PORTAL_TOKEN);
+
+    expect(payload.slides).toEqual([]);
   });
 });

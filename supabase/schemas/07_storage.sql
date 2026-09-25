@@ -112,3 +112,18 @@ create policy "Quote attachments can be deleted by users who see the quote"
         and (storage.foldername(name))[1] ~ '^[0-9]+$'
         and public.can_see_quote((storage.foldername(name))[1]::bigint)
     );
+
+-- Customer portal media. A PUBLIC bucket (`portal-media`, created with its
+-- size and type limits by the migration): the customer's browser has no
+-- session and no policy grants `anon`, so the pictures and videos of a slide
+-- must be readable by address. That is right for this content only -- it is
+-- marketing, meant for customers. Paths are `slides/<uuid>.<ext>` and never
+-- overwritten (no update policy), so a frozen snapshot keeps pointing at the
+-- file it was issued with; nothing here deletes either.
+create policy "Portal media can be uploaded by admins"
+    on storage.objects for insert to authenticated
+    with check (
+        bucket_id = 'portal-media'
+        and (select public.is_admin())
+        and name ~ '^slides/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|png|gif|avif|mp4|webm)$'
+    );

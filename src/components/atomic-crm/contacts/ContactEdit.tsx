@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { FORM_EDGE_CLASS } from "@/components/admin/simple-form";
 import { EditBase, Form, useEditContext, type MutationMode } from "ra-core";
 
 import type { Contact } from "../types";
@@ -10,6 +11,8 @@ import {
   defaultEmailJsonb,
   defaultPhoneJsonb,
 } from "./contactModel";
+import { FormPageHeader } from "../misc/FormPageHeader";
+import { FormPage } from "../misc/FormPage";
 
 export const ContactEdit = ({
   mutationMode,
@@ -41,20 +44,23 @@ const ContactEditContent = () => {
   const { isPending, record } = useEditContext<Contact>();
   if (isPending || !record) return null;
   return (
-    <div className="mt-2 flex gap-8">
-      <Form
-        className="flex flex-1 flex-col gap-4"
-        record={normalizeContactArrayFields(record)}
-      >
-        <Card>
-          <CardContent>
-            <ContactInputs />
-            <FormToolbar />
-          </CardContent>
-        </Card>
-      </Form>
+    <FormPage wide>
+      <FormPageHeader mode="edit" />
+      <div className="flex gap-8">
+        <Form
+          className="flex flex-1 flex-col gap-4"
+          record={normalizeContactArrayFields(record)}
+        >
+          <Card className={FORM_EDGE_CLASS}>
+            <CardContent>
+              <ContactInputs />
+              <FormToolbar />
+            </CardContent>
+          </Card>
+        </Form>
 
-      <ContactAside link="show" />
-    </div>
+        <ContactAside link="show" />
+      </div>
+    </FormPage>
   );
 };

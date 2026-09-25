@@ -1,3 +1,4 @@
+import { Building2, Factory, MapPin, NotebookPen } from "lucide-react";
 import { required, useRecordContext, useTranslate } from "ra-core";
 import { TextInput } from "@/components/admin/text-input";
 import { SelectInput } from "@/components/admin/select-input";
@@ -13,6 +14,7 @@ import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Company } from "../types";
 import { getTranslatedCompanySizeLabel } from "./getTranslatedCompanySizeLabel";
 import { sizes } from "./sizes";
+import { FormSection } from "../misc/FormSection";
 
 const isUrl = (url: string) => {
   if (!url) return;
@@ -77,12 +79,13 @@ const CompanyDisplayInputs = () => {
 const CompanyContactInputs = () => {
   const translate = useTranslate();
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.companies.field_categories.contact", {
-          _: "Company info",
-        })}
-      </h6>
+    <FormSection
+      icon={Building2}
+      title={translate("resources.companies.field_categories.contact", {
+        _: "Company info",
+      })}
+      description={translate("crm.form_section.company_contact")}
+    >
       <TextInput source="website" helperText={false} validate={isUrl} />
       <TextInput
         source="linkedin_url"
@@ -90,7 +93,7 @@ const CompanyContactInputs = () => {
         validate={isLinkedinUrl}
       />
       <TextInput source="phone_number" helperText={false} />
-    </div>
+    </FormSection>
   );
 };
 
@@ -102,12 +105,13 @@ const CompanyContextInputs = () => {
     name: getTranslatedCompanySizeLabel(size, translate),
   }));
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.companies.field_categories.context", {
-          _: "Context",
-        })}
-      </h6>
+    <FormSection
+      icon={Factory}
+      title={translate("resources.companies.field_categories.context", {
+        _: "Context",
+      })}
+      description={translate("crm.form_section.company_context")}
+    >
       <SelectInput
         source="sector"
         choices={companySectors}
@@ -115,40 +119,50 @@ const CompanyContextInputs = () => {
         optionValue="value"
         helperText={false}
       />
-      <SelectInput source="size" choices={translatedSizes} helperText={false} />
-      <TextInput source="revenue" helperText={false} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SelectInput
+          source="size"
+          choices={translatedSizes}
+          helperText={false}
+        />
+        <TextInput source="revenue" helperText={false} />
+      </div>
       <TextInput source="tax_identifier" helperText={false} />
-    </div>
+    </FormSection>
   );
 };
 
 const CompanyAddressInputs = () => {
   const translate = useTranslate();
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.companies.field_categories.address", {
-          _: "Address",
-        })}
-      </h6>
+    <FormSection
+      icon={MapPin}
+      title={translate("resources.companies.field_categories.address", {
+        _: "Address",
+      })}
+      description={translate("crm.form_section.address")}
+    >
       <TextInput source="address" helperText={false} />
-      <TextInput source="city" helperText={false} />
-      <TextInput source="zipcode" helperText={false} />
-      <TextInput source="state_abbr" helperText={false} />
-      <TextInput source="country" helperText={false} />
-    </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextInput source="city" helperText={false} />
+        <TextInput source="zipcode" helperText={false} />
+        <TextInput source="state_abbr" helperText={false} />
+        <TextInput source="country" helperText={false} />
+      </div>
+    </FormSection>
   );
 };
 
 const CompanyAdditionalInformationInputs = () => {
   const translate = useTranslate();
   return (
-    <div className="flex flex-col gap-4">
-      <h6 className="text-lg font-semibold">
-        {translate("resources.companies.field_categories.additional_info", {
-          _: "Additional information",
-        })}
-      </h6>
+    <FormSection
+      icon={NotebookPen}
+      title={translate("resources.companies.field_categories.additional_info", {
+        _: "Additional information",
+      })}
+      description={translate("crm.form_section.company_misc")}
+    >
       <TextInput source="description" multiline helperText={false} />
       <ArrayInput source="context_links" helperText={false}>
         <SimpleFormIterator disableReordering fullWidth getItemLabel={false}>
@@ -161,6 +175,6 @@ const CompanyAdditionalInformationInputs = () => {
         </SimpleFormIterator>
       </ArrayInput>
       <SaleInput />
-    </div>
+    </FormSection>
   );
 };

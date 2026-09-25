@@ -1,0 +1,113 @@
+/*
+ * The customer portal's motion and texture: the keyframes and the few rules
+ * Tailwind has no utility for. Every class is prefixed `qp-` (this sheet ships
+ * with the app bundle, and must never style anything outside the portal) and
+ * tagged with the refinement it implements (`quotePortalFx.ts`). A class is
+ * only applied while its switch is on, so turning a refinement off there is
+ * enough; delete its rules here when removing it for good.
+ */
+
+/* FX-01: the cover photograph drifts in, slowly, for as long as it is read. */
+.qp-kenburns {
+  animation: qp-kenburns 28s ease-in-out infinite alternate;
+  transform-origin: 60% 45%;
+}
+@keyframes qp-kenburns {
+  from {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.12) translate3d(-1.5%, -1%, 0);
+  }
+}
+
+/* FX-02: the heading's words arrive one after another. The delay is inline. */
+.qp-word {
+  display: inline-block;
+  animation: qp-word-in 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes qp-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* FX-04: a mouse whose wheel rolls down, instead of a line and a sentence. */
+.qp-mouse-wheel {
+  animation: qp-mouse-wheel 1.8s ease-in-out infinite;
+}
+@keyframes qp-mouse-wheel {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* FX-05: fine grain over the photograph, the finish of film rather than of
+   stock photography. An SVG noise tile, moved in steps so it shimmers. */
+.qp-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  animation: qp-grain 1.2s steps(6) infinite;
+}
+@keyframes qp-grain {
+  0% {
+    background-position: 0 0;
+  }
+  50% {
+    background-position: -60px 40px;
+  }
+  100% {
+    background-position: 30px -50px;
+  }
+}
+
+/* FX-24: a light sweeping along the reading-progress bar. */
+.qp-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--brand-foreground) 70%, transparent),
+    transparent
+  );
+  animation: qp-shimmer 2.8s ease-in-out infinite;
+}
+@keyframes qp-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* FX-28: a display face for the headings; Inter stays the text face. Loaded
+   by `useDisplayFont()` only while the portal is open. */
+.qp-display {
+  font-family: "General Sans", var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qp-kenburns,
+  .qp-word,
+  .qp-mouse-wheel,
+  .qp-grain,
+  .qp-shimmer {
+    animation: none;
+  }
+}

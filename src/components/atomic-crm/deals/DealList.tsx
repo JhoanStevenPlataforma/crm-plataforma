@@ -65,7 +65,6 @@ const DealList = () => {
     <List
       perPage={100}
       filter={{ "archived_at@is": null }}
-      title={false}
       sort={{ field: "index", order: "DESC" }}
       filters={dealFilters}
       actions={<DealActions />}

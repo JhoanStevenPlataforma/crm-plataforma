@@ -779,13 +779,19 @@ union all
 select
     'deal_stage_change:' || sc.id, sc.changed_at, 'deal.stage_changed',
     'deal_stage_change',
-    null::bigint, sc.sales_id, 'user',
+    null::bigint, sc.sales_id,
+    -- A quotation's event moved it with nobody signed in (the customer, the
+    -- sweeper): the system acted, not a user.
+    case when sc.source = 'quote' and sc.sales_id is null then 'system' else 'user' end,
     'deal', sc.deal_id,
     jsonb_build_object('from_stage', sc.from_stage, 'to_stage', sc.to_stage,
                        'reason', sc.reason, 'deal_id', sc.deal_id,
                        'attachments', to_jsonb(sc.attachments),
-                       'override_reason', sc.override_reason)
+                       'override_reason', sc.override_reason,
+                       'source', sc.source, 'quote_id', sc.quote_id,
+                       'quote_number', sq.quote_number)
 from public.deal_stage_changes sc
+    left join public.quotes sq on sq.id = sc.quote_id
 
 union all
 
@@ -843,7 +849,26 @@ select
     'quote', e.quote_id,
     jsonb_build_object('quote_id', e.quote_id, 'version_id', e.version_id,
                        'actor_name', e.actor_name, 'detail', e.payload)
-from public.quote_portal_events e;
+from public.quote_portal_events e
+
+union all
+
+-- The customer writing back, on the DEAL too: it is what moves a deal into
+-- negotiation, so its history must say so. Only comments: a view and an
+-- answer already reach the deal as the status change they caused, and the
+-- same event twice on one timeline is noise.
+select
+    'quote_portal_event:deal:' || e.id, e.occurred_at, 'quote.' || e.event_type,
+    'quote_portal_event',
+    null::bigint, null::bigint, 'system',
+    'deal', q.deal_id,
+    jsonb_build_object('quote_id', e.quote_id, 'quote_number', q.quote_number,
+                       'version_id', e.version_id,
+                       'actor_name', e.actor_name, 'detail', e.payload)
+from public.quote_portal_events e
+    join public.quotes q on q.id = e.quote_id
+where q.deal_id is not null
+  and e.event_type = 'commented';
 
 create or replace view public.init_state with (security_invoker = off) as
 select count(sub.id) as is_initialized

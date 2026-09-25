@@ -51,6 +51,8 @@ const ViewDocumentButton = () => {
  */
 export const QuoteEdit = () => (
   <Edit
+    // Wider than a plain form: the tables under it need the room.
+    contentClassName="max-w-6xl"
     redirect={false}
     mutationMode="pessimistic"
     // The kit's default header is a Show link and a DELETE button, and the
@@ -60,14 +62,14 @@ export const QuoteEdit = () => (
     // Show link it also carries is already here as `ViewDocumentButton`.
     actions={<></>}
   >
-    <div className="p-4 pb-0 flex flex-wrap items-start justify-between gap-2">
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
       <QuoteActions />
       <ViewDocumentButton />
     </div>
     <SimpleForm>
       <QuoteInputs />
     </SimpleForm>
-    <div className="p-4 pt-0 flex flex-col gap-6">
+    <div className="mt-6 flex flex-col gap-6">
       <QuoteLines />
       <QuoteLinksPanel />
     </div>

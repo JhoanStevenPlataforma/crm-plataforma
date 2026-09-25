@@ -1,9 +1,10 @@
-import { Plus } from "lucide-react";
+import { Plus, Receipt } from "lucide-react";
 import {
   useCanAccess,
   useGetList,
   useTranslate,
   type Identifier,
+  useLocaleState,
 } from "ra-core";
 import { Link } from "react-router";
 
@@ -34,12 +35,16 @@ export const EntityQuotesPanel = ({
   dealId,
   companyId,
   dealName,
+  amountSourceQuoteId,
 }: {
   dealId: Identifier;
   companyId: Identifier;
   dealName?: string | null;
+  /** The quotation whose total the deal's amount is, marked in the list. */
+  amountSourceQuoteId?: Identifier | null;
 }) => {
   const translate = useTranslate();
+  const [locale = "en"] = useLocaleState();
   const { canAccess: canCreate } = useCanAccess({
     resource: "quotes",
     action: "create",
@@ -82,14 +87,34 @@ export const EntityQuotesPanel = ({
               >
                 {quote.quote_number}
               </Link>
-              <span className="flex-1 truncate text-muted-foreground">
-                {quote.title}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-muted-foreground">
+                  {quote.title}
+                </span>
+                {quote.last_portal_activity_at ? (
+                  // The customer's last move on the link (opened, wrote back).
+                  <span className="truncate text-xs text-muted-foreground">
+                    {translate("resources.quotes.panel.customer_activity", {
+                      date: new Date(
+                        quote.last_portal_activity_at,
+                      ).toLocaleDateString(locale, { dateStyle: "medium" }),
+                    })}
+                  </span>
+                ) : null}
               </span>
               <QuoteStatusBadge
                 statusKey={quote.status_key}
                 label={quote.status_label}
               />
-              <span className="tabular-nums">
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                {String(quote.id) === String(amountSourceQuoteId) ? (
+                  <Receipt
+                    className="size-3.5 text-muted-foreground"
+                    aria-label={translate(
+                      "resources.deals.board.amount_from_quote",
+                    )}
+                  />
+                ) : null}
                 {formatMoneyExact(quote.total, quote.currency)}
               </span>
             </li>

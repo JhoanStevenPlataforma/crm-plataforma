@@ -5,7 +5,7 @@ import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Team, TeamWorkload } from "../types";
 import { formatMoney } from "./teamBudget";
 import { TeamChartCard } from "./TeamChartCard";
-import { barDefaults, bottomLegend, useChartPalette } from "./teamChartTheme";
+import { barDefaults, useChartPalette } from "./teamChartTheme";
 import { workloadByTeam } from "./taskWorkload";
 import { TeamWorkloadChart } from "./TeamWorkloadChart";
 
@@ -42,8 +42,12 @@ const TeamsMoneyChart = ({ teams }: { teams: Team[] }) => {
     [wonLabel]: team.won_amount ?? 0,
   }));
 
+  const seriesKeys = [budgetLabel, pipelineLabel, wonLabel];
+  const seriesColors = [palette.reference, palette.inFlight, palette.good];
+
   return (
     <TeamChartCard
+      legend={seriesKeys.map((label, i) => ({ label, color: seriesColors[i] }))}
       title={translate("crm.teams_dashboard.money_chart")}
       isEmpty={teams.length === 0}
       height={320}
@@ -51,14 +55,13 @@ const TeamsMoneyChart = ({ teams }: { teams: Team[] }) => {
       <ResponsiveBar
         data={data}
         indexBy="team"
-        keys={[budgetLabel, pipelineLabel, wonLabel]}
+        keys={seriesKeys}
         groupMode="grouped"
-        colors={[palette.reference, palette.inFlight, palette.good]}
-        margin={{ top: 20, right: 20, bottom: 50, left: 70 }}
+        colors={seriesColors}
+        margin={{ top: 20, right: 20, bottom: 28, left: 70 }}
         {...barDefaults}
         enableLabel={false}
         axisLeft={{ format: (value: number) => formatMoney(value, currency) }}
-        legends={bottomLegend}
       />
     </TeamChartCard>
   );

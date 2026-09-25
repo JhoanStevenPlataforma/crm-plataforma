@@ -91,7 +91,7 @@ export const InfinitePagination = ({
       ) : isFetchingNextPage && hasNextPage ? (
         <Item variant="default">
           <ItemMedia>
-            <Spinner />
+            <Spinner size="small" />
           </ItemMedia>
           <ItemContent>
             <ItemTitle className="line-clamp-1">

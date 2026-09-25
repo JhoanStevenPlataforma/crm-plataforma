@@ -37,6 +37,8 @@ export const TasksListByDueDate = ({
   showContact: showContactProp,
   emptyPlaceholder,
   pendingPlaceholder,
+  framed,
+  compact = false,
 }: {
   filterByContact?: Identifier;
   /** Scope the list to any linked record (§14), e.g. `{ contact_id: 12 }`. */
@@ -44,6 +46,13 @@ export const TasksListByDueDate = ({
   showContact?: boolean;
   emptyPlaceholder?: React.ReactNode;
   pendingPlaceholder?: React.ReactNode;
+  /** Each due-date bucket as a card of rows (the tasks page). */
+  framed?: boolean;
+  /**
+   * The dashboard panel: one line per task, three per section, and no
+   * "recently done" section. The panel links to the task page for the rest.
+   */
+  compact?: boolean;
 }) => {
   const { identity } = useGetIdentity();
   const isMobile = useIsMobile();
@@ -99,7 +108,7 @@ export const TasksListByDueDate = ({
   );
 
   const oneSecondHasPassed = useTimeout(1000);
-  const perPage = isMobile ? 10 : 5;
+  const perPage = compact ? 3 : isMobile ? 10 : 5;
 
   if (isPending) {
     return oneSecondHasPassed ? (pendingPlaceholder ?? null) : null;
@@ -117,16 +126,21 @@ export const TasksListByDueDate = ({
           showContact={showContact}
           perPage={perPage}
           enabled={enabled}
+          framed={framed}
+          compact={compact}
         />
       ))}
 
-      <TaskBucketSection
-        title={translate("resources.tasks.filters.recently_done")}
-        filter={recentlyDoneFilter}
-        showContact={showContact}
-        perPage={perPage}
-        enabled={enabled}
-      />
+      {compact ? null : (
+        <TaskBucketSection
+          title={translate("resources.tasks.filters.recently_done")}
+          filter={recentlyDoneFilter}
+          showContact={showContact}
+          perPage={perPage}
+          enabled={enabled}
+          framed={framed}
+        />
+      )}
     </div>
   );
 };

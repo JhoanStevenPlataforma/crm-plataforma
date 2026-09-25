@@ -3,7 +3,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { ChartCard } from "../misc/ChartCard";
 import {
   barDefaults,
-  bottomLegend,
+  horizontalBarProps,
   useChartPalette,
   type ChartRole,
 } from "../misc/chartTheme";
@@ -36,6 +36,12 @@ export interface SeriesRow {
   label: string;
   values: Record<string, number>;
 }
+
+/** A request, not an exact count: d3 rounds it to clean steps (0/200K/400K). */
+const VALUE_TICKS = 4;
+
+/** "Apr 2026": a month label as `formatMonthLabel` writes it. */
+const MONTH_LABEL = /^(\S+) (\d{4})$/;
 
 /** Green, blue, red, then the recessive gray of a reference mark. */
 const ROLE_ORDER: ChartRole[] = ["good", "inFlight", "bad", "reference"];
@@ -76,6 +82,17 @@ export const SeriesBarChart = ({
     return point;
   });
 
+  const format = formatValue ?? ((value: number) => value.toLocaleString());
+  // "Apr 2026" per tick overlaps on a narrow card. When every category is a
+  // month, the axis shows the month alone; the year stays in the subtitle,
+  // the tooltip and the table.
+  const isMonthly =
+    rows.length > 0 && rows.every((row) => MONTH_LABEL.test(row.label));
+  const categoryTick = isMonthly
+    ? (value: string | number) => String(value).replace(MONTH_LABEL, "$1")
+    : undefined;
+  const isHorizontal = layout === "horizontal";
+
   return (
     <ChartCard
       title={title}
@@ -83,6 +100,22 @@ export const SeriesBarChart = ({
       isEmpty={rows.length === 0}
       emptyLabel={emptyLabel}
       height={height}
+      // A single series needs no legend: the title names it and the axis
+      // names every bar.
+      legend={ordered.map((item) => ({
+        label: item.label,
+        color: palette[item.role],
+      }))}
+      table={{
+        columns: ["", ...ordered.map((item) => item.label)],
+        rows: rows.map((row) => ({
+          key: row.label,
+          cells: [
+            row.label,
+            ...ordered.map((item) => format(row.values[item.key] ?? 0)),
+          ],
+        })),
+      }}
     >
       <ResponsiveBar
         data={data}
@@ -92,11 +125,17 @@ export const SeriesBarChart = ({
         layout={layout}
         groupMode={groupMode}
         margin={
-          layout === "horizontal"
-            ? { top: 10, right: 20, bottom: 50, left: 110 }
-            : { top: 10, right: 20, bottom: 60, left: 60 }
+          isHorizontal
+            ? { top: 4, right: 24, bottom: 28, left: 116 }
+            : {
+                top: 8,
+                right: 8,
+                bottom: rows.length > 6 ? 48 : 28,
+                left: 64,
+              }
         }
         {...barDefaults}
+        {...(isHorizontal ? horizontalBarProps : {})}
         // The value is printed on any segment big enough to hold it: two of
         // these hues sit under 3:1 against the light surface, so identity is
         // never carried by colour alone.
@@ -106,14 +145,25 @@ export const SeriesBarChart = ({
             : undefined
         }
         valueFormat={formatValue}
+        // The value axis speaks the same compact figures as the bars
+        // ("$1.2M", not "1200000").
+        // Five clean ticks on the value axis, never the eleven nivo picks by
+        // default: the gridlines are a reference, not a ruler.
+        gridYValues={isHorizontal ? undefined : VALUE_TICKS}
+        gridXValues={isHorizontal ? VALUE_TICKS : undefined}
+        axisLeft={{
+          tickSize: 0,
+          tickPadding: 10,
+          tickValues: isHorizontal ? undefined : VALUE_TICKS,
+          format: isHorizontal ? undefined : formatValue,
+        }}
         axisBottom={{
           tickSize: 0,
-          tickPadding: 8,
-          tickRotation: layout === "vertical" && rows.length > 6 ? -35 : 0,
+          tickPadding: 10,
+          tickValues: isHorizontal ? VALUE_TICKS : undefined,
+          tickRotation: !isHorizontal && rows.length > 6 ? -35 : 0,
+          format: isHorizontal ? formatValue : categoryTick,
         }}
-        // A single series needs no legend: the title names it and the axis
-        // names every bar.
-        legends={ordered.length > 1 ? bottomLegend : undefined}
       />
     </ChartCard>
   );

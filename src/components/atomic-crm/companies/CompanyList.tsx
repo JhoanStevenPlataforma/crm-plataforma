@@ -15,7 +15,6 @@ export const CompanyList = () => {
   if (!identity) return null;
   return (
     <List
-      title={false}
       perPage={25}
       sort={{ field: "name", order: "ASC" }}
       actions={<CompanyListActions />}

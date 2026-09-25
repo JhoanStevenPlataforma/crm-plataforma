@@ -30,6 +30,14 @@
     <link rel="apple-touch-icon" sizes="1024x1024" href="./appIcon/1024.png" />
     <title>Hermes CRM</title>
 
+    <script>
+      try {
+        var theme = JSON.parse(localStorage.getItem("RaStore.theme") || '"system"');
+        if (theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    </script>
     <style>
       body {
         margin: 0;
@@ -46,100 +54,89 @@
         touch-action: manipulation;
       }
 
+      /* Boot screen: the HermesLoader caduceus (src/components/ui/hermes-loader.tsx)
+         as static markup, because it shows before React and index.css load.
+         The paths below are generated from that component's geometry, and the
+         colours are its brand tokens as hex, from src/index.css. */
       .loader-container {
+        position: absolute;
+        inset: 0;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        flex-direction: column;
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background-color: #fafafa;
+        gap: 20px;
+        background-color: #f4f6fa;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: #606878;
       }
-
-      /* CSS Spinner from https://projects.lukehaas.me/css-loaders/ */
-
-      .loader,
-      .loader:before,
-      .loader:after {
-        border-radius: 50%;
+      .dark .loader-container {
+        background-color: #090d17;
+        color: #959ba9;
       }
-
-      .loader {
-        color: #283593;
-        font-size: 11px;
-        text-indent: -99999em;
-        margin: 55px auto;
-        position: relative;
-        width: 10em;
-        height: 10em;
-        box-shadow: inset 0 0 0 1em;
-        -webkit-transform: translateZ(0);
-        -ms-transform: translateZ(0);
-        transform: translateZ(0);
+      .hermes-boot .r0 { stroke: #a0570f; }
+      .hermes-boot .r1 { stroke: #f0a73a; }
+      .hermes-boot .staff { stroke: #c8ceda; }
+      .dark .hermes-boot .r0 { stroke: #e39a46; }
+      .dark .hermes-boot .r1 { stroke: #f0a73a; }
+      .dark .hermes-boot .staff { stroke: #333a4a; }
+      .hermes-boot .back path { stroke-width: 3.5; stroke-opacity: 0.5; }
+      .hermes-boot .front path { stroke-width: 5.5; }
+      .hermes-boot .braid { animation: hermes-braid 1.6s linear infinite; }
+      @keyframes hermes-braid {
+        to { transform: translateY(-60px); }
       }
-
-      .loader:before,
-      .loader:after {
-        position: absolute;
-        content: "";
+      @media (prefers-reduced-motion: reduce) {
+        .hermes-boot .braid { animation: hermes-breathe 2.4s ease-in-out infinite; }
       }
-
-      .loader:before {
-        width: 5.2em;
-        height: 10.2em;
-        background: #fafafa;
-        border-radius: 10.2em 0 0 10.2em;
-        top: -0.1em;
-        left: -0.1em;
-        -webkit-transform-origin: 5.2em 5.1em;
-        transform-origin: 5.2em 5.1em;
-        -webkit-animation: load2 2s infinite ease 1.5s;
-        animation: load2 2s infinite ease 1.5s;
-      }
-
-      .loader:after {
-        width: 5.2em;
-        height: 10.2em;
-        background: #fafafa;
-        border-radius: 0 10.2em 10.2em 0;
-        top: -0.1em;
-        left: 5.1em;
-        -webkit-transform-origin: 0px 5.1em;
-        transform-origin: 0px 5.1em;
-        -webkit-animation: load2 2s infinite ease;
-        animation: load2 2s infinite ease;
-      }
-
-      @-webkit-keyframes load2 {
-        0% {
-          -webkit-transform: rotate(0deg);
-          transform: rotate(0deg);
-        }
-        100% {
-          -webkit-transform: rotate(360deg);
-          transform: rotate(360deg);
-        }
-      }
-
-      @keyframes load2 {
-        0% {
-          -webkit-transform: rotate(0deg);
-          transform: rotate(0deg);
-        }
-        100% {
-          -webkit-transform: rotate(360deg);
-          transform: rotate(360deg);
-        }
+      @keyframes hermes-breathe {
+        50% { opacity: 0.45; }
       }
     </style>
   </head>
   <body>
     <div id="root">
-      <div class="loader-container">
-        <div class="loader">Loading...</div>
+      <div class="loader-container" role="status">
+        <svg class="hermes-boot" width="36" height="108" viewBox="0 0 40 120" fill="none" stroke-linecap="round" aria-hidden="true">
+          <defs>
+            <linearGradient id="hermes-boot-fade" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#fff" stop-opacity="0" />
+              <stop offset="0.16" stop-color="#fff" />
+              <stop offset="0.84" stop-color="#fff" />
+              <stop offset="1" stop-color="#fff" stop-opacity="0" />
+            </linearGradient>
+            <mask id="hermes-boot-mask" maskUnits="userSpaceOnUse">
+              <rect x="-10" y="0" width="60" height="120" fill="url(#hermes-boot-fade)" />
+            </mask>
+          </defs>
+          <g mask="url(#hermes-boot-mask)">
+            <g class="braid back">
+                <path class="r0" d="M31.0 -45L30.8 -43L30.0 -41L28.9 -39L27.4 -37L25.5 -35L23.4 -33L21.1 -31L18.9 -29L16.6 -27L14.5 -25L12.6 -23L11.1 -21L10.0 -19L9.2 -17L9.0 -15"/>
+                <path class="r0" d="M31.0 15L30.8 17L30.0 19L28.9 21L27.4 23L25.5 25L23.4 27L21.1 29L18.9 31L16.6 33L14.5 35L12.6 37L11.1 39L10.0 41L9.2 43L9.0 45"/>
+                <path class="r0" d="M31.0 75L30.8 77L30.0 79L28.9 81L27.4 83L25.5 85L23.4 87L21.1 89L18.9 91L16.6 93L14.5 95L12.6 97L11.1 99L10.0 101L9.2 103L9.0 105"/>
+                <path class="r0" d="M31.0 135L30.8 137L30.0 139L28.9 141L27.4 143L25.5 145L23.4 147L21.1 149L18.9 151L16.6 153L14.5 155L12.6 157L11.1 159L10.0 161L9.2 163L9.0 165"/>
+                <path class="r1" d="M31.0 -75L30.8 -73L30.0 -71L28.9 -69L27.4 -67L25.5 -65L23.4 -63L21.1 -61L18.9 -59L16.6 -57L14.5 -55L12.6 -53L11.1 -51L10.0 -49L9.2 -47L9.0 -45"/>
+                <path class="r1" d="M31.0 -15L30.8 -13L30.0 -11L28.9 -9L27.4 -7L25.5 -5L23.4 -3L21.1 -1L18.9 1L16.6 3L14.5 5L12.6 7L11.1 9L10.0 11L9.2 13L9.0 15"/>
+                <path class="r1" d="M31.0 45L30.8 47L30.0 49L28.9 51L27.4 53L25.5 55L23.4 57L21.1 59L18.9 61L16.6 63L14.5 65L12.6 67L11.1 69L10.0 71L9.2 73L9.0 75"/>
+                <path class="r1" d="M31.0 105L30.8 107L30.0 109L28.9 111L27.4 113L25.5 115L23.4 117L21.1 119L18.9 121L16.6 123L14.5 125L12.6 127L11.1 129L10.0 131L9.2 133L9.0 135"/>
+                <path class="r1" d="M31.0 165L30.8 167L30.0 169L28.9 171L27.4 173L25.5 175L23.4 177L21.1 179L18.9 181L16.6 183L14.5 185L12.6 187L11.1 189L10.0 191L9.2 193L9.0 195"/>
+            </g>
+            <line class="staff" x1="20" x2="20" y1="6" y2="114" stroke-width="2.5" />
+            <g class="braid front">
+                <path class="r0" d="M9.0 -75L9.2 -73L10.0 -71L11.1 -69L12.6 -67L14.5 -65L16.6 -63L18.9 -61L21.1 -59L23.4 -57L25.5 -55L27.4 -53L28.9 -51L30.0 -49L30.8 -47L31.0 -45"/>
+                <path class="r0" d="M9.0 -15L9.2 -13L10.0 -11L11.1 -9L12.6 -7L14.5 -5L16.6 -3L18.9 -1L21.1 1L23.4 3L25.5 5L27.4 7L28.9 9L30.0 11L30.8 13L31.0 15"/>
+                <path class="r0" d="M9.0 45L9.2 47L10.0 49L11.1 51L12.6 53L14.5 55L16.6 57L18.9 59L21.1 61L23.4 63L25.5 65L27.4 67L28.9 69L30.0 71L30.8 73L31.0 75"/>
+                <path class="r0" d="M9.0 105L9.2 107L10.0 109L11.1 111L12.6 113L14.5 115L16.6 117L18.9 119L21.1 121L23.4 123L25.5 125L27.4 127L28.9 129L30.0 131L30.8 133L31.0 135"/>
+                <path class="r0" d="M9.0 165L9.2 167L10.0 169L11.1 171L12.6 173L14.5 175L16.6 177L18.9 179L21.1 181L23.4 183L25.5 185L27.4 187L28.9 189L30.0 191L30.8 193L31.0 195"/>
+                <path class="r1" d="M9.0 -45L9.2 -43L10.0 -41L11.1 -39L12.6 -37L14.5 -35L16.6 -33L18.9 -31L21.1 -29L23.4 -27L25.5 -25L27.4 -23L28.9 -21L30.0 -19L30.8 -17L31.0 -15"/>
+                <path class="r1" d="M9.0 15L9.2 17L10.0 19L11.1 21L12.6 23L14.5 25L16.6 27L18.9 29L21.1 31L23.4 33L25.5 35L27.4 37L28.9 39L30.0 41L30.8 43L31.0 45"/>
+                <path class="r1" d="M9.0 75L9.2 77L10.0 79L11.1 81L12.6 83L14.5 85L16.6 87L18.9 89L21.1 91L23.4 93L25.5 95L27.4 97L28.9 99L30.0 101L30.8 103L31.0 105"/>
+                <path class="r1" d="M9.0 135L9.2 137L10.0 139L11.1 141L12.6 143L14.5 145L16.6 147L18.9 149L21.1 151L23.4 153L25.5 155L27.4 157L28.9 159L30.0 161L30.8 163L31.0 165"/>
+            </g>
+          </g>
+        </svg>
+        <span>Hermes CRM</span>
       </div>
     </div>
     <noscript>You need to enable JavaScript to run this app.</noscript>

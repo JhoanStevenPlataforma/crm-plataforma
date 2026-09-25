@@ -192,15 +192,49 @@ export const spanishCrmMessages = {
           'Cambia el estado de un contacto añadiéndole una nota y haciendo clic en "mostrar opciones".',
         empty_hint: 'Aquí aparecerán los contactos con el estado "caliente".',
         title: "Contactos calientes",
+        subtitle: "Primero los que llevan más tiempo sin contacto",
+        cooling: "Enfriándose",
+        cooling_hint:
+          "%{smart_count} día sin contacto |||| %{smart_count} días sin contacto",
+        last_touch: "Último contacto: %{date}",
+        filter_label: "Filtrar contactos calientes",
+        filter_all: "Todos",
+        filter_cooling: "Enfriándose",
+        filter_mine: "Míos",
+        no_next_task: "Sin próxima tarea",
+        view_all: "Ver los %{total}",
+        empty_filter: "Ningún contacto caliente cumple este filtro.",
+        call: "Llamar a %{name}",
+        email: "Escribir a %{name}",
       },
     },
     deals: {
+      quote_history: {
+        commented: "%{name} respondió en la cotización",
+        customer: "El cliente",
+        by_customer: "por el cliente",
+      },
       name: "Oportunidad |||| Oportunidades",
+      board: {
+        latest_quote: "Última cotización y su estado",
+        amount_from_quote: "Monto tomado de la cotización",
+        probability: "Probabilidad %{value}",
+        weighted_short: "Ponderado %{amount}",
+        share: "%{value} del pipeline abierto",
+        close_date: "Cierre previsto: %{date}",
+        no_close_date: "Sin fecha de cierre",
+        next_task: "Próxima: %{task}",
+        overdue_task: "Vencida: %{task}",
+        no_task: "Sin actividad programada",
+        owner: "Responsable: %{name}",
+        drop_here: "Arrastra una oportunidad aquí",
+      },
       fields: {
         name: "Nombre",
         description: "Descripción",
         company_id: "Empresa",
         contact_ids: "Contactos",
+        sales_id: "Responsable",
         category: "Categoría",
         amount: "Importe",
         expected_closing_date: "Fecha prevista de cierre",
@@ -233,6 +267,17 @@ export const spanishCrmMessages = {
       },
       updated: "Oportunidad actualizada",
       stage_change: {
+        by_quote: {
+          sent: "Movida automáticamente: se envió la cotización",
+          viewed: "Movida automáticamente: el cliente abrió la cotización",
+          commented: "Movida automáticamente: el cliente respondió",
+          negotiating:
+            "Movida automáticamente: la cotización está en negociación",
+          accepted: "Movida automáticamente: el cliente aceptó la cotización",
+          rejected: "Movida automáticamente: el cliente rechazó la cotización",
+          expired: "Movida automáticamente: la cotización venció",
+          generic: "Movida automáticamente por una cotización",
+        },
         title: "Mover a %{stage}",
         description:
           "%{deal} pasa de %{from} a %{to}. Deja constancia de lo que ha ocurrido, para que dentro de tres meses el tablero siga explicándose solo.",
@@ -377,6 +422,10 @@ export const spanishCrmMessages = {
       },
     },
     sales: {
+      field_categories: {
+        person: "Persona",
+        access: "Acceso",
+      },
       name: "Usuario |||| Usuarios",
       fields: {
         first_name: "Nombre",
@@ -407,6 +456,10 @@ export const spanishCrmMessages = {
       },
     },
     teams: {
+      field_categories: {
+        team: "Equipo",
+        budget: "Presupuesto",
+      },
       name: "Equipo |||| Equipos",
       forcedCaseName: "Equipo",
       fields: {
@@ -455,6 +508,11 @@ export const spanishCrmMessages = {
       },
     },
     products: {
+      field_categories: {
+        product: "Producto",
+        pricing: "Precio",
+        internal: "Uso interno",
+      },
       name: "Producto |||| Productos",
       forcedCaseName: "Producto",
       fields: {
@@ -498,6 +556,10 @@ export const spanishCrmMessages = {
       },
     },
     price_lists: {
+      field_categories: {
+        general: "Lista de precios",
+        validity: "Vigencia",
+      },
       name: "Lista de precios |||| Listas de precios",
       forcedCaseName: "Lista de precios",
       fields: {
@@ -619,6 +681,7 @@ export const spanishCrmMessages = {
         },
       },
       panel: {
+        customer_activity: "Actividad del cliente: %{date}",
         empty: "Esta oportunidad todavía no tiene cotizaciones",
         load_error:
           "No se pudieron cargar las cotizaciones de esta oportunidad",
@@ -706,11 +769,23 @@ export const spanishCrmMessages = {
         closed_anonymous:
           "Esta cotización ya no se puede responder en línea. Comuníquese con quien se la envió.",
         landing: {
+          stamp: {
+            open: "Vigente",
+            accepted: "Aceptada",
+            rejected: "Rechazada",
+            superseded: "Reemplazada",
+            expired: "Vencida",
+          },
           company_fallback: "usted",
           sections: "Secciones",
           start: "Comenzar propuesta",
+          continue: "Continuar",
+          plain_cover_title: "Una propuesta preparada para %{company}",
+          plain_cover_body:
+            "Aquí está la cotización que preparamos, con todo el detalle de la propuesta.",
           skip_to_quote: "Ver cotización directamente",
           view_quote: "Ver cotización",
+          slide_label: "Diapositiva %{number} de %{total}",
           scroll_hint: "Desplácese para conocer la propuesta",
           back_to_top: "Volver arriba",
           quote_eyebrow: "Propuesta económica",
@@ -938,6 +1013,10 @@ export const spanishCrmMessages = {
       },
     },
     tax_rates: {
+      field_categories: {
+        tax: "Impuesto",
+        rate: "Tarifa y uso",
+      },
       name: "Impuesto |||| Impuestos",
       forcedCaseName: "Impuesto",
       fields: {
@@ -1058,6 +1137,8 @@ export const spanishCrmMessages = {
         empty_value: "(vacío)",
         load_more: "Cargar eventos anteriores",
         events: {
+          quote_status_changed: "Cambió el estado de la cotización",
+          quote_commented: "El cliente respondió",
           // Not a task event: the timeline is shared, and this is how a deal's
           // stage transition is labelled on it.
           deal_stage_changed: "Etapa cambiada",
@@ -1247,6 +1328,93 @@ export const spanishCrmMessages = {
     },
   },
   crm: {
+    portal_slides: {
+      templates: {
+        label: "Plantilla",
+        active: "Se muestra en las cotizaciones",
+        active_short: "activa",
+        activate: "Usar en cotizaciones",
+        activated:
+          "Desde ahora, toda cotización que se emita mostrará esta plantilla.",
+        locked: "Predeterminada · solo lectura",
+        save_as: "Guardar como",
+        save_as_title: "Guardar una copia de esta plantilla",
+        copy_name: "Copia de %{name}",
+        new: "Nueva",
+        new_title: "Nueva plantilla",
+        name: "Nombre",
+        more: "Más acciones",
+        rename: "Renombrar",
+        delete: "Eliminar plantilla",
+        delete_active: "Eliminar (activa otra primero)",
+        delete_title: "¿Eliminar «%{name}»?",
+        delete_content:
+          "Sus diapositivas se eliminan con ella. Las cotizaciones ya emitidas las siguen mostrando.",
+        locked_hint:
+          "Es la presentación original del portal y se muestra tal como fue diseñada. No se edita; «Guardar como» crea una versión editable con cajas libres.",
+        preview: "Ver a pantalla completa",
+        cover: "Portada",
+        sample_company: "tu empresa",
+      },
+      title: "Portal del cliente",
+      description:
+        "Las diapositivas que el cliente ve antes de la cotización. Guarda las plantillas que quieras y elige cuál muestran las cotizaciones; cada cotización emitida conserva las diapositivas tal como estaban ese día. Los textos pueden usar {company}, {contact}, {quote} y {brand}.",
+      saved: "Guardado",
+      saving: "Guardando…",
+      save_failed: "Sin guardar",
+      empty_deck:
+        "Aún no hay diapositivas: el cliente abre directamente una portada sencilla y la cotización. Agrega una diapositiva para presentar tu empresa primero.",
+      add_first: "Agregar la primera diapositiva",
+      add_slide: "Agregar diapositiva",
+      filmstrip_label: "Diapositivas",
+      slide_n: "Diapositiva %{number}",
+      move_up: "Subir",
+      move_down: "Bajar",
+      duplicate: "Duplicar",
+      delete_slide: "Eliminar diapositiva",
+      delete_title: "¿Eliminar esta diapositiva?",
+      delete_content:
+        "Las cotizaciones ya emitidas la siguen mostrando; las nuevas no.",
+      canvas_label: "Editor de diapositiva",
+      canvas_hint:
+        "Arrastra una caja para moverla, arrastra sus esquinas para cambiar su tamaño y haz doble clic en un texto para escribir. Las flechas mueven la caja seleccionada y Suprimir la elimina.",
+      empty_slide:
+        "Diapositiva vacía. Agrega un texto, una imagen o un video desde la barra de arriba.",
+      text_label: "Texto",
+      text_placeholder: "Doble clic para escribir",
+      new_text: "Escribe aquí",
+      add_text: "Texto",
+      add_media: "Imagen o video",
+      toolbar_hint: "Selecciona una caja de la diapositiva para modificarla.",
+      text_size: "Tamaño del texto",
+      text_align: "Alineación",
+      align: {
+        left: "Alinear a la izquierda",
+        center: "Centrar",
+        right: "Alinear a la derecha",
+      },
+      text_color: "Color del texto",
+      color: {
+        light: "Texto claro",
+        dark: "Texto oscuro",
+      },
+      alt_label: "Descripción",
+      alt_placeholder: "Descríbela (para lectores de pantalla)",
+      bring_front: "Traer al frente",
+      send_back: "Enviar al fondo",
+      delete_box: "Quitar de la diapositiva",
+      errors: {
+        upload_type:
+          "Usa una imagen (JPG, PNG, WebP, GIF, AVIF) o un video (MP4, WebM).",
+        upload_too_large:
+          "Demasiado grande: imágenes hasta 10 MB, videos hasta 50 MB.",
+        upload_failed: "No se pudo subir el archivo. Inténtalo de nuevo.",
+        demo_upload:
+          "En la demo no se pueden subir imágenes ni videos: no hay almacenamiento detrás.",
+        save_failed:
+          "No se pudo guardar la diapositiva. Revisa tu conexión e inténtalo de nuevo.",
+      },
+    },
     notifications: {
       title: "Notificaciones",
       empty: "Estás al día",
@@ -1347,7 +1515,40 @@ export const spanishCrmMessages = {
       },
       welcome_title: "Te damos la bienvenida a Atomic CRM",
     },
+    form_section: {
+      product: "Qué es y cómo se vende",
+      pricing: "Precio de lista, moneda e impuesto",
+      product_internal: "Notas para el equipo y si se ofrece",
+      price_list_general: "Código, moneda y si se aplica por defecto",
+      price_list_validity: "Cuándo aplican los precios y lo que conviene saber",
+      tax_identity: "Cómo aparece en las cotizaciones",
+      tax_rate: "Porcentaje, orden y disponibilidad",
+      team_identity: "Nombre y a qué se dedica el equipo",
+      team_budget: "Cuánto se espera que venda y en qué periodo",
+      sale_identity: "Nombre y correo de acceso",
+      sale_access: "Rol y si la cuenta puede iniciar sesión",
+      identity: "Quién es esta persona",
+      position: "Su cargo y su empresa",
+      reach: "Cómo contactarle",
+      contact_misc: "Contexto y responsable de la cuenta",
+      company_contact: "Web, LinkedIn y teléfono",
+      company_context: "Sector, tamaño y facturación",
+      address: "Dónde está la empresa",
+      company_misc: "Notas, enlaces y responsable de la cuenta",
+      qualification: "De dónde viene el lead y cuán caliente está",
+      linked_to: "La empresa y las personas implicadas",
+      deal_misc: "Importe, fecha de cierre, etapa y responsable",
+    },
+    form_page: {
+      unsaved_changes: "Cambios sin guardar",
+      create_hint: "Los campos marcados con * son obligatorios.",
+      edit_hint: "Los cambios se guardan al pulsar Guardar.",
+    },
     common: {
+      see_all_tasks: "Ver todas las tareas",
+      no_results: "Sin resultados",
+      no_results_hint: "Prueba con otra búsqueda o quita los filtros.",
+      record_count: "%{smart_count} registro |||| %{smart_count} registros",
       activity: "Actividad",
       added: "añadido",
       details: "Detalles",
@@ -1383,6 +1584,11 @@ export const spanishCrmMessages = {
       load_more: "Cargar más actividad",
     },
     analytics: {
+      view: {
+        label: "Gráfica o tabla",
+        chart: "Gráfica",
+        table: "Tabla",
+      },
       title: "Analítica",
       see_teams_dashboard: "Objetivos por equipo →",
       load_error:
@@ -1900,6 +2106,36 @@ export const spanishCrmMessages = {
         unweighted_short: "%{amount} sin ponderar",
       },
       latest_activity: "Última actividad",
+      delta: {
+        today: "vs. ayer",
+        this_week: "vs. semana pasada",
+        this_month: "vs. mes pasado",
+        this_quarter: "vs. trimestre pasado",
+        this_year: "vs. año pasado",
+        points: "%{value} pts",
+        no_change: "Sin cambios",
+        basis_hint:
+          "Comparado con el mismo tramo del periodo anterior, hasta el mismo día",
+      },
+      trend_won: "Ganado por mes, últimos 6 meses",
+      trend_win_rate: "Tasa de ganado por mes, últimos 6 meses",
+      pipeline: {
+        title: "Pipeline por etapa",
+        subtitle:
+          "Oportunidades abiertas hoy; no se aplica el periodo de arriba",
+        view_board: "Abrir el tablero",
+        empty: "No hay oportunidades abiertas.",
+        weighted: "Ponderado %{amount}",
+      },
+      closing: {
+        title: "Cierres en los próximos 30 días",
+        subtitle: "Por fecha de cierre prevista",
+        empty:
+          "Ninguna oportunidad tiene cierre previsto en los próximos 30 días.",
+        overdue:
+          "%{smart_count} oportunidad abierta tiene el cierre vencido |||| %{smart_count} oportunidades abiertas tienen el cierre vencido",
+        more: "%{smart_count} más |||| %{smart_count} más",
+      },
       trend_basis:
         "Últimos 6 meses · creadas por fecha de apertura; ganadas y perdidas por cierre previsto",
       latest_activity_error: "Error al cargar la última actividad",
@@ -1961,6 +2197,23 @@ export const spanishCrmMessages = {
       title: "Importar datos",
     },
     settings: {
+      deal_quote_rules: {
+        title: "Pipeline y cotizaciones",
+        help: "A qué etapa mueve una cotización a su oportunidad. Una oportunidad ya ganada o perdida nunca se reabre.",
+        saved: "Regla guardada",
+        save_error: "No se pudo guardar la regla",
+        no_move: "No mover la oportunidad",
+        unknown_stage: "%{stage} (ya no es una etapa)",
+        triggers: {
+          sent: "Se envía la cotización (se genera el enlace)",
+          viewed: "El cliente la abre",
+          commented: "El cliente responde",
+          negotiating: "Pasa a negociación",
+          accepted: "El cliente la acepta",
+          rejected: "El cliente la rechaza (y no hay otra abierta)",
+          expired: "Vence (y no hay otra abierta)",
+        },
+      },
       about: "Acerca de",
       companies: {
         sectors: "Sectores",
@@ -2034,6 +2287,8 @@ export const spanishCrmMessages = {
       help: "Centro de ayuda",
       search: "Buscar",
       toggle: "Mostrar u ocultar la navegación",
+      collapse: "Contraer",
+      expand: "Expandir",
       groups: {
         home: "Inicio",
         sales: "Ventas",

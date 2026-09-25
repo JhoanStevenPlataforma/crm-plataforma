@@ -20,11 +20,15 @@ import { TeamMembers } from "./TeamMembers";
  */
 export function TeamEdit() {
   return (
-    <Edit redirect={false}>
+    <Edit
+      // Wider than a plain form: the tables under it need the room.
+      contentClassName="max-w-6xl"
+      redirect={false}
+    >
       <SimpleForm>
         <TeamInputs />
       </SimpleForm>
-      <div className="p-4 pt-0 flex flex-col gap-6">
+      <div className="mt-6 flex flex-col gap-6">
         <TeamMembers />
         <TeamMemberBudgets />
         <TeamBudgetHistory />

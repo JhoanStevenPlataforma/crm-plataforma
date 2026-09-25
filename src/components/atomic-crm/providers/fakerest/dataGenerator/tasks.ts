@@ -122,7 +122,8 @@ export const generateTasks = (db: Db) => {
     const contact = random.arrayElement(db.contacts);
     contact.nb_tasks = (contact.nb_tasks ?? 0) + 1;
 
-    const taskType = random.arrayElement(defaultTaskTypes).value;
+    const { value: taskType, label: taskTypeLabel } =
+      random.arrayElement(defaultTaskTypes);
     const priority = priorityByKey(random.arrayElement(PRIORITY_DECK));
     const outcome = random.arrayElement(OUTCOME_DECK);
     const createdAtDate = randomDate(new Date(contact.first_seen));
@@ -133,6 +134,16 @@ export const generateTasks = (db: Db) => {
     );
     const isDone = completedAt != null;
     const text = lorem.sentence();
+    // About half the tasks on a contact who is on a deal are about that deal,
+    // as they would be in a real pipeline — otherwise the board's activity
+    // indicator would read "nothing scheduled" on every demo card.
+    const deals = db.deals.filter((deal) =>
+      deal.contact_ids.includes(contact.id),
+    );
+    const deal =
+      deals.length > 0 && datatype.boolean()
+        ? random.arrayElement(deals)
+        : null;
 
     return {
       id,
@@ -150,7 +161,8 @@ export const generateTasks = (db: Db) => {
       priority_label: priority.label,
       priority_rank: priority.rank,
       type_key: taskType,
-      type_label: taskType,
+      // The catalogue label, as `tasks_summary` joins it — not the key.
+      type_label: taskTypeLabel,
       due_date: dueDate.toISOString(),
       completed_at: completedAt?.toISOString() ?? null,
       // The database CHECK ties these two together, so the demo honours it.
@@ -172,9 +184,11 @@ export const generateTasks = (db: Db) => {
       checklist_done: 0,
       blocked_seconds: 0,
       source: "manual",
-      primary_entity_type: "contact",
-      primary_entity_id: contact.id,
-      primary_entity_label: `${contact.first_name} ${contact.last_name}`,
+      primary_entity_type: deal ? "deal" : "contact",
+      primary_entity_id: deal ? deal.id : contact.id,
+      primary_entity_label: deal
+        ? deal.name
+        : `${contact.first_name} ${contact.last_name}`,
       is_overdue: outcome === "overdue",
       // legacy shims, kept in sync exactly as the database does
       contact_id: contact.id,

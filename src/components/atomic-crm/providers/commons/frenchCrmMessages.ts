@@ -193,15 +193,49 @@ export const frenchCrmMessages = {
           'Changez le statut d\'un contact en ajoutant une note à ce contact et en cliquant sur "afficher les options".',
         empty_hint: 'Les contacts avec un statut "chaud" apparaîtront ici.',
         title: "Contacts chauds",
+        subtitle: "Les plus longtemps sans contact d'abord",
+        cooling: "Refroidit",
+        cooling_hint:
+          "%{smart_count} jour sans contact |||| %{smart_count} jours sans contact",
+        last_touch: "Dernier contact : %{date}",
+        filter_label: "Filtrer les contacts chauds",
+        filter_all: "Tous",
+        filter_cooling: "Refroidissent",
+        filter_mine: "Les miens",
+        no_next_task: "Aucune tâche prévue",
+        view_all: "Voir les %{total}",
+        empty_filter: "Aucun contact chaud ne correspond à ce filtre.",
+        call: "Appeler %{name}",
+        email: "Écrire à %{name}",
       },
     },
     deals: {
+      quote_history: {
+        commented: "%{name} a répondu sur le devis",
+        customer: "Le client",
+        by_customer: "par le client",
+      },
       name: "Affaire |||| Affaires",
+      board: {
+        latest_quote: "Dernier devis et son état",
+        amount_from_quote: "Montant repris du devis",
+        probability: "Probabilité %{value}",
+        weighted_short: "Pondéré %{amount}",
+        share: "%{value} du pipeline ouvert",
+        close_date: "Clôture prévue : %{date}",
+        no_close_date: "Pas de date de clôture",
+        next_task: "Prochaine : %{task}",
+        overdue_task: "En retard : %{task}",
+        no_task: "Aucune activité prévue",
+        owner: "Responsable : %{name}",
+        drop_here: "Glissez une affaire ici",
+      },
       fields: {
         name: "Nom",
         description: "Description",
         company_id: "Entreprise",
         contact_ids: "Contacts",
+        sales_id: "Responsable",
         category: "Catégorie",
         amount: "Budget",
         expected_closing_date: "Date de clôture prévue",
@@ -234,6 +268,16 @@ export const frenchCrmMessages = {
       },
       updated: "Affaire mise à jour",
       stage_change: {
+        by_quote: {
+          sent: "Déplacée automatiquement : le devis a été envoyé",
+          viewed: "Déplacée automatiquement : le client a ouvert le devis",
+          commented: "Déplacée automatiquement : le client a répondu",
+          negotiating: "Déplacée automatiquement : le devis est en négociation",
+          accepted: "Déplacée automatiquement : le client a accepté le devis",
+          rejected: "Déplacée automatiquement : le client a refusé le devis",
+          expired: "Déplacée automatiquement : le devis a expiré",
+          generic: "Déplacée automatiquement par un devis",
+        },
         title: "Passer à %{stage}",
         description:
           "%{deal} passe de %{from} à %{to}. Notez ce qui s'est passé, pour que le tableau reste explicable dans trois mois.",
@@ -377,6 +421,10 @@ export const frenchCrmMessages = {
       },
     },
     sales: {
+      field_categories: {
+        person: "Personne",
+        access: "Accès",
+      },
       name: "Utilisateur |||| Utilisateurs",
       fields: {
         first_name: "Prénom",
@@ -408,6 +456,10 @@ export const frenchCrmMessages = {
       },
     },
     teams: {
+      field_categories: {
+        team: "Équipe",
+        budget: "Budget",
+      },
       name: "Équipe |||| Équipes",
       forcedCaseName: "Équipe",
       fields: {
@@ -456,6 +508,11 @@ export const frenchCrmMessages = {
       },
     },
     products: {
+      field_categories: {
+        product: "Produit",
+        pricing: "Prix",
+        internal: "Usage interne",
+      },
       name: "Produit |||| Produits",
       forcedCaseName: "Produit",
       fields: {
@@ -500,6 +557,10 @@ export const frenchCrmMessages = {
       },
     },
     price_lists: {
+      field_categories: {
+        general: "Liste de prix",
+        validity: "Validité",
+      },
       name: "Liste de prix |||| Listes de prix",
       forcedCaseName: "Liste de prix",
       fields: {
@@ -621,6 +682,7 @@ export const frenchCrmMessages = {
         },
       },
       panel: {
+        customer_activity: "Activité du client : %{date}",
         empty: "Aucun devis pour cette opportunité",
         load_error: "Les devis de cette opportunité n’ont pas pu être chargés",
       },
@@ -707,11 +769,23 @@ export const frenchCrmMessages = {
         closed_anonymous:
           "Ce devis ne peut plus recevoir de réponse en ligne. Veuillez contacter la personne qui vous l’a envoyé.",
         landing: {
+          stamp: {
+            open: "En cours",
+            accepted: "Acceptée",
+            rejected: "Refusée",
+            superseded: "Remplacée",
+            expired: "Expirée",
+          },
           company_fallback: "vous",
           sections: "Sections",
           start: "Commencer la proposition",
+          continue: "Continuer",
+          plain_cover_title: "Une proposition préparée pour %{company}",
+          plain_cover_body:
+            "Voici le devis que nous avons préparé, avec tout le détail de la proposition.",
           skip_to_quote: "Voir directement le devis",
           view_quote: "Voir le devis",
+          slide_label: "Diapositive %{number} sur %{total}",
           scroll_hint: "Faites défiler pour découvrir la proposition",
           back_to_top: "Retour en haut",
           quote_eyebrow: "Proposition commerciale",
@@ -940,6 +1014,10 @@ export const frenchCrmMessages = {
       },
     },
     tax_rates: {
+      field_categories: {
+        tax: "Taxe",
+        rate: "Taux et usage",
+      },
       name: "Taxe |||| Taxes",
       forcedCaseName: "Taxe",
       fields: {
@@ -1059,6 +1137,8 @@ export const frenchCrmMessages = {
         empty_value: "(vide)",
         load_more: "Charger les événements plus anciens",
         events: {
+          quote_status_changed: "Statut du devis modifié",
+          quote_commented: "Le client a répondu",
           // Not a task event: the timeline is shared, and this is how a
           // deal's stage transition is labelled on it.
           deal_stage_changed: "Étape modifiée",
@@ -1248,6 +1328,92 @@ export const frenchCrmMessages = {
     },
   },
   crm: {
+    portal_slides: {
+      templates: {
+        label: "Modèle",
+        active: "Affiché dans les devis",
+        active_short: "actif",
+        activate: "Utiliser dans les devis",
+        activated: "Désormais, chaque devis émis affiche ce modèle.",
+        locked: "Par défaut · lecture seule",
+        save_as: "Enregistrer sous",
+        save_as_title: "Enregistrer une copie de ce modèle",
+        copy_name: "Copie de %{name}",
+        new: "Nouveau",
+        new_title: "Nouveau modèle",
+        name: "Nom",
+        more: "Plus d'actions",
+        rename: "Renommer",
+        delete: "Supprimer le modèle",
+        delete_active: "Supprimer (activez-en un autre d'abord)",
+        delete_title: "Supprimer « %{name} » ?",
+        delete_content:
+          "Ses diapositives sont supprimées avec lui. Les devis déjà émis continuent de les afficher.",
+        locked_hint:
+          "C'est la présentation d'origine du portail, affichée telle qu'elle a été conçue. Elle ne se modifie pas ; « Enregistrer sous » crée une version modifiable en blocs libres.",
+        preview: "Voir en plein écran",
+        cover: "Couverture",
+        sample_company: "votre entreprise",
+      },
+      title: "Portail client",
+      description:
+        "Les diapositives que le client voit avant le devis. Gardez autant de modèles que vous voulez et choisissez celui que montrent les devis ; chaque devis émis conserve les diapositives telles qu'elles étaient ce jour-là. Les textes peuvent utiliser {company}, {contact}, {quote} et {brand}.",
+      saved: "Enregistré",
+      saving: "Enregistrement…",
+      save_failed: "Non enregistré",
+      empty_deck:
+        "Aucune diapositive : le client arrive directement sur une couverture simple et le devis. Ajoutez une diapositive pour présenter d'abord votre entreprise.",
+      add_first: "Ajouter la première diapositive",
+      add_slide: "Ajouter une diapositive",
+      filmstrip_label: "Diapositives",
+      slide_n: "Diapositive %{number}",
+      move_up: "Monter",
+      move_down: "Descendre",
+      duplicate: "Dupliquer",
+      delete_slide: "Supprimer la diapositive",
+      delete_title: "Supprimer cette diapositive ?",
+      delete_content:
+        "Les devis déjà émis continuent de l'afficher ; les nouveaux non.",
+      canvas_label: "Éditeur de diapositive",
+      canvas_hint:
+        "Faites glisser un bloc pour le déplacer, ses poignées pour le redimensionner, double-cliquez sur un texte pour écrire. Les flèches déplacent le bloc sélectionné, Suppr le retire.",
+      empty_slide:
+        "Diapositive vide. Ajoutez un texte, une image ou une vidéo depuis la barre ci-dessus.",
+      text_label: "Texte",
+      text_placeholder: "Double-cliquez pour écrire",
+      new_text: "Écrivez ici",
+      add_text: "Texte",
+      add_media: "Image ou vidéo",
+      toolbar_hint: "Sélectionnez un bloc de la diapositive pour le modifier.",
+      text_size: "Taille du texte",
+      text_align: "Alignement",
+      align: {
+        left: "Aligner à gauche",
+        center: "Centrer",
+        right: "Aligner à droite",
+      },
+      text_color: "Couleur du texte",
+      color: {
+        light: "Texte clair",
+        dark: "Texte foncé",
+      },
+      alt_label: "Description",
+      alt_placeholder: "Décrivez-la (pour les lecteurs d'écran)",
+      bring_front: "Mettre au premier plan",
+      send_back: "Mettre à l'arrière-plan",
+      delete_box: "Retirer de la diapositive",
+      errors: {
+        upload_type:
+          "Utilisez une image (JPG, PNG, WebP, GIF, AVIF) ou une vidéo (MP4, WebM).",
+        upload_too_large:
+          "Trop volumineux : images jusqu'à 10 Mo, vidéos jusqu'à 50 Mo.",
+        upload_failed: "Le fichier n'a pas pu être envoyé. Réessayez.",
+        demo_upload:
+          "Impossible d'envoyer des images ou des vidéos dans la démo : aucun stockage derrière.",
+        save_failed:
+          "La diapositive n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.",
+      },
+    },
     notifications: {
       title: "Notifications",
       empty: "Vous êtes à jour",
@@ -1348,7 +1514,43 @@ export const frenchCrmMessages = {
       },
       welcome_title: "Bienvenue sur Atomic CRM",
     },
+    form_section: {
+      product: "Ce que c'est et comment il se vend",
+      pricing: "Prix catalogue, devise et taxe",
+      product_internal: "Notes pour l'équipe, et s'il est proposé",
+      price_list_general: "Code, devise et application par défaut",
+      price_list_validity:
+        "Quand les prix s'appliquent, et ce qu'il faut savoir",
+      tax_identity: "Comment elle apparaît sur les devis",
+      tax_rate: "Pourcentage, ordre et disponibilité",
+      team_identity: "Nom et rôle de l'équipe",
+      team_budget: "Ce que l'équipe doit vendre, et sur quelle période",
+      sale_identity: "Nom et e-mail de connexion",
+      sale_access: "Rôle, et si le compte peut se connecter",
+      identity: "Qui est cette personne",
+      position: "Son poste et son entreprise",
+      reach: "Comment le joindre",
+      contact_misc: "Contexte et responsable du compte",
+      company_contact: "Site web, LinkedIn et téléphone",
+      company_context: "Secteur, taille et chiffre d'affaires",
+      address: "Où se trouve l'entreprise",
+      company_misc: "Notes, liens et responsable du compte",
+      qualification: "D'où vient le lead et à quel point il est chaud",
+      linked_to: "L'entreprise et les personnes impliquées",
+      deal_misc: "Montant, date de clôture, étape et responsable",
+    },
+    form_page: {
+      unsaved_changes: "Modifications non enregistrées",
+      create_hint: "Les champs marqués d'un * sont obligatoires.",
+      edit_hint:
+        "Les modifications sont enregistrées en cliquant sur Enregistrer.",
+    },
     common: {
+      see_all_tasks: "Voir toutes les tâches",
+      no_results: "Aucun résultat",
+      no_results_hint: "Essayez une autre recherche ou retirez les filtres.",
+      record_count:
+        "%{smart_count} enregistrement |||| %{smart_count} enregistrements",
       activity: "Activité",
       added: "ajoutée",
       details: "Détails",
@@ -1384,6 +1586,11 @@ export const frenchCrmMessages = {
       load_more: "Charger plus d'activité",
     },
     analytics: {
+      view: {
+        label: "Graphique ou tableau",
+        chart: "Graphique",
+        table: "Tableau",
+      },
       title: "Analytique",
       see_teams_dashboard: "Objectifs par équipe →",
       load_error:
@@ -1910,6 +2117,36 @@ export const frenchCrmMessages = {
         unweighted_short: "%{amount} non pondéré",
       },
       latest_activity: "Dernière activité",
+      delta: {
+        today: "vs. hier",
+        this_week: "vs. semaine dernière",
+        this_month: "vs. mois dernier",
+        this_quarter: "vs. trimestre dernier",
+        this_year: "vs. année dernière",
+        points: "%{value} pts",
+        no_change: "Stable",
+        basis_hint:
+          "Comparé à la même portion de la période précédente, jusqu'au même jour",
+      },
+      trend_won: "Gagné par mois, 6 derniers mois",
+      trend_win_rate: "Taux de gain par mois, 6 derniers mois",
+      pipeline: {
+        title: "Pipeline par étape",
+        subtitle:
+          "Affaires ouvertes aujourd'hui ; la période ci-dessus ne s'applique pas",
+        view_board: "Ouvrir le tableau",
+        empty: "Aucune affaire ouverte.",
+        weighted: "Pondéré %{amount}",
+      },
+      closing: {
+        title: "Clôtures des 30 prochains jours",
+        subtitle: "Par date de clôture prévue",
+        empty:
+          "Aucune affaire ne doit se conclure dans les 30 prochains jours.",
+        overdue:
+          "%{smart_count} affaire ouverte a dépassé sa date de clôture |||| %{smart_count} affaires ouvertes ont dépassé leur date de clôture",
+        more: "%{smart_count} de plus |||| %{smart_count} de plus",
+      },
       trend_basis:
         "6 derniers mois · créées par date d'ouverture ; gagnées et perdues par clôture prévue",
       latest_activity_error:
@@ -1972,6 +2209,23 @@ export const frenchCrmMessages = {
       title: "Importer des données",
     },
     settings: {
+      deal_quote_rules: {
+        title: "Pipeline et devis",
+        help: "Où un devis lié à une affaire déplace l'affaire. Une affaire déjà gagnée ou perdue n'est jamais rouverte.",
+        saved: "Règle enregistrée",
+        save_error: "La règle n'a pas pu être enregistrée",
+        no_move: "Ne pas déplacer l'affaire",
+        unknown_stage: "%{stage} (n'est plus une étape)",
+        triggers: {
+          sent: "Le devis est envoyé (son lien est créé)",
+          viewed: "Le client l'ouvre",
+          commented: "Le client répond",
+          negotiating: "Il passe en négociation",
+          accepted: "Le client l'accepte",
+          rejected: "Le client le refuse (et aucun autre n'est ouvert)",
+          expired: "Il expire (et aucun autre n'est ouvert)",
+        },
+      },
       about: "À propos",
       companies: {
         sectors: "Secteurs",
@@ -2045,6 +2299,8 @@ export const frenchCrmMessages = {
       help: "Centre d'aide",
       search: "Rechercher",
       toggle: "Afficher ou masquer la navigation",
+      collapse: "Réduire",
+      expand: "Déplier",
       groups: {
         home: "Accueil",
         sales: "Ventes",

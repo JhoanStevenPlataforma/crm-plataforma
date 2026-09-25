@@ -4,7 +4,11 @@ import { useTranslate } from "ra-core";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { formatMoney } from "./teamBudget";
 import { TeamChartCard } from "./TeamChartCard";
-import { barDefaults, bottomLegend, useChartPalette } from "./teamChartTheme";
+import {
+  barDefaults,
+  useChartPalette,
+  horizontalBarProps,
+} from "./teamChartTheme";
 import {
   formatMonthLabel,
   type MonthlyPoint,
@@ -59,19 +63,25 @@ export const MonthlyPerformanceChart = ({
     [lostLabel]: point.lost,
   }));
 
+  const seriesKeys = [wonLabel, pipelineLabel, lostLabel];
+  const seriesColors = [palette.good, palette.inFlight, palette.bad];
+
   return (
-    <TeamChartCard title={title} isEmpty={points.length === 0}>
+    <TeamChartCard
+      legend={seriesKeys.map((label, i) => ({ label, color: seriesColors[i] }))}
+      title={title}
+      isEmpty={points.length === 0}
+    >
       <ResponsiveBar
         data={data}
         indexBy="month"
-        keys={[wonLabel, pipelineLabel, lostLabel]}
+        keys={seriesKeys}
         groupMode="grouped"
-        colors={[palette.good, palette.inFlight, palette.bad]}
-        margin={{ top: 20, right: 20, bottom: 50, left: 70 }}
+        colors={seriesColors}
+        margin={{ top: 20, right: 20, bottom: 28, left: 70 }}
         {...barDefaults}
         enableLabel={false}
         axisLeft={{ format: (value: number) => formatMoney(value, currency) }}
-        legends={bottomLegend}
       />
     </TeamChartCard>
   );
@@ -117,6 +127,7 @@ export const StageBreakdownChart = ({
         colors={[palette.inFlight]}
         margin={{ top: 10, right: 20, bottom: 40, left: 130 }}
         {...barDefaults}
+        {...horizontalBarProps}
         label={(datum) => formatMoney(datum.value ?? 0, currency)}
         axisBottom={{
           format: (value: number) => formatMoney(value, currency),

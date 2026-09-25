@@ -34,9 +34,9 @@ export const SectionCard = ({
   contentClassName?: string;
 }) => (
   <Card className={cn("gap-0 py-0 overflow-hidden", className)}>
-    <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
+    <div className="flex items-start justify-between gap-2 border-b border-border/70 px-4 py-3.5">
       <div className="flex flex-col gap-0.5 min-w-0">
-        <h2 className="text-sm font-semibold truncate">{title}</h2>
+        <h2 className="truncate text-[0.9375rem] font-semibold">{title}</h2>
         {subtitle ? (
           <p className="text-xs text-muted-foreground">{subtitle}</p>
         ) : null}

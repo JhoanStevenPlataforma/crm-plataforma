@@ -77,6 +77,11 @@ export type Deal = {
   stage: string;
   description: string;
   amount: number;
+  /**
+   * The quotation whose total the amount is (`sync_deal_from_quote()`); null
+   * when a person typed it.
+   */
+  amount_source_quote_id?: Identifier | null;
   created_at: string;
   updated_at: string;
   archived_at?: string;
@@ -121,6 +126,10 @@ export type DealStageChange = {
    * task requirement. Null on every move that met it.
    */
   override_reason?: string | null;
+  /** `quote`: moved by a quotation's event (`sync_deal_from_quote()`). */
+  source?: "manual" | "quote";
+  /** The quotation whose event moved it, when `source` is `quote`. */
+  quote_id?: Identifier | null;
 } & Pick<RaRecord, "id">;
 
 /**
