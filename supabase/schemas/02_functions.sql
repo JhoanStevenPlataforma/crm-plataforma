@@ -742,6 +742,19 @@ begin
                 v_name,
                 v_month,
                 (v_month + interval '1 month')::date);
+            -- A partition is a table in its own right: the parent's row level
+            -- security is NOT inherited, and `alter default privileges` in
+            -- 06_grants.sql has just handed `anon`/`authenticated` every
+            -- privilege on it. Left as created, the partition is a hole around
+            -- task_events' RLS -- a direct query to public.task_events_YYYY_MM
+            -- returns every row regardless of owner. Close it here, on the same
+            -- statement that opened it, so the window never exists.
+            execute format(
+                'alter table public.%I enable row level security', v_name);
+            execute format(
+                'alter table public.%I force row level security', v_name);
+            execute format(
+                'revoke all on table public.%I from anon, authenticated', v_name);
             v_created := v_created + 1;
         exception
             when others then
@@ -3212,6 +3225,9 @@ declare
     v_attachments jsonb := nullif(coalesce(current_setting('app.deal_stage_attachments', true), ''), '')::jsonb;
     v_override    text  := nullif(btrim(coalesce(current_setting('app.deal_stage_override', true), '')), '');
     v_for_deal    text  := coalesce(current_setting('app.deal_stage_deal_id', true), '');
+    -- Set by `sync_deal_from_quote()`: the move was a quotation's event.
+    v_source      text  := nullif(coalesce(current_setting('app.deal_stage_source', true), ''), '');
+    v_quote_id    text  := nullif(coalesce(current_setting('app.deal_stage_quote_id', true), ''), '');
 begin
     -- The settings belong to one specific deal. Without this check a second
     -- deal updated later in the same transaction (the kanban reindexes its
@@ -3220,10 +3236,13 @@ begin
         v_reason := null;
         v_attachments := null;
         v_override := null;
+        v_source := null;
+        v_quote_id := null;
     end if;
 
     insert into public.deal_stage_changes
-        (deal_id, from_stage, to_stage, reason, sales_id, attachments, override_reason)
+        (deal_id, from_stage, to_stage, reason, sales_id, attachments,
+         override_reason, source, quote_id)
     values (
         new.id,
         old.stage,
@@ -3235,7 +3254,9 @@ begin
             else (select array_agg(element)
                     from jsonb_array_elements(v_attachments) as element)
         end,
-        v_override
+        v_override,
+        coalesce(v_source, 'manual'),
+        v_quote_id::bigint
     );
 
     return null;
@@ -5714,7 +5735,11 @@ begin
     update public.quote_versions v
        set issued_at      = now(),
            issued_by      = v_actor,
-           party_snapshot = public.quote_party_snapshot(p_quote_id)
+           party_snapshot = public.quote_party_snapshot(p_quote_id),
+           slides         = public.portal_slides_snapshot(),
+           standard_presentation = coalesce((select t.is_system
+                                               from public.portal_templates t
+                                              where t.is_active), false)
      where v.id = v_version.id
     returning * into v_version;
 
@@ -6418,6 +6443,11 @@ as $$
                                            when 'object' then c.config -> 'lightModeLogo' ->> 'src'
                                        end, '')
                            from public.configuration c where c.id = 1)),
+        -- The slides frozen at issue; a version issued before the deck
+        -- existed has none.
+        'slides', coalesce(v.slides, '[]'::jsonb),
+        -- The default template: the designed presentation the build ships.
+        'standard_presentation', v.standard_presentation,
         'actions', jsonb_build_object(
             'can_accept', answerable.is_answerable and exists (
                 select 1 from public.quote_transitions t
@@ -7156,5 +7186,373 @@ begin
             'reason_code', new.payload ->> 'reason_code'));
 
     return new;
+end;
+$$;
+
+--
+-- Customer portal slides (docs/proposals/quote-portal-presentation.md §7)
+--
+
+-- One box of a slide. Everything a customer's browser will render is checked
+-- here, keys included, because the snapshot reaches anybody holding a link.
+-- Media paths are `slides/<uuid>.<ext>` in the public `portal-media` bucket:
+-- the original file name never reaches the path, and there is no SVG (a
+-- document that can carry script, on a public bucket). `builtin/<name>.webp`
+-- names one of the pictures bundled with the app, which the default template
+-- uses -- a closed list, resolved by the browser, never a URL.
+create or replace function public.portal_slide_element_is_valid(p_element jsonb)
+    returns boolean
+    language plpgsql immutable
+    set search_path to ''
+as $$
+declare
+    v_key     text;
+    v_pattern text;
+begin
+    if jsonb_typeof(p_element) is distinct from 'object' then
+        return false;
+    end if;
+    if (p_element - array['id', 'kind', 'x', 'y', 'w', 'h', 'path', 'alt',
+                          'text', 'size', 'align', 'color']) <> '{}'::jsonb then
+        return false;
+    end if;
+    if coalesce(p_element ->> 'id', '') !~ '^[A-Za-z0-9_-]+$'
+       or char_length(p_element ->> 'id') > 40 then
+        return false;
+    end if;
+    foreach v_key in array array['x', 'y', 'w', 'h'] loop
+        if jsonb_typeof(p_element -> v_key) is distinct from 'number' then
+            return false;
+        end if;
+    end loop;
+    if (p_element ->> 'x')::numeric not between 0 and 100
+       or (p_element ->> 'y')::numeric not between 0 and 100
+       or (p_element ->> 'w')::numeric not between 1 and 100
+       or (p_element ->> 'h')::numeric not between 1 and 100 then
+        return false;
+    end if;
+
+    if p_element ->> 'kind' = 'text' then
+        return jsonb_typeof(p_element -> 'text') = 'string'
+           and char_length(p_element ->> 'text') <= 2000
+           and p_element ->> 'size' in ('sm', 'md', 'lg', 'xl')
+           and p_element ->> 'align' in ('left', 'center', 'right')
+           and p_element ->> 'color' in ('light', 'dark')
+           and not (p_element ?| array['path', 'alt']);
+    end if;
+    if p_element ->> 'kind' in ('image', 'video') then
+        -- The extension list follows the kind; a variable rather than an
+        -- inline CASE, which the migration runner's splitter mis-cuts.
+        v_pattern := '^(slides/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|png|gif|avif)|builtin/(cover|company|purpose|certifications)\.webp)$';
+        if p_element ->> 'kind' = 'video' then
+            v_pattern := '^slides/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(mp4|webm)$';
+        end if;
+        return coalesce(p_element ->> 'path', '') ~ v_pattern
+           and (not p_element ? 'alt'
+                or (jsonb_typeof(p_element -> 'alt') = 'string'
+                    and char_length(p_element ->> 'alt') <= 200))
+           and not (p_element ?| array['text', 'size', 'align', 'color']);
+    end if;
+    return false;
+end;
+$$;
+
+-- Whether a template is the one the build ships, which nobody changes. The
+-- migration that seeds it opens `app.portal_template_seed` for the purpose.
+create or replace function public.portal_template_is_locked(p_template_id bigint)
+    returns boolean
+    language sql stable
+    set search_path to ''
+as $$
+    select coalesce(current_setting('app.portal_template_seed', true), '') <> 'on'
+       and exists (select 1 from public.portal_templates t
+                    where t.id = p_template_id and t.is_system);
+$$;
+
+-- A template's limits, the box shape, and the default template's lock. Raised
+-- with a key rather than failing a constraint, so the editor can say what went
+-- wrong.
+create or replace function public.portal_slides_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+declare
+    v_element jsonb;
+begin
+    if (tg_op <> 'INSERT' and public.portal_template_is_locked(old.template_id))
+       or (tg_op <> 'DELETE' and public.portal_template_is_locked(new.template_id)) then
+        raise exception 'the default template cannot be changed; save a copy instead'
+            using errcode = 'check_violation', detail = 'portal_template_locked';
+    end if;
+    if tg_op = 'DELETE' then
+        return old;
+    end if;
+
+    if tg_op = 'INSERT'
+       and (select count(*) from public.portal_slides s
+             where s.template_id = new.template_id) >= 30 then
+        raise exception 'a template holds at most 30 slides'
+            using errcode = 'check_violation', detail = 'portal_slide_limit';
+    end if;
+
+    if jsonb_typeof(new.elements) is distinct from 'array'
+       or jsonb_array_length(new.elements) > 20 then
+        raise exception 'a slide holds at most 20 boxes'
+            using errcode = 'check_violation', detail = 'portal_slide_elements_invalid';
+    end if;
+    for v_element in select value from jsonb_array_elements(new.elements) loop
+        if not public.portal_slide_element_is_valid(v_element) then
+            raise exception 'invalid slide box: %', v_element
+                using errcode = 'check_violation', detail = 'portal_slide_elements_invalid';
+        end if;
+    end loop;
+
+    new.updated_at := now();
+    return new;
+end;
+$$;
+
+-- The default template: renamed, edited or deleted by nobody. The only thing
+-- anybody may change on it is whether it is the active one.
+create or replace function public.portal_templates_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.portal_template_seed', true), '') = 'on' then
+        if tg_op = 'DELETE' then return old; else return new; end if;
+    end if;
+    if tg_op = 'INSERT' and new.is_system then
+        raise exception 'only the build ships a default template'
+            using errcode = 'check_violation', detail = 'portal_template_locked';
+    end if;
+    if tg_op = 'DELETE' and old.is_system then
+        raise exception 'the default template cannot be deleted'
+            using errcode = 'check_violation', detail = 'portal_template_locked';
+    end if;
+    if tg_op = 'UPDATE'
+       and (old.is_system or new.is_system)
+       and (to_jsonb(old) - array['is_active', 'updated_at'])
+           is distinct from (to_jsonb(new) - array['is_active', 'updated_at']) then
+        raise exception 'the default template cannot be changed; save a copy instead'
+            using errcode = 'check_violation', detail = 'portal_template_locked';
+    end if;
+    if tg_op = 'DELETE' then
+        return old;
+    end if;
+    new.updated_at := now();
+    return new;
+end;
+$$;
+
+-- Makes one template the one every quotation issued from now on shows. One
+-- statement per row, the old one first, so the one-active index never sees
+-- two; security invoker, so the admin-only update policy is the gate.
+create or replace function public.activate_portal_template(p_template_id bigint)
+    returns void
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if not public.is_admin() then
+        raise exception 'only admins choose the active template'
+            using errcode = 'insufficient_privilege';
+    end if;
+    update public.portal_templates set is_active = false
+     where is_active and id <> p_template_id;
+    update public.portal_templates set is_active = true
+     where id = p_template_id;
+    if not found then
+        raise exception 'portal template % does not exist', p_template_id
+            using errcode = 'no_data_found', detail = 'portal_template_missing';
+    end if;
+end;
+$$;
+
+-- "Save as": a new template with a copy of every slide of another one. The
+-- copy is never active and never the default; security invoker, so only an
+-- admin's insert passes.
+create or replace function public.duplicate_portal_template(p_template_id bigint, p_name text)
+    returns bigint
+    language plpgsql
+    set search_path to ''
+as $$
+declare
+    v_id bigint;
+begin
+    if not exists (select 1 from public.portal_templates where id = p_template_id) then
+        raise exception 'portal template % does not exist', p_template_id
+            using errcode = 'no_data_found', detail = 'portal_template_missing';
+    end if;
+    insert into public.portal_templates (name) values (btrim(p_name))
+    returning id into v_id;
+    insert into public.portal_slides (template_id, position, elements)
+    select v_id, s.position, s.elements
+      from public.portal_slides s
+     where s.template_id = p_template_id
+     order by s.position, s.id;
+    return v_id;
+end;
+$$;
+
+-- What `issue_quote_version()` freezes: the ACTIVE template's slides as they
+-- stand, in order. The default template contributes none -- the page draws its
+-- designed presentation from `standard_presentation` -- and with no active
+-- template there are none either: the plain cover.
+create or replace function public.portal_slides_snapshot()
+    returns jsonb
+    language sql stable
+    set search_path to ''
+as $$
+    select coalesce(jsonb_agg(jsonb_build_object('elements', s.elements)
+                              order by s.position, s.id), '[]'::jsonb)
+      from public.portal_slides s
+      join public.portal_templates t on t.id = s.template_id
+     where t.is_active and not t.is_system;
+$$;
+
+--
+-- The pipeline follows its quotations
+--
+
+-- Moves a quotation's deal for one of its events, and keeps the deal's amount
+-- on the quotation's total. The ONE place a quotation touches its deal; called
+-- by the two triggers below, so no path that changes a quotation's status (or
+-- lets the customer write) can forget to move the deal.
+--
+-- Deliberately NOT `move_deal_stage()`: that function asks a person for a
+-- reason and for the completed-task rule, and the actor here is often the
+-- customer or the expiry sweeper. The cause is recorded instead
+-- (`deal_stage_changes.source = 'quote'` and the quotation), which is what
+-- makes the automatic move auditable without being blockable.
+create or replace function public.sync_deal_from_quote(
+    p_quote_id bigint,
+    p_trigger  text
+) returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote       public.quotes;
+    v_rule        public.deal_quote_stage_rules;
+    v_deal        public.deals;
+    v_is_closed   boolean;
+    v_total       numeric;
+    v_is_fixed    boolean;
+    v_index       integer;
+begin
+    select * into v_quote from public.quotes where id = p_quote_id;
+    if not found or v_quote.deal_id is null then
+        return;
+    end if;
+
+    select * into v_rule from public.deal_quote_stage_rules where trigger_key = p_trigger;
+    if not found then
+        return;
+    end if;
+
+    -- Serialises two quotations acting on one deal at the same time.
+    select * into v_deal from public.deals where id = v_quote.deal_id for update;
+    if not found or v_deal.archived_at is not null then
+        return;
+    end if;
+
+    v_is_closed := exists (
+        select 1 from public.deal_quote_stage_rules r
+         where r.closes and r.to_stage = v_deal.stage);
+
+    -- The amount: the total of the version the customer was sent, and fixed
+    -- once a quotation of this deal was accepted (a later proposal on the same
+    -- deal does not rewrite a sale already made).
+    if p_trigger in ('sent', 'accepted') and not v_is_closed then
+        v_is_fixed := exists (
+            select 1 from public.quotes q
+              join public.quote_statuses st on st.key = q.status_key
+             where q.id = v_deal.amount_source_quote_id
+               and q.id <> p_quote_id
+               and st.counts_as_won);
+        if not v_is_fixed then
+            select v.total into v_total
+              from public.quote_versions v
+             where v.quote_id = p_quote_id
+               and v.issued_at is not null
+               and v.superseded_at is null
+             order by v.version_number desc
+             limit 1;
+            if v_total is not null then
+                -- `deals.amount` is a whole number; the quotation keeps the cents.
+                update public.deals
+                   set amount = round(v_total)::bigint,
+                       amount_source_quote_id = p_quote_id,
+                       updated_at = now()
+                 where id = v_deal.id
+                   and (amount is distinct from round(v_total)::bigint
+                        or amount_source_quote_id is distinct from p_quote_id);
+            end if;
+        end if;
+    end if;
+
+    if v_is_closed or v_deal.stage = v_rule.to_stage then
+        return;
+    end if;
+
+    if v_rule.only_if_no_open_quote and exists (
+        select 1 from public.quotes q
+          join public.quote_statuses st on st.key = q.status_key
+         where q.deal_id = v_deal.id
+           and q.id <> p_quote_id
+           and st.is_open) then
+        return;
+    end if;
+
+    -- On top of its new column, where the board shows what just happened.
+    select coalesce(min(d.index), 0) - 1 into v_index
+      from public.deals d
+     where d.stage = v_rule.to_stage and d.archived_at is null;
+
+    perform set_config('app.deal_stage_reason', 'quote:' || p_trigger, true);
+    perform set_config('app.deal_stage_deal_id', v_deal.id::text, true);
+    perform set_config('app.deal_stage_source', 'quote', true);
+    perform set_config('app.deal_stage_quote_id', p_quote_id::text, true);
+
+    update public.deals
+       set stage = v_rule.to_stage,
+           index = greatest(v_index, -32768),
+           updated_at = now()
+     where id = v_deal.id;
+
+    perform set_config('app.deal_stage_reason', '', true);
+    perform set_config('app.deal_stage_deal_id', '', true);
+    perform set_config('app.deal_stage_source', '', true);
+    perform set_config('app.deal_stage_quote_id', '', true);
+end;
+$$;
+
+-- AFTER UPDATE OF status_key ON quotes: every status change of a quotation,
+-- whoever made it (the rep, the customer on the portal, the sweeper), reaches
+-- its deal. Every status change goes through `apply_quote_status()`, and every
+-- one of those lands here.
+create or replace function public.quotes_sync_deal() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    perform public.sync_deal_from_quote(new.id, new.status_key);
+    return null;
+end;
+$$;
+
+-- AFTER INSERT ON quote_portal_events: the customer writing back is what opens
+-- a negotiation. Portal events are the customer's by construction (the team
+-- writes in `quote_comments`).
+create or replace function public.quote_portal_events_sync_deal() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if new.event_type = 'commented' then
+        perform public.sync_deal_from_quote(new.quote_id, 'commented');
+    end if;
+    return null;
 end;
 $$;

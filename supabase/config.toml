@@ -170,8 +170,10 @@ verify_jwt = false
 verify_jwt = false
 [functions.users]
 verify_jwt = false
-[functions.mcp]
-verify_jwt = false
+# The MCP function is disabled (audit AUD-001: role re-escalation to postgres).
+# It is gated off by MCP_ENABLED in its own handler; its config stanza is removed
+# so it is not treated as a deployed no-JWT endpoint. See mcp/index.ts before
+# re-enabling.
 # The customer portal: a customer holds a quotation link, not a CRM session.
 # The token in the request body is the credential (docs/proposals/quotes-cpq-module.md §6).
 [functions.quote-portal]

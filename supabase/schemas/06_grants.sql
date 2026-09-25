@@ -173,6 +173,47 @@ grant all on function public.claim_task_notifications(public.reminder_channel[],
 grant all on function public.complete_task_notification(bigint, text, text, text, integer) to service_role;
 grant all on function public.requeue_stale_task_notifications(interval) to service_role;
 
+-- Internal SECURITY DEFINER helpers: service_role and the triggers only.
+--
+-- A `grant ... to service_role` above does NOT make a function service-only:
+-- Postgres grants EXECUTE to PUBLIC on every new function, and anon/authenticated
+-- are members of PUBLIC, so each of these was reachable by any browser session
+-- (and some by anon) despite being meant for triggers and the workers alone.
+-- Being SECURITY DEFINER, they run with the owner's privileges, so a caller
+-- could forge audit events (emit_task_event), cancel tasks it cannot see
+-- (set_task_status_system) or create tables (ensure_task_events_partitions).
+-- Their legitimate callers are definer functions/triggers running as the owner,
+-- which do not need the caller to hold EXECUTE, so revoking is safe.
+-- security_invariants.test.sql pins this shut against the next helper added.
+revoke all on function public.emit_task_event(bigint, public.task_event_type, bigint, jsonb, jsonb, jsonb, text, text) from public, anon, authenticated;
+revoke all on function public.set_task_status_system(bigint, text, public.task_event_type, jsonb) from public, anon, authenticated;
+revoke all on function public.sync_comment_mentions(bigint, bigint, text, bigint) from public, anon, authenticated;
+revoke all on function public.refresh_attachment_counter(bigint) from public, anon, authenticated;
+revoke all on function public.refresh_checklist_counters(bigint) from public, anon, authenticated;
+revoke all on function public.reminder_recipient_ids(jsonb) from public, anon, authenticated;
+revoke all on function public.dispatch_due_reminders(integer) from public, anon, authenticated;
+
+-- UI-facing SECURITY DEFINER functions: authenticated only, never anon.
+--
+-- These are legitimately called by a signed-in user (predicates the UI reads,
+-- the two task/deal write RPCs, the quote RPCs). They kept the EXECUTE-to-PUBLIC
+-- grant as well, which handed the same access to `anon` -- including the write
+-- path transition_task. The project principle is that no anon session reaches
+-- the database (the customer portal is an edge function holding service_role),
+-- so `anon` must execute none of these. Revoking PUBLIC + anon leaves the
+-- authenticated grant (from `alter default privileges` below, or the explicit
+-- grants above) intact; verified per-function. security_invariants.test.sql
+-- asserts anon executes zero SECURITY DEFINER function.
+revoke all on function public.can_manage_all() from public, anon;
+revoke all on function public.can_see_deal(bigint) from public, anon;
+revoke all on function public.can_see_task(bigint) from public, anon;
+revoke all on function public.compute_reminder_next_fire(jsonb, timestamp with time zone) from public, anon;
+revoke all on function public.current_sale_id() from public, anon;
+revoke all on function public.current_sales_role() from public, anon;
+revoke all on function public.is_admin() from public, anon;
+revoke all on function public.task_has_open_blockers(bigint) from public, anon;
+revoke all on function public.transition_task(bigint, text, text, jsonb) from public, anon;
+
 -- Table grants
 grant all on table public.companies to anon;
 grant all on table public.companies to authenticated;
@@ -824,3 +865,57 @@ grant execute on function public.quote_portal_accept(bytea, text, text, inet, te
 grant execute on function public.quote_portal_reject(bytea, text, text, text, text, inet, text) to service_role;
 grant execute on function public.quote_portal_comment(bytea, text, text, text, inet, text) to service_role;
 grant execute on function public.quote_portal_version(bytea) to service_role;
+
+--
+-- Customer portal slides. No `anon` grant: the customer reads the frozen copy
+-- through the `quote-portal` edge function, never this table.
+--
+revoke all on table public.portal_templates from anon, authenticated;
+grant select, insert, update, delete on table public.portal_templates to authenticated;
+grant all on table public.portal_templates to service_role;
+revoke all on sequence public.portal_templates_id_seq from anon, authenticated;
+grant usage on sequence public.portal_templates_id_seq to authenticated;
+grant all on sequence public.portal_templates_id_seq to service_role;
+
+revoke all on function public.portal_template_is_locked(bigint) from public, anon;
+grant execute on function public.portal_template_is_locked(bigint) to authenticated;
+grant execute on function public.portal_template_is_locked(bigint) to service_role;
+revoke all on function public.portal_templates_guard() from public, anon, authenticated;
+grant execute on function public.portal_templates_guard() to service_role;
+revoke all on function public.activate_portal_template(bigint) from public, anon;
+grant execute on function public.activate_portal_template(bigint) to authenticated;
+grant execute on function public.activate_portal_template(bigint) to service_role;
+revoke all on function public.duplicate_portal_template(bigint, text) from public, anon;
+grant execute on function public.duplicate_portal_template(bigint, text) to authenticated;
+grant execute on function public.duplicate_portal_template(bigint, text) to service_role;
+
+revoke all on table public.portal_slides from anon, authenticated;
+grant select, insert, update, delete on table public.portal_slides to authenticated;
+grant all on table public.portal_slides to service_role;
+revoke all on sequence public.portal_slides_id_seq from anon, authenticated;
+grant usage on sequence public.portal_slides_id_seq to authenticated;
+grant all on sequence public.portal_slides_id_seq to service_role;
+
+revoke all on function public.portal_slide_element_is_valid(jsonb) from public, anon;
+grant execute on function public.portal_slide_element_is_valid(jsonb) to authenticated;
+grant execute on function public.portal_slide_element_is_valid(jsonb) to service_role;
+revoke all on function public.portal_slides_guard() from public, anon, authenticated;
+grant execute on function public.portal_slides_guard() to service_role;
+revoke all on function public.portal_slides_snapshot() from public, anon;
+grant execute on function public.portal_slides_snapshot() to authenticated;
+grant execute on function public.portal_slides_snapshot() to service_role;
+
+-- The deal follows its quotations.
+revoke all on table public.deal_quote_stage_rules from anon, authenticated;
+grant select, insert, update, delete on table public.deal_quote_stage_rules to authenticated;
+grant all on table public.deal_quote_stage_rules to service_role;
+revoke all on sequence public.deal_quote_stage_rules_id_seq from anon, authenticated;
+grant usage, select on sequence public.deal_quote_stage_rules_id_seq to authenticated;
+grant all on sequence public.deal_quote_stage_rules_id_seq to service_role;
+
+revoke all on function public.sync_deal_from_quote(bigint, text) from public, anon, authenticated;
+revoke all on function public.quotes_sync_deal() from public, anon, authenticated;
+revoke all on function public.quote_portal_events_sync_deal() from public, anon, authenticated;
+grant execute on function public.sync_deal_from_quote(bigint, text) to service_role;
+grant execute on function public.quotes_sync_deal() to service_role;
+grant execute on function public.quote_portal_events_sync_deal() to service_role;

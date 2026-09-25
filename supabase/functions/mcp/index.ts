@@ -625,10 +625,36 @@ function withCorsHeaders(response: Response): Response {
 
 // --- Route Dispatcher ---
 
+// Kill-switch: this function is DISABLED by default (audit AUD-001).
+//
+// executeQueryWithRLS() runs caller-supplied SQL on a connection opened as the
+// superuser `postgres` and only lowers the role with a REVERSIBLE
+// `set_config('role','authenticated')`. A query the validator accepts as
+// read-only can call `set_config('role','postgres', true)` and, from that point
+// in the same statement, read and write the whole database -- auth.users
+// included -- with row level security off. It was verified end to end.
+//
+// Until that is fixed it stays off. To re-enable it you MUST first:
+//   1. open the pool as the `authenticator` role (a non-superuser that can only
+//      SET ROLE to anon/authenticated/service_role), NOT as `postgres`, e.g. a
+//      dedicated MCP_DB_URL pointing at authenticator; and
+//   2. reject `set_config`/`SET ROLE`/`RESET` in validateSql.ts.
+// Then set MCP_ENABLED=true. Removing this guard without (1) reopens the hole.
+const MCP_ENABLED = Deno.env.get("MCP_ENABLED") === "true";
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (!MCP_ENABLED) {
+    return withCorsHeaders(
+      new Response(
+        JSON.stringify({ error: "mcp_disabled" }),
+        { status: 403, headers: { "Content-Type": "application/json" } },
+      ),
+    );
   }
 
   const url = new URL(req.url);

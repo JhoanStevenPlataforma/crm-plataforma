@@ -4,6 +4,7 @@ import { corsHeaders, OptionsMiddleware } from "../_shared/cors.ts";
 import { createErrorResponse } from "../_shared/utils.ts";
 import { AuthMiddleware, UserMiddleware } from "../_shared/authentication.ts";
 import { getUserSale } from "../_shared/getUserSale.ts";
+import { buildAuthUserUpdate } from "./authUpdate.ts";
 
 async function updateSaleDisabled(user_id: string, disabled: boolean) {
   return await supabaseAdmin
@@ -221,11 +222,16 @@ async function patchUser(req: Request, currentUserSale: any) {
   }
 
   const { data, error: userError } =
-    await supabaseAdmin.auth.admin.updateUserById(sale.user_id, {
-      email,
-      ban_duration: disabled ? "87600h" : "none",
-      user_metadata: { first_name, last_name },
-    });
+    await supabaseAdmin.auth.admin.updateUserById(
+      sale.user_id,
+      buildAuthUserUpdate({
+        isAdmin,
+        email,
+        disabled,
+        firstName: first_name,
+        lastName: last_name,
+      }),
+    );
 
   if (!data?.user || userError) {
     console.error("Error patching user:", userError);
