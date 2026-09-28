@@ -176,4 +176,24 @@ describe("spanish catalog parity", () => {
     // so a key only Spanish has is a typo rather than an upstream addition.
     expect([...spanish].filter((key) => !english.has(key))).toEqual([]);
   });
+
+  it("speaks to the team as tú; only the customer's portal says usted", () => {
+    // The portal addresses an outside customer, where "usted" is the business
+    // register. Everything else is the team's own tool.
+    const FORMAL =
+      /\busted\b|\b(Pida|Escriba|Cópielo|Revise|Elija|Introduzca|Seleccione|Pulse)\b|envíelo/;
+    const valueAt = (path: string) =>
+      path
+        .split(".")
+        .reduce<unknown>(
+          (node, key) => (node as Record<string, unknown>)[key],
+          spanishCrmMessages,
+        );
+
+    const formal = leafPaths(spanishCrmMessages)
+      .filter((path) => !path.startsWith("resources.quotes.portal."))
+      .filter((path) => FORMAL.test(String(valueAt(path))));
+
+    expect(formal).toEqual([]);
+  });
 });

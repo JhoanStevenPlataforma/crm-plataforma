@@ -749,11 +749,11 @@ export const spanishCrmMessages = {
         gate_no_rule:
           "Este documento otorga %{percent}% de descuento. No hay ningún tope vigente.",
         gate_blocked:
-          "Este documento otorga %{percent}% de descuento, por encima del %{max}% que usted tiene permitido (%{lines} línea(s) por encima del tope).",
+          "Este documento otorga %{percent}% de descuento, por encima del %{max}% que tienes permitido (%{lines} línea(s) por encima del tope).",
         gate_blocked_hint:
-          "Pida aprobación: una aprobación sube el tope al de quien aprueba.",
+          "Pide aprobación: una aprobación sube el tope al de quien aprueba.",
         gate_blocked_admin:
-          "Como administrador puede enviarla igual, por escrito. El motivo queda guardado con el movimiento.",
+          "Como administrador puedes enviarla igual, por escrito. El motivo queda guardado con el movimiento.",
         reason: "Por qué este descuento",
         reason_placeholder: "¿Qué justifica el descuento otorgado?",
         reason_hint:
@@ -778,7 +778,7 @@ export const spanishCrmMessages = {
         close_anyway: "Cerrar sin copiar",
         title: "Enlace a la versión %{version}",
         description:
-          "Este enlace se muestra una sola vez y no se guarda en ninguna parte: solo queda su huella. Cópielo ahora — después la única salida es crear uno nuevo. Si lo abre usted mismo, cuenta como una visita del cliente.",
+          "Este enlace se muestra una sola vez y no se guarda en ninguna parte: solo queda su huella. Cópialo ahora — después la única salida es crear uno nuevo. Si lo abres tú mismo, cuenta como una visita del cliente.",
         url: "Enlace para el cliente",
         copy: "Copiar el enlace",
         expires: "Deja de funcionar el %{date}",
@@ -974,7 +974,7 @@ export const spanishCrmMessages = {
       },
       print: {
         preparing: "Preparando el documento…",
-        ready: "En el cuadro de impresión, elija «Guardar como PDF».",
+        ready: "En el cuadro de impresión, elige «Guardar como PDF».",
         back: "Volver a la cotización",
         again: "Imprimir de nuevo",
         version_missing:
@@ -984,7 +984,7 @@ export const spanishCrmMessages = {
         title: "Conversación",
         empty:
           "Aún no hay comentarios. Las notas internas quedan en el equipo; las compartidas las ve el cliente en el enlace de la cotización.",
-        placeholder: "Escriba un comentario…",
+        placeholder: "Escribe un comentario…",
         share: "Compartir con el cliente",
         share_on:
           "El cliente lo leerá en el enlace de la cotización. Después no se podrá volver interno.",
@@ -1025,7 +1025,7 @@ export const spanishCrmMessages = {
       errors: {
         generic: "No se pudo actualizar la cotización",
         quote_version_frozen:
-          "Esta versión fue emitida: es el documento que vio el cliente y no se puede modificar. Revise la cotización para abrir una nueva.",
+          "Esta versión fue emitida: es el documento que vio el cliente y no se puede modificar. Revisa la cotización para abrir una nueva.",
         quote_version_column_protected:
           "Aquí solo se pueden cambiar la vigencia, las condiciones y el descuento de un borrador.",
         quote_not_draft:
@@ -1037,11 +1037,11 @@ export const spanishCrmMessages = {
         quote_not_issued:
           "Todavía no se ha emitido nada, así que no hay documento del que partir.",
         quote_discount_exceeds_limit:
-          "El descuento otorgado supera su límite. Pida aprobación o pida a un administrador que lo autorice.",
+          "El descuento otorgado supera tu límite. Pide aprobación o pide a un administrador que lo autorice.",
         quote_discount_reason_required:
           "Un descuento de este tamaño necesita un motivo escrito antes de enviarse.",
         quote_draft_exists:
-          "Esta cotización ya tiene un borrador abierto: envíelo en lugar de empezar otro.",
+          "Esta cotización ya tiene un borrador abierto: envíalo en lugar de empezar otro.",
         quote_validity_elapsed:
           "La oferta ya venció, así que cualquier enlace nacería muerto. Amplíe primero la vigencia.",
         quote_header_derived:
@@ -1049,7 +1049,7 @@ export const spanishCrmMessages = {
         quote_empty: "Una cotización sin líneas no se puede enviar.",
         quote_no_draft: "No hay ningún borrador que enviar.",
         quote_transition_actor_not_allowed:
-          "Ese movimiento le corresponde al cliente o al sistema, no a usted.",
+          "Ese movimiento le corresponde al cliente o al sistema, no a ti.",
         quote_approval_requires_manager:
           "Solo un gerente puede aprobar una cotización — aprobar la propia sería fijarse el límite uno mismo.",
       },
