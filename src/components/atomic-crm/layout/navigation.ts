@@ -5,7 +5,6 @@ import {
   Contact,
   FileBarChart,
   FileSignature,
-  FileText,
   Handshake,
   Import,
   LayoutDashboard,
@@ -33,13 +32,12 @@ import { TEAMS_DASHBOARD_PATH } from "../teams/teamsDashboardPath";
 /**
  * Written out rather than imported from the page modules that declare them
  * (`SettingsPage.path` and friends). Importing a page here to read one string
- * pulls that whole page into the layout chunk, so the settings forms and the
- * changelog would load before the first screen paints. The pages keep declaring
+ * pulls that whole page into the layout chunk, so the settings forms would load
+ * before the first screen paints. The pages keep declaring
  * the route they mount on; these are the menu's links to them.
  */
 const SETTINGS_PATH = "/settings";
 const IMPORT_PATH = "/import";
-const CHANGELOG_PATH = "/changelog";
 
 /**
  * The sidebar menu, as data.
@@ -47,7 +45,7 @@ const CHANGELOG_PATH = "/changelog";
  * Written by hand rather than derived from `useResourceDefinitions()`, which is
  * what `admin/app-sidebar.tsx` does. That hook can only produce a flat list of
  * resources, and half of this menu is not a resource: analytics, the team
- * dashboard, settings, import and the changelog are all `CustomRoutes`. Deriving
+ * dashboard, settings and import are all `CustomRoutes`. Deriving
  * the menu would silently drop them, which is how they ended up buried in the
  * avatar dropdown in the first place.
  *
@@ -311,13 +309,6 @@ export const NAV_SECTIONS: NavSection[] = [
         to: IMPORT_PATH,
         match: "/import/*",
         icon: Import,
-      },
-      {
-        key: "changelog",
-        labelKey: "crm.changelog.title",
-        to: CHANGELOG_PATH,
-        match: "/changelog/*",
-        icon: FileText,
       },
     ],
   },

@@ -136,6 +136,30 @@ describe("convertLead", () => {
     expect(deals[0].contact_ids).toEqual([contactId]);
   });
 
+  test("dates the new deal only when a closing date is given", async () => {
+    const dataProvider = buildProvider([
+      buildLead({ id: 1 }),
+      buildLead({ id: 2 }),
+    ]);
+
+    await convertLead(
+      1,
+      { createDeal: true, dealExpectedClosingDate: "2026-12-15" },
+      dataProvider,
+    );
+    await convertLead(2, { createDeal: true }, dataProvider);
+
+    const { data: deals } = await dataProvider.getList<Deal>("deals", {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: "id", order: "ASC" },
+      filter: {},
+    });
+    expect(deals.map((deal) => deal.expected_closing_date)).toEqual([
+      "2026-12-15",
+      null,
+    ]);
+  });
+
   test("names the deal after the lead when no name is given", async () => {
     const dataProvider = buildProvider([buildLead({ id: 1 })]);
 

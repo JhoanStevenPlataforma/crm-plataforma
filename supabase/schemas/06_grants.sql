@@ -26,9 +26,8 @@ grant all on function public.current_sales_role() to anon;
 grant all on function public.current_sales_role() to authenticated;
 grant all on function public.current_sales_role() to service_role;
 
-grant all on function public.convert_lead(bigint, boolean, text, bigint) to anon;
-grant all on function public.convert_lead(bigint, boolean, text, bigint) to authenticated;
-grant all on function public.convert_lead(bigint, boolean, text, bigint) to service_role;
+grant all on function public.convert_lead(bigint, boolean, text, bigint, date) to authenticated;
+grant all on function public.convert_lead(bigint, boolean, text, bigint, date) to service_role;
 
 grant all on function public.get_avatar_for_email(text) to anon;
 grant all on function public.get_avatar_for_email(text) to authenticated;

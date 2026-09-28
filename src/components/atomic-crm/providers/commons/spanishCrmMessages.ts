@@ -175,6 +175,16 @@ export const spanishCrmMessages = {
           "Todos los datos se transferirán al segundo contacto. Esta acción no se puede deshacer.",
         warning_title: "Atención: operación destructiva",
         what_will_be_merged: "Qué se va a fusionar:",
+        notes_reassigned:
+          "Se reasignará %{smart_count} nota |||| Se reasignarán %{smart_count} notas",
+        tasks_reassigned:
+          "Se reasignará %{smart_count} tarea |||| Se reasignarán %{smart_count} tareas",
+        deals_updated:
+          "Se actualizará %{smart_count} oportunidad |||| Se actualizarán %{smart_count} oportunidades",
+        emails_added:
+          "Se añadirá %{smart_count} dirección de email |||| Se añadirán %{smart_count} direcciones de email",
+        phones_added:
+          "Se añadirá %{smart_count} teléfono |||| Se añadirán %{smart_count} teléfonos",
       },
       filters: {
         before_last_month: "Antes del mes pasado",
@@ -1350,6 +1360,85 @@ export const spanishCrmMessages = {
     },
   },
   crm: {
+    configuration: {
+      companySectors: {
+        "communication-services": "Servicios de comunicación",
+        "consumer-discretionary": "Consumo discrecional",
+        "consumer-staples": "Consumo básico",
+        energy: "Energía",
+        financials: "Finanzas",
+        "health-care": "Salud",
+        industrials: "Industria",
+        "information-technology": "Tecnologías de la información",
+        materials: "Materiales",
+        "real-estate": "Inmobiliario",
+        utilities: "Servicios públicos",
+      },
+      dealCategories: {
+        other: "Otro",
+        copywriting: "Redacción",
+        "print-project": "Proyecto de impresión",
+        "ui-design": "Diseño de interfaz",
+        "website-design": "Diseño web",
+      },
+      dealStages: {
+        opportunity: "Oportunidad",
+        "proposal-sent": "Propuesta enviada",
+        "in-negociation": "En negociación",
+        won: "Ganada",
+        lost: "Perdida",
+        delayed: "Aplazada",
+      },
+      leadSources: {
+        web: "Sitio web",
+        referral: "Recomendación",
+        event: "Evento",
+        outbound: "Prospección",
+        partner: "Socio",
+        other: "Otro",
+      },
+      leadStatuses: {
+        new: "Nuevo",
+        contacted: "Contactado",
+        qualified: "Cualificado",
+        unqualified: "No cualificado",
+      },
+      noteStatuses: {
+        cold: "Frío",
+        warm: "Templado",
+        hot: "Caliente",
+        "in-contract": "En contrato",
+      },
+      productCategories: {
+        hardware: "Hardware",
+        software: "Software",
+        services: "Servicios profesionales",
+        support: "Soporte",
+        training: "Formación",
+        other: "Otro",
+      },
+      productUnits: {
+        unit: "Unidad",
+        hour: "Hora",
+        day: "Día",
+        month: "Mes",
+        year: "Año",
+        license: "Licencia",
+        kg: "Kilogramo",
+        m: "Metro",
+      },
+      taskTypes: {
+        none: "Ninguno",
+        email: "Email",
+        demo: "Demostración",
+        lunch: "Comida",
+        meeting: "Reunión",
+        "follow-up": "Seguimiento",
+        "thank-you": "Agradecimiento",
+        ship: "Envío",
+        call: "Llamada",
+      },
+    },
     duplicates: {
       contact_exists: "Ya existe un contacto con este correo:",
       company_exists: "Ya existe una empresa con este nombre:",
@@ -1604,9 +1693,6 @@ export const spanishCrmMessages = {
       loading: "Cargando...",
       me: "Yo",
       task_count: "%{smart_count} tarea |||| %{smart_count} tareas",
-    },
-    changelog: {
-      title: "Novedades",
     },
     activity: {
       added_company: "%{name} ha añadido la empresa",
@@ -2218,6 +2304,7 @@ export const spanishCrmMessages = {
       save_failed: "no se pudo guardar",
     },
     import: {
+      file: "Archivo",
       action: {
         download_error_report: "Descargar el informe de errores",
         import: "Importar",
@@ -2261,7 +2348,6 @@ export const spanishCrmMessages = {
           expired: "Vence (y no hay otra abierta)",
         },
       },
-      about: "Acerca de",
       companies: {
         sectors: "Sectores",
       },
@@ -2306,6 +2392,10 @@ export const spanishCrmMessages = {
         },
       },
     },
+    kanban: {
+      drag_instructions:
+        "Pulsa la barra espaciadora para coger la tarjeta. Muévela con las flechas, suéltala con espacio o cancela con Escape.",
+    },
     theme: {
       dark: "Oscuro",
       label: "Tema",
@@ -2331,6 +2421,9 @@ export const spanishCrmMessages = {
     },
     navigation: {
       label: "Navegación del CRM",
+      more_pages: "Más páginas",
+      previous: "Anterior",
+      next: "Siguiente",
       more: "Más",
       help: "Centro de ayuda",
       search: "Buscar",

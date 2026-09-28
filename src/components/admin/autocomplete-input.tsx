@@ -241,7 +241,7 @@ export const AutocompleteInput = (
               {/* We handle the filtering ourselves */}
               <Command shouldFilter={!isFromReference}>
                 <CommandInput
-                  placeholder="Search..."
+                  placeholder={`${translate("ra.action.search")}…`}
                   value={filterValue}
                   onValueChange={(filter) => {
                     setFilterValue(filter);

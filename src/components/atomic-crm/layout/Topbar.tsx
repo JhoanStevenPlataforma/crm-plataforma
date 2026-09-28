@@ -15,7 +15,7 @@ import { NotificationsBell } from "../notifications/NotificationsBell";
  * The bar above the content.
  *
  * Deliberately thin. Everything that used to live in the old header's avatar
- * dropdown -- users, teams, the team dashboard, settings, import, the changelog
+ * dropdown -- users, teams, the team dashboard, settings, import
  * -- is now a visible entry in the sidebar, so what is left here is the
  * per-session chrome: where am I, what changed, how does this look, who am I.
  *

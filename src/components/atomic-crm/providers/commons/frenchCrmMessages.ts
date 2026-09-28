@@ -176,6 +176,16 @@ export const frenchCrmMessages = {
           "Toutes les données seront transférées au deuxième contact. Cette action ne peut pas être annulée.",
         warning_title: "Avertissement : opération destructrice",
         what_will_be_merged: "Ce qui sera fusionné :",
+        notes_reassigned:
+          "%{smart_count} note sera réattribuée |||| %{smart_count} notes seront réattribuées",
+        tasks_reassigned:
+          "%{smart_count} tâche sera réattribuée |||| %{smart_count} tâches seront réattribuées",
+        deals_updated:
+          "%{smart_count} affaire sera mise à jour |||| %{smart_count} affaires seront mises à jour",
+        emails_added:
+          "%{smart_count} adresse e-mail sera ajoutée |||| %{smart_count} adresses e-mail seront ajoutées",
+        phones_added:
+          "%{smart_count} numéro de téléphone sera ajouté |||| %{smart_count} numéros de téléphone seront ajoutés",
       },
       filters: {
         before_last_month: "Avant le mois dernier",
@@ -1350,6 +1360,85 @@ export const frenchCrmMessages = {
     },
   },
   crm: {
+    configuration: {
+      companySectors: {
+        "communication-services": "Services de communication",
+        "consumer-discretionary": "Consommation discrétionnaire",
+        "consumer-staples": "Biens de consommation de base",
+        energy: "Énergie",
+        financials: "Finance",
+        "health-care": "Santé",
+        industrials: "Industrie",
+        "information-technology": "Technologies de l'information",
+        materials: "Matériaux",
+        "real-estate": "Immobilier",
+        utilities: "Services publics",
+      },
+      dealCategories: {
+        other: "Autre",
+        copywriting: "Rédaction",
+        "print-project": "Projet d'impression",
+        "ui-design": "Design d'interface",
+        "website-design": "Conception de site web",
+      },
+      dealStages: {
+        opportunity: "Opportunité",
+        "proposal-sent": "Proposition envoyée",
+        "in-negociation": "En négociation",
+        won: "Gagnée",
+        lost: "Perdue",
+        delayed: "Retardée",
+      },
+      leadSources: {
+        web: "Site web",
+        referral: "Recommandation",
+        event: "Événement",
+        outbound: "Prospection",
+        partner: "Partenaire",
+        other: "Autre",
+      },
+      leadStatuses: {
+        new: "Nouveau",
+        contacted: "Contacté",
+        qualified: "Qualifié",
+        unqualified: "Non qualifié",
+      },
+      noteStatuses: {
+        cold: "Froid",
+        warm: "Tiède",
+        hot: "Chaud",
+        "in-contract": "Sous contrat",
+      },
+      productCategories: {
+        hardware: "Matériel",
+        software: "Logiciel",
+        services: "Services professionnels",
+        support: "Support",
+        training: "Formation",
+        other: "Autre",
+      },
+      productUnits: {
+        unit: "Unité",
+        hour: "Heure",
+        day: "Jour",
+        month: "Mois",
+        year: "An",
+        license: "Licence",
+        kg: "Kilogramme",
+        m: "Mètre",
+      },
+      taskTypes: {
+        none: "Aucun",
+        email: "E-mail",
+        demo: "Démo",
+        lunch: "Déjeuner",
+        meeting: "Réunion",
+        "follow-up": "Relance",
+        "thank-you": "Remerciement",
+        ship: "Expédition",
+        call: "Appel",
+      },
+    },
     duplicates: {
       contact_exists: "Un contact avec cet e-mail existe déjà :",
       company_exists: "Une entreprise portant ce nom existe déjà :",
@@ -1606,9 +1695,6 @@ export const frenchCrmMessages = {
       copy: "Copier",
       loading: "Chargement...",
       me: "Moi",
-    },
-    changelog: {
-      title: "Notes de version",
     },
     activity: {
       added_company: "%{name} a ajouté l'entreprise",
@@ -2231,6 +2317,7 @@ export const frenchCrmMessages = {
       save_failed: "elle n’a pas pu être enregistrée",
     },
     import: {
+      file: "Fichier",
       action: {
         download_error_report: "Téléchargez le rapport d'erreur",
         import: "Importer",
@@ -2274,7 +2361,6 @@ export const frenchCrmMessages = {
           expired: "Il expire (et aucun autre n'est ouvert)",
         },
       },
-      about: "À propos",
       companies: {
         sectors: "Secteurs",
       },
@@ -2319,6 +2405,10 @@ export const frenchCrmMessages = {
         },
       },
     },
+    kanban: {
+      drag_instructions:
+        "Appuyez sur la barre d'espace pour saisir la carte. Déplacez-la avec les flèches, relâchez-la avec espace ou annulez avec Échap.",
+    },
     theme: {
       dark: "Sombre",
       label: "Thème",
@@ -2344,6 +2434,9 @@ export const frenchCrmMessages = {
     },
     navigation: {
       label: "Navigation CRM",
+      more_pages: "Plus de pages",
+      previous: "Précédent",
+      next: "Suivant",
       more: "Plus",
       help: "Centre d'aide",
       search: "Rechercher",

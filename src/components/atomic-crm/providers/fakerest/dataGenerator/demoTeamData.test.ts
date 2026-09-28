@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import type { Deal } from "../../../types";
+import type { Deal, TeamWorkload } from "../../../types";
+import { createDataProvider } from "../dataProvider";
 import generateData from "./index";
 import { generateTeamDealStats } from "./teamDealStats";
 import type { Db } from "./types";
@@ -65,6 +66,79 @@ describe("generated team demo data", () => {
 
     // Assert
     expect(cubeWon).toBe(team.won_amount);
+  });
+
+  test("the win/loss counters agree with the money beside them", () => {
+    // The audit saw "Total won $264.9K" next to "0 won, 0 lost": the demo
+    // header summed the won deals but never counted them.
+    const db = generateData();
+
+    for (const team of db.teams) {
+      const cube = db.team_deal_stats.filter((row) => row.team_id === team.id);
+      const count = (stage: string) =>
+        cube
+          .filter((row) => row.stage === stage)
+          .reduce((total, row) => total + row.nb_deals, 0);
+      const amount = (stage: string) =>
+        cube
+          .filter((row) => row.stage === stage)
+          .reduce((total, row) => total + row.amount, 0);
+
+      expect(team.nb_won).toBe(count("won"));
+      expect(team.nb_lost).toBe(count("lost"));
+      expect(team.lost_amount).toBe(amount("lost"));
+    }
+    expect(db.teams.some((team) => (team.nb_won ?? 0) > 0)).toBe(true);
+  });
+
+  test("lost deals are not pipeline, as in the view", () => {
+    const db = generateData();
+
+    for (const team of db.teams) {
+      const open = db.team_deal_stats
+        .filter(
+          (row) =>
+            row.team_id === team.id &&
+            row.stage !== "won" &&
+            row.stage !== "lost",
+        )
+        .reduce((total, row) => total + row.amount, 0);
+      expect(team.pipeline_amount).toBe(open);
+    }
+  });
+
+  test("the dashboard's workload request reaches the overdue tasks", async () => {
+    // The audit saw "Overdue 0" beside 93 overdue tasks: the counters were
+    // right, but the dashboard's request never found them. Read it the way the
+    // dashboard does, through the provider, under the view's name.
+    const db = generateData();
+    const dataProvider = createDataProvider({ db, latency: 0, silent: true });
+    const rostered = new Set(db.team_members.map((m) => m.sales_id));
+    const overdue = db.tasks.filter(
+      (task) =>
+        rostered.has(task.owner_sales_id as number) &&
+        task.deleted_at == null &&
+        task.archived_at == null &&
+        task.completed_at == null &&
+        task.canceled_at == null &&
+        task.due_date != null &&
+        new Date(task.due_date).getTime() < Date.now(),
+    ).length;
+
+    const { data: workloads } = await dataProvider.getList<TeamWorkload>(
+      "team_workload_summary",
+      {
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "team_id", order: "ASC" },
+        filter: {},
+      },
+    );
+    const counted = workloads.reduce(
+      (total, row) => total + row.nb_tasks_overdue,
+      0,
+    );
+    expect(overdue).toBeGreaterThan(0);
+    expect(counted).toBe(overdue);
   });
 });
 
@@ -233,9 +307,7 @@ describe("generated task workload", () => {
     // `team_workload_summary` and `team_members_summary`.
     const db = generateData();
     const team = db.teams[0];
-    const workload = db.team_workload_summary.find(
-      (row) => row.team_id === team.id,
-    );
+    const workload = db.team_workload.find((row) => row.team_id === team.id);
     const rosterOpen = db.team_members
       .filter((member) => member.team_id === team.id)
       .reduce((total, member) => total + (member.nb_open_tasks ?? 0), 0);

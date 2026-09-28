@@ -228,34 +228,42 @@ const ContactMergeDialog = ({ open, onClose }: ContactMergeDialogProps) => {
                 <ul className="text-sm text-muted-foreground space-y-1 ml-4">
                   {notesCount != null && notesCount > 0 && (
                     <li>
-                      • {notesCount} note
-                      {notesCount !== 1 ? "s" : ""} will be reassigned
+                      •{" "}
+                      {translate("resources.contacts.merge.notes_reassigned", {
+                        smart_count: notesCount,
+                      })}
                     </li>
                   )}
                   {tasksCount != null && tasksCount > 0 && (
                     <li>
-                      • {tasksCount} task
-                      {tasksCount !== 1 ? "s" : ""} will be reassigned
+                      •{" "}
+                      {translate("resources.contacts.merge.tasks_reassigned", {
+                        smart_count: tasksCount,
+                      })}
                     </li>
                   )}
                   {dealsCount != null && dealsCount > 0 && (
                     <li>
-                      • {dealsCount} deal
-                      {dealsCount !== 1 ? "s" : ""} will be updated
+                      •{" "}
+                      {translate("resources.contacts.merge.deals_updated", {
+                        smart_count: dealsCount,
+                      })}
                     </li>
                   )}
                   {loserContact.email_jsonb?.length > 0 && (
                     <li>
-                      • {loserContact.email_jsonb.length} email address
-                      {loserContact.email_jsonb.length !== 1 ? "es" : ""} will
-                      be added
+                      •{" "}
+                      {translate("resources.contacts.merge.emails_added", {
+                        smart_count: loserContact.email_jsonb.length,
+                      })}
                     </li>
                   )}
                   {loserContact.phone_jsonb?.length > 0 && (
                     <li>
-                      • {loserContact.phone_jsonb.length} phone number
-                      {loserContact.phone_jsonb.length !== 1 ? "s" : ""} will be
-                      added
+                      •{" "}
+                      {translate("resources.contacts.merge.phones_added", {
+                        smart_count: loserContact.phone_jsonb.length,
+                      })}
                     </li>
                   )}
                   {!notesCount &&

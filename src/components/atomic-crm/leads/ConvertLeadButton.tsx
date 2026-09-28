@@ -55,6 +55,7 @@ export const ConvertLeadButton = () => {
   const [createDeal, setCreateDeal] = useState(false);
   const [dealName, setDealName] = useState("");
   const [dealAmount, setDealAmount] = useState("0");
+  const [dealClosingDate, setDealClosingDate] = useState("");
 
   const { mutate, isPending } = useMutation({
     mutationFn: async () => {
@@ -63,6 +64,7 @@ export const ConvertLeadButton = () => {
         createDeal,
         dealName: dealName.trim() || undefined,
         dealAmount: Number(dealAmount) || 0,
+        dealExpectedClosingDate: dealClosingDate || undefined,
       });
     },
     onSuccess: (contactId) => {
@@ -160,6 +162,17 @@ export const ConvertLeadButton = () => {
                       {translate("resources.leads.convert.amount_negative")}
                     </p>
                   )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="convert-deal-closing-date">
+                    {translate("resources.deals.fields.expected_closing_date")}
+                  </Label>
+                  <Input
+                    id="convert-deal-closing-date"
+                    type="date"
+                    value={dealClosingDate}
+                    onChange={(event) => setDealClosingDate(event.target.value)}
+                  />
                 </div>
               </div>
             )}

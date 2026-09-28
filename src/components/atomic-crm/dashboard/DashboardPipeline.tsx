@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import { useTranslate } from "ra-core";
+import { useLocaleState, useTranslate } from "ra-core";
 import { Link } from "react-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,8 +13,8 @@ import { SectionCard } from "../misc/SectionCard";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { DealStageStat } from "../types";
 
-const percent = (value: number) =>
-  value.toLocaleString("en-US", { style: "percent", maximumFractionDigits: 0 });
+const percent = (value: number, locale: string) =>
+  value.toLocaleString(locale, { style: "percent", maximumFractionDigits: 0 });
 
 /**
  * Where the open money sits, stage by stage — the dashboard's view of the
@@ -34,6 +34,7 @@ export const DashboardPipeline = ({
   isPending: boolean;
 }) => {
   const translate = useTranslate();
+  const [locale = "en"] = useLocaleState();
   const { currency, dealStages, dealPipelineStatuses } =
     useConfigurationContext();
   const palette = useChartPalette();
@@ -94,14 +95,14 @@ export const DashboardPipeline = ({
                     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                       {row.count}
                       {row.probability != null
-                        ? ` · ${percent(row.probability)}`
+                        ? ` · ${percent(row.probability, locale)}`
                         : ""}
                     </span>
                   </span>
                   <span className="shrink-0 font-semibold tabular-nums">
                     {formatMoney(row.amount, currency)}
                     <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                      {percent(total > 0 ? row.amount / total : 0)}
+                      {percent(total > 0 ? row.amount / total : 0, locale)}
                     </span>
                   </span>
                 </div>

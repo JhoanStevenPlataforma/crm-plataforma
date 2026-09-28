@@ -64,7 +64,7 @@ export default (): Db => {
   // resolves ownership through.
   db.team_task_stats = generateTeamTaskStats(db);
   // Stands in for `team_workload_summary`, which aggregates that same roster.
-  db.team_workload_summary = generateTeamWorkloads(db);
+  db.team_workload = generateTeamWorkloads(db);
   // The owner assignment every task gets on insert in the real backend
   // (`tasks_seed_assignments_links`). Without it the People tab would claim
   // nobody is on a task that plainly has an owner.

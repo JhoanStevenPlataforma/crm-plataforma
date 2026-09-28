@@ -112,6 +112,13 @@ export const Notification = (props: ToasterProps) => {
         theme={theme}
         closeButton
         position="bottom-center"
+        // Sonner's own labels are English; the region is announced by name.
+        containerAriaLabel={translate("crm.notifications.title", {
+          _: "Notifications",
+        })}
+        toastOptions={{
+          closeButtonAriaLabel: translate("ra.action.close", { _: "Close" }),
+        }}
         {...props}
       />
     </CloseNotificationContext.Provider>

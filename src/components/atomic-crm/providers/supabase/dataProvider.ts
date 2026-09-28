@@ -866,6 +866,7 @@ const getDataProviderWithCustomMethods = () => {
         createDeal?: boolean;
         dealName?: string;
         dealAmount?: number;
+        dealExpectedClosingDate?: string;
       } = {},
     ): Promise<Identifier> {
       const { data, error } = await getSupabaseClient().rpc("convert_lead", {
@@ -873,6 +874,7 @@ const getDataProviderWithCustomMethods = () => {
         create_deal: options.createDeal ?? false,
         deal_name: options.dealName ?? null,
         deal_amount: options.dealAmount ?? 0,
+        deal_expected_closing_date: options.dealExpectedClosingDate ?? null,
       });
 
       if (error) {

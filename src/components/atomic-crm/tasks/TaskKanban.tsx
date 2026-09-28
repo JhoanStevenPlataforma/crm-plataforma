@@ -54,7 +54,10 @@ export const TaskKanban = ({ filter }: { filter: Record<string, unknown> }) => {
 
   return (
     <>
-      <DragDropContext onDragEnd={onDragEnd}>
+      <DragDropContext
+        onDragEnd={onDragEnd}
+        dragHandleUsageInstructions={translate("crm.kanban.drag_instructions")}
+      >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {KANBAN_COLUMNS.map((status) => {
             const columnTasks = byColumn(status);

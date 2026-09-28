@@ -1,7 +1,7 @@
 import { ResponsiveBar } from "@nivo/bar";
-import { format, startOfMonth } from "date-fns";
+import { startOfMonth } from "date-fns";
 import { TrendingUp } from "lucide-react";
-import { useGetList, useTranslate } from "ra-core";
+import { useGetList, useLocaleState, useTranslate } from "ra-core";
 import { memo, useMemo } from "react";
 
 import { findDealLabel, findDealProbability } from "../deals/dealUtils";
@@ -12,14 +12,10 @@ const threeMonthsAgo = new Date(
   new Date().setMonth(new Date().getMonth() - 6),
 ).toISOString();
 
-const DEFAULT_LOCALE = "en-US";
-
 export const DealsChart = memo(() => {
   const translate = useTranslate();
   const { dealStages, currency } = useConfigurationContext();
-  const acceptedLanguages = navigator
-    ? navigator.languages || [navigator.language]
-    : [DEFAULT_LOCALE];
+  const [locale = "en"] = useLocaleState();
   const wonLabel = findDealLabel(dealStages, "won") ?? "Won";
   const lostLabel = findDealLabel(dealStages, "lost") ?? "Lost";
 
@@ -46,7 +42,9 @@ export const DealsChart = memo(() => {
 
     const amountByMonth = Object.keys(dealsByMonth).map((month) => {
       return {
-        date: format(month, "MMM"),
+        date: new Intl.DateTimeFormat(locale, { month: "short" }).format(
+          new Date(month),
+        ),
         won: dealsByMonth[month]
           .filter((deal: Deal) => deal.stage === "won")
           .reduce((acc: number, deal: Deal) => {
@@ -78,7 +76,7 @@ export const DealsChart = memo(() => {
     // of this file and into the configuration: the pending series is now a
     // function of the config, so an admin editing a probability has to redraw
     // the chart rather than wait for the next deal to load.
-  }, [data, dealStages]);
+  }, [data, dealStages, locale]);
 
   if (isPending) return null; // FIXME return skeleton instead
   const range = months.reduce(
@@ -119,7 +117,7 @@ export const DealsChart = memo(() => {
           tooltip={({ value, indexValue }) => (
             <div className="p-2 bg-secondary rounded shadow inline-flex items-center gap-1 text-secondary-foreground">
               <strong>{indexValue}: </strong>&nbsp;{value > 0 ? "+" : ""}
-              {value.toLocaleString(acceptedLanguages.at(0) ?? DEFAULT_LOCALE, {
+              {value.toLocaleString(locale, {
                 style: "currency",
                 currency,
               })}

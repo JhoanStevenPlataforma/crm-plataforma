@@ -74,7 +74,9 @@ describe("QuoteActions", () => {
       .element(link)
       .toHaveValue(expect.stringMatching(/\/quote#[0-9a-f]{64}$/));
 
+    // Nothing was copied, so closing asks first: it discards the only copy.
     await clickButton(screen, "Done");
+    await clickButton(screen, "Close without copying");
 
     // And the quote moved with it: one transaction in the database, one button
     // here.
@@ -203,6 +205,7 @@ describe("QuoteActions", () => {
 
     await clickButton(screen, "New link");
     await clickButton(screen, "Done");
+    await clickButton(screen, "Close without copying");
     await expect.element(screen.getByText("Active")).toBeVisible();
 
     await clickButton(screen, "Revise");

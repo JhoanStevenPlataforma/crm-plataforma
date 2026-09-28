@@ -75,8 +75,11 @@ export interface Db {
   // chart. Flow only -- the stock counters live on the team/member records.
   team_task_stats: TeamTaskStat[];
   // Stand-in for the `team_workload_summary` view: the dashboard's workload
-  // report, deliberately not columns on the team record.
-  team_workload_summary: TeamWorkload[];
+  // report, deliberately not columns on the team record. Named WITHOUT the
+  // suffix because the filter adapter strips `_summary` from every resource
+  // before it reaches FakeRest; under the view's own name the dashboard asked
+  // for a collection that did not exist and rendered "0 overdue".
+  team_workload: TeamWorkload[];
   tasks: Task[];
   // Who is on a task and in what role (§7). Seeded with the owner row every
   // task gets on insert in the real backend; the rest is filled by the UI.

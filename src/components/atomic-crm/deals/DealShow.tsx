@@ -122,7 +122,7 @@ const DealShowContent = () => {
                 {translate("resources.deals.fields.amount")}
               </span>
               <span className="text-sm">
-                {record.amount.toLocaleString("en-US", {
+                {record.amount.toLocaleString(locale, {
                   notation: "compact",
                   style: "currency",
                   currency,

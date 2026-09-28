@@ -533,7 +533,7 @@ $$;
 -- convert what. Runs as one statement, so a failure half-way leaves nothing
 -- behind, and takes a row lock on the lead so two people clicking "convert"
 -- at once cannot produce two contacts.
-CREATE OR REPLACE FUNCTION "public"."convert_lead"("lead_id" bigint, "create_deal" boolean DEFAULT false, "deal_name" "text" DEFAULT NULL::"text", "deal_amount" bigint DEFAULT 0) RETURNS bigint
+CREATE OR REPLACE FUNCTION "public"."convert_lead"("lead_id" bigint, "create_deal" boolean DEFAULT false, "deal_name" "text" DEFAULT NULL::"text", "deal_amount" bigint DEFAULT 0, "deal_expected_closing_date" "date" DEFAULT NULL::"date") RETURNS bigint
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
     AS $$
@@ -595,7 +595,7 @@ begin
   returning id into v_contact_id;
 
   if create_deal then
-    insert into public.deals (name, company_id, contact_ids, stage, amount, sales_id, index)
+    insert into public.deals (name, company_id, contact_ids, stage, amount, sales_id, index, expected_closing_date)
     values (
       coalesce(
         nullif(btrim(coalesce(deal_name, '')), ''),
@@ -606,7 +606,8 @@ begin
       'opportunity',
       coalesce(deal_amount, 0),
       l.sales_id,
-      0
+      0,
+      deal_expected_closing_date
     )
     returning id into v_deal_id;
   end if;

@@ -1,5 +1,10 @@
 import { DollarSign } from "lucide-react";
-import { useGetIdentity, useGetList, useTranslate } from "ra-core";
+import {
+  useGetIdentity,
+  useGetList,
+  useLocaleState,
+  useTranslate,
+} from "ra-core";
 import { Link } from "react-router";
 import { ReferenceField } from "@/components/admin/reference-field";
 import { Card } from "@/components/ui/card";
@@ -17,6 +22,7 @@ import type { Deal } from "../types";
  */
 export const DealsPipeline = () => {
   const translate = useTranslate();
+  const [locale = "en"] = useLocaleState();
   const { identity } = useGetIdentity();
   const teamScope = useTeamScopeFilter();
   const { dealStages, dealPipelineStatuses, currency } =
@@ -68,7 +74,7 @@ export const DealsPipeline = () => {
           isPending={isPending}
           primaryText={(deal) => deal.name}
           secondaryText={(deal) =>
-            `${deal.amount.toLocaleString("en-US", {
+            `${deal.amount.toLocaleString(locale, {
               notation: "compact",
               style: "currency",
               currency,

@@ -6,6 +6,8 @@ export interface ConvertLeadOptions {
   createDeal?: boolean;
   dealName?: string;
   dealAmount?: number;
+  /** ISO date (yyyy-mm-dd) for the new deal; none leaves it undated. */
+  dealExpectedClosingDate?: string;
 }
 
 /**
@@ -84,6 +86,7 @@ export const convertLead = async (
         contact_ids: [contact.id],
         stage: "opportunity",
         amount: options.dealAmount ?? 0,
+        expected_closing_date: options.dealExpectedClosingDate ?? null,
         sales_id: lead.sales_id,
         index: 0,
       } as any,

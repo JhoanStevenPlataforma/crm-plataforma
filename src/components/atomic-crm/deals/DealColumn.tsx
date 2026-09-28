@@ -1,5 +1,5 @@
 import { Droppable } from "@hello-pangea/dnd";
-import { useTranslate } from "ra-core";
+import { useLocaleState, useTranslate } from "ra-core";
 
 import { cn } from "@/lib/utils";
 
@@ -10,8 +10,8 @@ import type { Deal } from "../types";
 import { findDealLabel, findDealProbability } from "./dealUtils";
 import { DealCard } from "./DealCard";
 
-const percent = (value: number) =>
-  value.toLocaleString("en-US", { style: "percent", maximumFractionDigits: 0 });
+const percent = (value: number, locale: string) =>
+  value.toLocaleString(locale, { style: "percent", maximumFractionDigits: 0 });
 
 /**
  * One stage of the board.
@@ -39,6 +39,7 @@ export const DealColumn = ({
   isClosed: boolean;
 }) => {
   const translate = useTranslate();
+  const [locale = "en"] = useLocaleState();
   const { dealStages, dealPipelineStatuses, currency } =
     useConfigurationContext();
   const palette = useChartPalette();
@@ -105,10 +106,10 @@ export const DealColumn = ({
             <span
               className="shrink-0 rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground tabular-nums dark:bg-surface-muted"
               title={translate("resources.deals.board.probability", {
-                value: percent(probability),
+                value: percent(probability, locale),
               })}
             >
-              {percent(probability)}
+              {percent(probability, locale)}
             </span>
           ) : null}
         </div>
@@ -136,7 +137,7 @@ export const DealColumn = ({
           <div
             className="h-1 overflow-hidden rounded-full bg-border/70"
             title={translate("resources.deals.board.share", {
-              value: percent(share),
+              value: percent(share, locale),
             })}
           >
             <div

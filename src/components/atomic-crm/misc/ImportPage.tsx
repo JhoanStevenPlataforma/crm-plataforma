@@ -130,7 +130,12 @@ const ImportFromJsonForm = ({
       importFile(values.file.rawFile);
     }}
   >
-    <FileInput className="mt-4" source="file" validate={required()}>
+    <FileInput
+      className="mt-4"
+      source="file"
+      label="crm.import.file"
+      validate={required()}
+    >
       <FileField source="src" title="title" />
     </FileInput>
     <div className="flex justify-end mt-4">

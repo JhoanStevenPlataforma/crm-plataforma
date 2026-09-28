@@ -171,6 +171,16 @@ export const englishCrmMessages = {
           "All data will be transferred to the second contact. This action cannot be undone.",
         warning_title: "Warning: Destructive Operation",
         what_will_be_merged: "What will be merged:",
+        notes_reassigned:
+          "%{smart_count} note will be reassigned |||| %{smart_count} notes will be reassigned",
+        tasks_reassigned:
+          "%{smart_count} task will be reassigned |||| %{smart_count} tasks will be reassigned",
+        deals_updated:
+          "%{smart_count} deal will be updated |||| %{smart_count} deals will be updated",
+        emails_added:
+          "%{smart_count} email address will be added |||| %{smart_count} email addresses will be added",
+        phones_added:
+          "%{smart_count} phone number will be added |||| %{smart_count} phone numbers will be added",
       },
       filters: {
         before_last_month: "Before last month",
@@ -1332,6 +1342,85 @@ export const englishCrmMessages = {
     },
   },
   crm: {
+    configuration: {
+      companySectors: {
+        "communication-services": "Communication Services",
+        "consumer-discretionary": "Consumer Discretionary",
+        "consumer-staples": "Consumer Staples",
+        energy: "Energy",
+        financials: "Financials",
+        "health-care": "Health Care",
+        industrials: "Industrials",
+        "information-technology": "Information Technology",
+        materials: "Materials",
+        "real-estate": "Real Estate",
+        utilities: "Utilities",
+      },
+      dealCategories: {
+        other: "Other",
+        copywriting: "Copywriting",
+        "print-project": "Print project",
+        "ui-design": "UI Design",
+        "website-design": "Website design",
+      },
+      dealStages: {
+        opportunity: "Opportunity",
+        "proposal-sent": "Proposal Sent",
+        "in-negociation": "In Negotiation",
+        won: "Won",
+        lost: "Lost",
+        delayed: "Delayed",
+      },
+      leadSources: {
+        web: "Website",
+        referral: "Referral",
+        event: "Event",
+        outbound: "Outbound",
+        partner: "Partner",
+        other: "Other",
+      },
+      leadStatuses: {
+        new: "New",
+        contacted: "Contacted",
+        qualified: "Qualified",
+        unqualified: "Unqualified",
+      },
+      noteStatuses: {
+        cold: "Cold",
+        warm: "Warm",
+        hot: "Hot",
+        "in-contract": "In Contract",
+      },
+      productCategories: {
+        hardware: "Hardware",
+        software: "Software",
+        services: "Professional services",
+        support: "Support",
+        training: "Training",
+        other: "Other",
+      },
+      productUnits: {
+        unit: "Unit",
+        hour: "Hour",
+        day: "Day",
+        month: "Month",
+        year: "Year",
+        license: "License",
+        kg: "Kilogram",
+        m: "Meter",
+      },
+      taskTypes: {
+        none: "None",
+        email: "Email",
+        demo: "Demo",
+        lunch: "Lunch",
+        meeting: "Meeting",
+        "follow-up": "Follow-up",
+        "thank-you": "Thank you",
+        ship: "Ship",
+        call: "Call",
+      },
+    },
     duplicates: {
       contact_exists: "A contact with this email already exists:",
       company_exists: "A company with this name already exists:",
@@ -1584,9 +1673,6 @@ export const englishCrmMessages = {
       loading: "Loading...",
       me: "Me",
       task_count: "%{smart_count} task |||| %{smart_count} tasks",
-    },
-    changelog: {
-      title: "Changelog",
     },
     activity: {
       added_company: "%{name} added company",
@@ -2193,6 +2279,7 @@ export const englishCrmMessages = {
       save_failed: "it could not be saved",
     },
     import: {
+      file: "File",
       action: {
         download_error_report: "Download the error report",
         import: "Import",
@@ -2237,7 +2324,6 @@ export const englishCrmMessages = {
           expired: "It expires (and no other is open)",
         },
       },
-      about: "About",
       companies: {
         sectors: "Sectors",
       },
@@ -2282,6 +2368,10 @@ export const englishCrmMessages = {
         },
       },
     },
+    kanban: {
+      drag_instructions:
+        "Press the space bar to pick up the card. Use the arrow keys to move it, space to drop it, or Escape to cancel.",
+    },
     theme: {
       dark: "Dark",
       label: "Theme",
@@ -2307,6 +2397,9 @@ export const englishCrmMessages = {
     },
     navigation: {
       label: "CRM navigation",
+      more_pages: "More pages",
+      previous: "Previous",
+      next: "Next",
       more: "More",
       help: "Help center",
       search: "Search",

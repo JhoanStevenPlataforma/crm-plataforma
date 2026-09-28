@@ -42,7 +42,6 @@ import { MobileDesktopPage } from "../layout/MobileContent";
 import { SignupPage } from "../login/SignupPage";
 import { ConfirmationRequired } from "../login/ConfirmationRequired";
 import { ImportPage } from "../misc/ImportPage";
-import { ChangelogPage } from "../misc/ChangelogPage";
 import {
   getAuthProvider as defaultAuthProviderBuilder,
   getDataProvider as defaultDataProviderBuilder,
@@ -310,7 +309,6 @@ const DesktopAdmin = (
 
       <CustomRoutes>
         <Route path={SettingsPage.path} element={<SettingsPage />} />
-        <Route path={ChangelogPage.path} element={<ChangelogPage />} />
         {sharedRoutes(asIs)}
       </CustomRoutes>
       <Resource name="contacts" {...contacts} />
@@ -544,10 +542,6 @@ const MobileAdmin = (
           <Route
             path={SettingsPageMobile.path}
             element={<SettingsPageMobile />}
-          />
-          <Route
-            path={ChangelogPage.path}
-            element={inMobileFrame(<ChangelogPage />)}
           />
           {sharedRoutes(inMobileFrame)}
         </CustomRoutes>

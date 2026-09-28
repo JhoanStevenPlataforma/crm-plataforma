@@ -191,7 +191,7 @@ export const ColumnsSelector = ({ children }: ColumnsSelectorProps) => {
             <button
               onClick={() => setColumnFilter("")}
               className="absolute right-8 top-2 h-4 w-4 text-muted-foreground"
-              aria-label="Clear"
+              aria-label={translate("ra.action.clear_input_value")}
             >
               ×
             </button>
@@ -219,7 +219,7 @@ export const ColumnsSelector = ({ children }: ColumnsSelectorProps) => {
             setHiddenColumns(defaultHiddenColumns);
           }}
         >
-          Reset
+          {translate("ra.action.reset")}
         </Button>
       </div>
     </div>,

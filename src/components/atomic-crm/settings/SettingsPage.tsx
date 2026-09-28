@@ -18,7 +18,7 @@ import { ColorInput } from "../misc/ColorInput";
 import { DealQuoteStageRules } from "./DealQuoteStageRules";
 import ImageEditorField from "../misc/ImageEditorField";
 import {
-  useConfigurationContext,
+  useStoredConfiguration,
   useConfigurationUpdater,
   type ConfigurationContextValue,
 } from "../root/ConfigurationContext";
@@ -167,7 +167,7 @@ export const SettingsPage = () => {
 SettingsPage.path = "/settings";
 
 const SettingsForm = () => {
-  const config = useConfigurationContext();
+  const config = useStoredConfiguration();
 
   const defaultValues = useMemo(
     () => ({

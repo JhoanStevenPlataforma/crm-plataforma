@@ -109,10 +109,17 @@ export const generateTeamMemberBudgets = (db: Db): TeamMemberBudget[] => {
  * anyway, and the alternative is recomputing four aggregates on every deal
  * write to emulate a view that the real backend computes for free.
  */
+/** Lost is not pipeline: `stage not in ('won', 'lost')`, as in the views. */
+const isOpenDeal = (deal: Db["deals"][number]) =>
+  deal.stage !== "won" && deal.stage !== "lost";
+
 export const decorateTeamsWithBudgets = (db: Db): Team[] =>
   db.teams.map((team) => {
     const budget = db.team_budgets.find((b) => b.team_id === team.id);
-    const teamDeals = db.deals.filter((deal) => deal.team_id === team.id);
+    // Archived deals are out of every figure, as in the view.
+    const teamDeals = db.deals.filter(
+      (deal) => deal.team_id === team.id && !deal.archived_at,
+    );
     const inPeriod = teamDeals.filter(
       (deal) =>
         budget != null &&
@@ -128,9 +135,13 @@ export const decorateTeamsWithBudgets = (db: Db): Team[] =>
       budget_amount: budget?.amount ?? null,
       budget_period_start: budget?.period_start ?? null,
       budget_period_end: budget?.period_end ?? null,
-      pipeline_amount: sum(inPeriod.filter((deal) => deal.stage !== "won")),
+      pipeline_amount: sum(inPeriod.filter(isOpenDeal)),
       won_amount: sum(inPeriod.filter((deal) => deal.stage === "won")),
       nb_deals: teamDeals.length,
+      // Without these the header showed the money won beside "0 won, 0 lost".
+      lost_amount: sum(inPeriod.filter((deal) => deal.stage === "lost")),
+      nb_won: inPeriod.filter((deal) => deal.stage === "won").length,
+      nb_lost: inPeriod.filter((deal) => deal.stage === "lost").length,
       // Unlike the deal aggregates above, this one IS kept live by the
       // `team_member_budgets` callbacks: the allocation panel writes it and
       // the dashboard reads it back in the same session.
@@ -209,7 +220,7 @@ export const decorateTeamMembersWithStats = (db: Db): TeamMember[] =>
     const sale = db.sales.find((s) => s.id === member.sales_id);
     const budget = db.team_budgets.find((b) => b.team_id === member.team_id);
     const ownDeals = db.deals.filter(
-      (deal) => deal.sales_id === member.sales_id,
+      (deal) => deal.sales_id === member.sales_id && !deal.archived_at,
     );
     const teamDeals = ownDeals.filter(
       (deal) => deal.team_id === member.team_id,
@@ -236,7 +247,7 @@ export const decorateTeamMembersWithStats = (db: Db): TeamMember[] =>
         .length,
       nb_deals_all: ownDeals.length,
       nb_deals: teamDeals.length,
-      pipeline_amount: sum(inPeriod.filter((deal) => deal.stage !== "won")),
+      pipeline_amount: sum(inPeriod.filter(isOpenDeal)),
       won_amount: sum(inPeriod.filter((deal) => deal.stage === "won")),
       // Counted on the COLUMNS, mirroring the view: `status_key` and the
       // columns disagree on an archived task, and demo mode has to reproduce

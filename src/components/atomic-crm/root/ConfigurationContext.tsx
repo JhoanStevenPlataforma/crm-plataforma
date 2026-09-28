@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { useStore } from "ra-core";
+import { useStore, useTranslate } from "ra-core";
 
 import type { DealStage, LabeledValue, NoteStatus } from "../types";
+import { translateConfigurationLabels } from "./configurationLabels";
 import { defaultConfiguration } from "./defaultConfiguration";
 
 export const CONFIGURATION_STORE_KEY = "app.configuration";
@@ -25,7 +26,12 @@ export interface ConfigurationContextValue {
   lightModeLogo: string;
 }
 
-export const useConfigurationContext = () => {
+/**
+ * The configuration as stored, labels untranslated. Only Settings reads this:
+ * it edits the stored labels, and saving a translated copy would pin today's
+ * language into every other user's screen.
+ */
+export const useStoredConfiguration = () => {
   const [config] = useStore<ConfigurationContextValue>(
     CONFIGURATION_STORE_KEY,
     defaultConfiguration,
@@ -33,6 +39,16 @@ export const useConfigurationContext = () => {
   // Merge with defaults so that missing fields in stored config
   // fall back to default values (e.g. when new settings are added)
   return useMemo(() => ({ ...defaultConfiguration, ...config }), [config]);
+};
+
+/** The configuration for display: shipped labels in the user's language. */
+export const useConfigurationContext = () => {
+  const config = useStoredConfiguration();
+  const translate = useTranslate();
+  return useMemo(
+    () => translateConfigurationLabels(config, translate),
+    [config, translate],
+  );
 };
 
 export const useConfigurationUpdater = () => {

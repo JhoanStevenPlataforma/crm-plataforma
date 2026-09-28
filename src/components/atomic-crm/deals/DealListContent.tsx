@@ -6,6 +6,7 @@ import {
   useGetIdentity,
   useListContext,
   useNotify,
+  useTranslate,
 } from "ra-core";
 import { useEffect, useMemo, useState } from "react";
 
@@ -40,6 +41,7 @@ export const DealListContent = () => {
   const { data: unorderedDeals, isPending, refetch } = useListContext<Deal>();
   const dataProvider = useDataProvider<CrmDataProvider>();
   const notify = useNotify();
+  const translate = useTranslate();
 
   const [dealsByStage, setDealsByStage] = useState<DealsByStage>(
     getDealsByStage([], dealStages),
@@ -173,7 +175,12 @@ export const DealListContent = () => {
           carries those), so it starts right under the filters. */}
       <div className="flex flex-col">
         <DealBoardSignalsProvider deals={unorderedDeals ?? []}>
-          <DragDropContext onDragEnd={onDragEnd}>
+          <DragDropContext
+            onDragEnd={onDragEnd}
+            dragHandleUsageInstructions={translate(
+              "crm.kanban.drag_instructions",
+            )}
+          >
             {/* The board scrolls inside itself, both ways, and ends at the
                 bottom of the viewport: its sideways scrollbar is always on
                 screen instead of below the last card of the longest column.
