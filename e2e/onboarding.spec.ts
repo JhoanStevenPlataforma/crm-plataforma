@@ -66,7 +66,10 @@ test("user onboarding", async ({ page, isMobile, menu, dismissToast }) => {
 
   await dismissToast("Element created");
 
-  await expect(page.locator(isMobile ? "h2" : "h5")).toHaveText("Jane Smith");
+  // The contact's name is the page heading (h1 on desktop since the redesign).
+  await expect(page.locator(isMobile ? "h2" : "main h1")).toHaveText(
+    "Jane Smith",
+  );
   await expect(page.getByText("CEO at Smith Corp")).toBeVisible();
 
   // Ownership, asserted on the OUTCOME rather than on a form control. This used

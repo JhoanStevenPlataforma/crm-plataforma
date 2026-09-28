@@ -50,11 +50,11 @@ test.describe("issuing a quote", () => {
 
   /**
    * Through the menu, so the auth provider clears its own session rather than
-   * the test clearing storage behind its back. The trigger is the avatar, whose
-   * only accessible name is the initial of the person signed in.
+   * the test clearing storage behind its back. The trigger is the avatar,
+   * named "Profile" for screen readers.
    */
-  const signOut = async (page: Page, initial: string) => {
-    await page.getByRole("button", { name: initial, exact: true }).click();
+  const signOut = async (page: Page) => {
+    await page.getByRole("button", { name: "Profile", exact: true }).click();
     await page.getByRole("menuitem", { name: "Logout" }).click();
     await expect(page.getByLabel("Email")).toBeVisible();
   };
@@ -170,6 +170,8 @@ test.describe("issuing a quote", () => {
     await expect(url).toHaveValue(/#\/quote#[0-9a-f]{64}$/);
 
     await page.getByRole("button", { name: "Done" }).click();
+    // Nothing was copied, so closing asks first: it discards the only copy.
+    await page.getByRole("button", { name: "Close without copying" }).click();
     await page.waitForLoadState("networkidle");
 
     // Frozen from here: the document the customer holds has to still render
@@ -251,7 +253,7 @@ test.describe("issuing a quote", () => {
     // any more. Stated as a test because the alternative reading — that the
     // ceiling belongs to the quote's owner — is the one a reader assumes.
     await page.getByRole("button", { name: "Cancel" }).click();
-    await signOut(page, "R");
+    await signOut(page);
     await signIn(page, "ada@doe.com");
     await page.goto(`/#/quotes/${quote.id}/show`);
     await page.waitForLoadState("networkidle");

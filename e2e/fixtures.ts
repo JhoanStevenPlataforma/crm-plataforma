@@ -634,7 +634,9 @@ async function issueQuote({
 
 const getMenuMethod = ({ page }: { page: Page; isMobile: boolean }) => ({
   goToDashboard: async () => {
-    await page.getByRole("link", { name: "Dashboard" }).click();
+    // First: the menu entry. A list page also links "Dashboard" in its
+    // breadcrumb.
+    await page.getByRole("link", { name: "Dashboard" }).first().click();
     await page.waitForLoadState("networkidle");
   },
   goToContacts: async () => {
@@ -649,7 +651,14 @@ const getMenuMethod = ({ page }: { page: Page; isMobile: boolean }) => ({
 
 const dismissToast = async (page: Page, content: string) => {
   await expect(page.getByText(content)).toBeVisible();
-  await page.getByLabel("Close toast").first().click();
+  // Scoped to this toast: its close button is labelled "Close" like every
+  // dialog's, so an unscoped label would match those too.
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: content })
+    .getByRole("button", { name: "Close" })
+    .first()
+    .click();
   // Since we are in optimistic UI, dismissing the toast trigger the request to the api linked to the toast message
   await page.waitForLoadState("networkidle");
 };
