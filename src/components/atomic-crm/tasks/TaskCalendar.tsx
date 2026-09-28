@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import type { Task } from "../types";
 import { TaskEdit } from "./TaskEdit";
 import { STATUS_DOT_CLASS } from "./taskModel";
+import { formatMonthLabel } from "./calendarLabels";
 
 /**
  * Monday-first, as the dashboard's "this week" is: every locale this CRM ships
@@ -28,18 +29,6 @@ import { STATUS_DOT_CLASS } from "./taskModel";
  * working week across two rows.
  */
 const WEEK_OPTIONS = { weekStartsOn: 1 } as const;
-
-/**
- * "Septiembre de 2026", not "Septiembre De 2026": CSS `capitalize` raises
- * every word, including the Spanish and French prepositions.
- */
-export const formatMonthLabel = (month: Date, locale: string): string => {
-  const label = new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-  }).format(month);
-  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
-};
 
 const MAX_CHIPS_PER_DAY = 3;
 

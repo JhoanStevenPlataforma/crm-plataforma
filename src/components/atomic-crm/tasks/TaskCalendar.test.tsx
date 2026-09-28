@@ -3,7 +3,8 @@ import { render } from "vitest-browser-react";
 
 import { buildContact, buildTask, StoryWrapper } from "@/test/StoryWrapper";
 
-import { formatMonthLabel, TaskCalendar } from "./TaskCalendar";
+import { formatMonthLabel } from "./calendarLabels";
+import { TaskCalendar } from "./TaskCalendar";
 import type { Task } from "../types";
 
 const contact = buildContact({ id: 1 });
