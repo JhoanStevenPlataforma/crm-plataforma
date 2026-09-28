@@ -108,9 +108,19 @@ export const QuoteActions = () => {
       reason,
     }: {
       toStatus: QuoteStatusKey;
+      /** The button's wording, echoed in the confirmation. */
+      label: string;
       reason?: string;
     }) => dataProvider.transitionQuote(quote!.id, toStatus, { reason }),
-    onSuccess: onMoved,
+    // A one-click move (Negotiate) otherwise changed only the badge, which
+    // the audit found people did not notice.
+    onSuccess: (_data, { label }) => {
+      notify("resources.quotes.actions.moved", {
+        type: "success",
+        messageArgs: { action: label },
+      });
+      onMoved();
+    },
     onError,
   });
 
@@ -176,7 +186,7 @@ export const QuoteActions = () => {
       setPendingMove(edge);
       return;
     }
-    transition({ toStatus: edge.to_status_key });
+    transition({ toStatus: edge.to_status_key, label: labelOf(edge, kind) });
   };
 
   const pendingKind =
@@ -231,7 +241,11 @@ export const QuoteActions = () => {
             revise(reason);
             return;
           }
-          transition({ toStatus: pendingMove.to_status_key, reason });
+          transition({
+            toStatus: pendingMove.to_status_key,
+            label: labelOf(pendingMove, pendingKind ?? "transition"),
+            reason,
+          });
         }}
         onCancel={() => setPendingMove(null)}
       />

@@ -10,6 +10,9 @@ export const getDealsByStage = (
   if (!dealStages) return {};
   const dealsByStage: Record<Deal["stage"], Deal[]> = unorderedDeals.reduce(
     (acc, deal) => {
+      // The list asks the server for live deals only; this drops the one being
+      // archived while its undoable write is still pending.
+      if (deal.archived_at) return acc;
       // if deal has a stage that does not exist in configuration, assign it to the first stage
       const stage = dealStages.find((s) => s.value === deal.stage)
         ? deal.stage

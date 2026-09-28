@@ -67,20 +67,18 @@ export const ContactAside = ({ link = "edit" }: { link?: "edit" | "show" }) => {
         <AddTask />
       </AsideSection>
 
-      {link !== "edit" && (
-        <>
-          <div className="mt-6 pt-6 border-t hidden sm:flex flex-col gap-2 items-start">
-            <ExportVCardButton />
-            <ContactMergeButton />
-          </div>
-          <div className="mt-6 pt-6 border-t hidden sm:flex flex-col gap-2 items-start">
-            <DeleteButton
-              className="h-6 cursor-pointer hover:bg-destructive/10! text-destructive! border-destructive! focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"
-              size="sm"
-            />
-          </div>
-        </>
-      )}
+      {/* Offered on the contact's page as well as its edit form: the audit
+      found users on the page looking for merge / vCard / delete and giving up. */}
+      <div className="mt-6 pt-6 border-t hidden sm:flex flex-col gap-2 items-start">
+        <ExportVCardButton />
+        <ContactMergeButton />
+      </div>
+      <div className="mt-6 pt-6 border-t hidden sm:flex flex-col gap-2 items-start">
+        <DeleteButton
+          className="h-6 cursor-pointer hover:bg-destructive/10! text-destructive! border-destructive! focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"
+          size="sm"
+        />
+      </div>
     </div>
   );
 };

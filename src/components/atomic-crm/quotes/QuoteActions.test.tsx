@@ -1,3 +1,4 @@
+import { page } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
 import {
@@ -57,6 +58,16 @@ describe("QuoteActions", () => {
         .element(screen.getByRole("button", { name: forbidden }))
         .not.toBeInTheDocument();
     }
+  });
+
+  it("confirms a one-click move instead of only repainting the badge", async () => {
+    const screen = await render(<Sent />);
+
+    await clickButton(screen, "Negotiate");
+
+    await expect
+      .element(page.getByText("Quote updated: Negotiate"))
+      .toBeVisible();
   });
 
   it("issues the document and hands over the customer link once, because it exists once", async () => {

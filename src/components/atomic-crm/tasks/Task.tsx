@@ -131,6 +131,9 @@ export const Task = ({
             id={labelId}
             checked={isDone}
             onCheckedChange={handleToggleDone}
+            // On mobile the whole row toggles too; without this a tap on the
+            // box reached both handlers and sent the transition twice.
+            onClick={(event) => event.stopPropagation()}
             disabled={isBusy}
             className="mt-1"
             aria-label={translate("resources.tasks.actions.complete")}

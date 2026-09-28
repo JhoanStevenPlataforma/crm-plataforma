@@ -306,6 +306,7 @@ export const frenchCrmMessages = {
           "Terminez une tâche sur cette affaire puis déplacez-la : une étape se gagne par le travail, pas par une phrase.",
         requirement_error:
           "Cette affaire n'a pas assez de tâches terminées pour changer d'étape",
+        success: "Affaire déplacée vers %{stage}",
         override: "Motif de la dérogation (administrateurs uniquement)",
         override_placeholder:
           "ex. Contrat signé hors du CRM, la tâche sera enregistrée demain",
@@ -716,6 +717,7 @@ export const frenchCrmMessages = {
       },
       actions: {
         terminal: "Ce devis est clos : il ne reste aucun mouvement possible.",
+        moved: "Devis mis à jour : %{action}",
       },
       transitions: {
         issue: "Envoyer",
@@ -993,6 +995,9 @@ export const frenchCrmMessages = {
         edited: "modifié",
         on_version: "sur la version %{number}",
         deleted: "Ce commentaire a été supprimé.",
+        delete_title: "Supprimer ce commentaire ?",
+        delete_content:
+          "Le fil indiquera qu'un commentaire a été supprimé. Son texte ne pourra pas être récupéré.",
         mark_read:
           "Marquer %{smart_count} commentaire du client comme lu |||| Marquer %{smart_count} commentaires du client comme lus",
         unread_count: "%{smart_count} non lu |||| %{smart_count} non lus",
@@ -1129,6 +1134,7 @@ export const frenchCrmMessages = {
       },
       transition: {
         error: "Le statut de la tâche n'a pas pu être modifié",
+        completed: "Tâche terminée",
       },
       badges: {
         rescheduled: "Reportée une fois |||| Reportée %{smart_count} fois",

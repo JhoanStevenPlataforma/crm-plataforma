@@ -21,6 +21,7 @@ import { planDealDrop, type DropTarget } from "./dealDrop";
 import { DealStageChangeDialog } from "./DealStageChangeDialog";
 import { closedDealStages, summarizePipeline } from "./pipelineFigures";
 import type { DealsByStage } from "./stages";
+import { findDealLabel } from "./dealUtils";
 import { getDealsByStage } from "./stages";
 
 /**
@@ -148,6 +149,12 @@ export const DealListContent = () => {
         dataProvider,
         { reason, attachments: files, overrideReason },
       );
+      notify("resources.deals.stage_change.success", {
+        type: "success",
+        messageArgs: {
+          stage: findDealLabel(dealStages, pendingMove.destination.stage),
+        },
+      });
       setPendingMove(null);
     } catch (error: unknown) {
       // The move is refused (someone else's deal, a lost connection). The

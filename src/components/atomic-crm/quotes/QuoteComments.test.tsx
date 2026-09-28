@@ -76,6 +76,12 @@ describe("QuoteComments", () => {
       .toBeVisible();
 
     await thread.getByRole("button", { name: "Delete", exact: true }).click();
+    // Asked first: the text cannot be recovered afterwards.
+    const confirm = screen.getByRole("dialog", {
+      name: "Delete this comment?",
+    });
+    await expect.element(confirm).toBeVisible();
+    await confirm.getByRole("button", { name: "Delete" }).click();
 
     await expect
       .element(

@@ -248,7 +248,6 @@ const ArchiveButton = ({ record }: { record: Deal }) => {
   const [update] = useUpdate();
   const redirect = useRedirect();
   const notify = useNotify();
-  const refresh = useRefresh();
   const handleClick = () => {
     update(
       "deals",
@@ -258,13 +257,15 @@ const ArchiveButton = ({ record }: { record: Deal }) => {
         previousData: record,
       },
       {
+        // Undoable: the toast offers "Undo" for a few seconds before the
+        // write is sent, so a misclick on the board costs nothing.
+        mutationMode: "undoable",
         onSuccess: () => {
           redirect("list", "deals");
           notify("resources.deals.archived.success", {
             type: "info",
-            undoable: false,
+            undoable: true,
           });
-          refresh();
         },
         onError: () => {
           notify("resources.deals.archived.error", {

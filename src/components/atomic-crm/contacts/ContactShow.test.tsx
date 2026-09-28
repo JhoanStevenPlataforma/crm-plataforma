@@ -75,4 +75,29 @@ describe("ContactShow", () => {
 
     await expect.element(screen.getByRole("combobox")).toHaveTextContent("Hot");
   });
+
+  it("offers merge, vCard and delete on the contact's page", async () => {
+    mockIsMobile.mockReturnValue(false);
+    const contact = buildContact();
+
+    const screen = await render(
+      <StoryWrapper data={{ contacts: [contact] }}>
+        <ResourceContextProvider value="contacts">
+          <ShowBase id={contact.id}>
+            <ContactAside />
+          </ShowBase>
+        </ResourceContextProvider>
+      </StoryWrapper>,
+    );
+
+    await expect
+      .element(screen.getByRole("button", { name: /merge/i }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: /vcard/i }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: /delete/i }))
+      .toBeVisible();
+  });
 });

@@ -29,7 +29,12 @@ export const useTransitionTask = () => {
   return useMutation({
     mutationFn: ({ taskId, to, reason }: TransitionTaskInput) =>
       dataProvider.transitionTask(taskId, to, { reason }),
-    onSuccess: () => {
+    onSuccess: (_data, { to }) => {
+      // The row's checkbox is the only other sign it worked, and it is easy
+      // to miss on a long list.
+      if (to === "completed") {
+        notify("resources.tasks.transition.completed", { type: "success" });
+      }
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tasks_summary"] });
       queryClient.invalidateQueries({ queryKey: ["contacts_summary"] });

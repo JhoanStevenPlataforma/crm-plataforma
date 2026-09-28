@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { DateField } from "@/components/admin/date-field";
 import { ReferenceField } from "@/components/admin/reference-field";
+import { Confirm } from "@/components/admin/confirm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,7 @@ export const QuoteCommentItem = ({
 }) => {
   const translate = useTranslate();
   const [mode, setMode] = useState<"read" | "edit" | "reply">("read");
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   if (comment.deleted_at) {
     return (
@@ -192,10 +194,22 @@ export const QuoteCommentItem = ({
                 size="sm"
                 className="h-6 px-2 text-xs"
                 disabled={isPending}
-                onClick={() => onDelete(comment)}
+                onClick={() => setIsConfirmingDelete(true)}
               >
                 {translate("ra.action.delete")}
               </Button>
+              <Confirm
+                isOpen={isConfirmingDelete}
+                title="resources.quotes.comments.delete_title"
+                content="resources.quotes.comments.delete_content"
+                confirm="ra.action.delete"
+                confirmColor="warning"
+                onClose={() => setIsConfirmingDelete(false)}
+                onConfirm={() => {
+                  setIsConfirmingDelete(false);
+                  onDelete(comment);
+                }}
+              />
             </>
           ) : null}
         </div>

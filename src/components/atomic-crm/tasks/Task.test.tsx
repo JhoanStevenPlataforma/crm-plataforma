@@ -1,5 +1,6 @@
 import { useDataProvider, type DataProvider } from "ra-core";
 import { describe, expect, it } from "vitest";
+import { page } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
 import { buildContact, buildTask, StoryWrapper } from "@/test/StoryWrapper";
@@ -62,6 +63,12 @@ describe("Task row", () => {
 
     const task = await readTask(getDataProvider(), 1);
     expect(task.completed_at).not.toBeNull();
+    await expect
+      .element(page.getByText("Task completed").first())
+      .toBeVisible();
+    // One tap, one transition: on a phone the row toggles as well, and the
+    // box used to fire both (two toasts, two writes).
+    expect(page.getByText("Task completed").all()).toHaveLength(1);
   });
 
   it("reopens a completed task instead of blanking its completion (fixes W3)", async () => {

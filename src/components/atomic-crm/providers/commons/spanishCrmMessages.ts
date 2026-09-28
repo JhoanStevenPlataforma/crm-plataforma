@@ -306,6 +306,7 @@ export const spanishCrmMessages = {
           "Completa una tarea de esta oportunidad para pasar de etapa.",
         requirement_error:
           "La oportunidad no tiene tareas completadas suficientes para cambiar de etapa",
+        success: "Oportunidad movida a %{stage}",
         override: "Motivo de la excepción (solo administradores)",
         override_placeholder:
           "p. ej. Contrato firmado fuera del CRM, la tarea se registra mañana",
@@ -716,6 +717,7 @@ export const spanishCrmMessages = {
       },
       actions: {
         terminal: "Esta cotización está cerrada: no queda ningún movimiento.",
+        moved: "Cotización actualizada: %{action}",
       },
       transitions: {
         issue: "Enviar",
@@ -992,6 +994,9 @@ export const spanishCrmMessages = {
         edited: "editado",
         on_version: "sobre la versión %{number}",
         deleted: "Este comentario fue eliminado.",
+        delete_title: "¿Eliminar este comentario?",
+        delete_content:
+          "La conversación mostrará que se eliminó un comentario. Su texto no se puede recuperar.",
         mark_read:
           "Marcar %{smart_count} comentario del cliente como leído |||| Marcar %{smart_count} comentarios del cliente como leídos",
         unread_count: "%{smart_count} sin leer |||| %{smart_count} sin leer",
@@ -1128,6 +1133,7 @@ export const spanishCrmMessages = {
       },
       transition: {
         error: "No se ha podido cambiar el estado de la tarea",
+        completed: "Tarea completada",
       },
       badges: {
         rescheduled:

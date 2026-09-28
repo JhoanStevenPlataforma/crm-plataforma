@@ -300,6 +300,7 @@ export const englishCrmMessages = {
           "Complete a task on this deal and move it again: a stage is earned with work, not with a sentence.",
         requirement_error:
           "This deal has not completed enough tasks to change stage",
+        success: "Deal moved to %{stage}",
         override: "Override reason (admins only)",
         override_placeholder:
           "e.g. Contract signed outside the CRM, the task will be recorded tomorrow",
@@ -703,6 +704,7 @@ export const englishCrmMessages = {
       },
       actions: {
         terminal: "This quote is closed: there is nothing left to move.",
+        moved: "Quote updated: %{action}",
       },
       transitions: {
         issue: "Send",
@@ -977,6 +979,9 @@ export const englishCrmMessages = {
         edited: "edited",
         on_version: "on version %{number}",
         deleted: "This comment was deleted.",
+        delete_title: "Delete this comment?",
+        delete_content:
+          "The thread will show that a comment was deleted. Its text cannot be recovered.",
         mark_read:
           "Mark %{smart_count} customer comment as read |||| Mark %{smart_count} customer comments as read",
         unread_count: "%{smart_count} unread |||| %{smart_count} unread",
@@ -1112,6 +1117,7 @@ export const englishCrmMessages = {
       },
       transition: {
         error: "The task status could not be changed",
+        completed: "Task completed",
       },
       badges: {
         rescheduled: "Rescheduled once |||| Rescheduled %{smart_count} times",
