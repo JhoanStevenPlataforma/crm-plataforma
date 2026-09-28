@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Report, ReportField, ReportRow, ReportSpec } from "../types";
+import { useLeadStatusChoices } from "../leads/useLeadStatusChoices";
 import { ReportBuilderPanel } from "./ReportBuilderPanel";
 import { ReportResultView } from "./ReportResultView";
 import { csvFilename, exportReportCsv } from "./exportReportCsv";
@@ -75,6 +76,7 @@ export const ReportPage = () => {
   const { reportId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const config = useConfigurationContext();
+  const leadStatuses = useLeadStatusChoices();
   const { identity } = useGetIdentity();
 
   const catalog = useReportCatalog();
@@ -221,7 +223,7 @@ export const ReportPage = () => {
     dealStages: config.dealStages,
     dealCategories: config.dealCategories,
     leadSources: config.leadSources,
-    leadStatuses: config.leadStatuses,
+    leadStatuses,
   };
 
   const fieldsOf = (keys: string[]): ReportField[] =>

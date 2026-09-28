@@ -18,6 +18,7 @@ import {
 } from "./taskAnalytics";
 import { useAnalyticsFilters } from "./useAnalyticsFilters";
 import { useAnalyticsQuery } from "./useAnalyticsQuery";
+import { formatCycleTime } from "../teams/taskStats";
 
 /**
  * Is the team doing the work, on time?
@@ -94,13 +95,7 @@ export const AnalyticsProductivity = () => {
         />
         <StatTile
           label={translate("crm.analytics.kpi.cycle_time")}
-          value={
-            cycle == null
-              ? "—"
-              : translate("crm.analytics.kpi.hours", {
-                  count: Math.round(cycle),
-                })
-          }
+          value={formatCycleTime(cycle, translate)}
         />
       </div>
 

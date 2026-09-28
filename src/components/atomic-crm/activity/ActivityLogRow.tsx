@@ -69,7 +69,10 @@ export const ActivityLogRow = ({
           </p>
           <time
             dateTime={date}
-            title={dateObj.toLocaleString(locale)}
+            title={dateObj.toLocaleString(locale, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
             className="shrink-0 pt-0.5 text-xs text-muted-foreground tabular-nums"
           >
             {formatTimeOfDay(dateObj, locale)}

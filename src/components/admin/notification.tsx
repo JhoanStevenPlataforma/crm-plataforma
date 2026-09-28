@@ -111,7 +111,10 @@ export const Notification = (props: ToasterProps) => {
         richColors
         theme={theme}
         closeButton
-        position="bottom-center"
+        // Top, not bottom: dialogs and side sheets keep their Save / Confirm
+        // buttons at the bottom, and a toast there covered the very button
+        // the user was about to press next.
+        position="top-center"
         // Sonner's own labels are English; the region is announced by name.
         containerAriaLabel={translate("crm.notifications.title", {
           _: "Notifications",

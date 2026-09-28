@@ -290,7 +290,10 @@ const CompactDue = ({
   return (
     <time
       dateTime={dueDate}
-      title={date.toLocaleString(locale)}
+      title={date.toLocaleString(locale, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })}
       className={cn(
         "text-xs tabular-nums",
         calendarDaysBetween(date, now) < 0 && "font-medium text-destructive",

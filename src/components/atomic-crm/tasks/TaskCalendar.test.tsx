@@ -3,7 +3,7 @@ import { render } from "vitest-browser-react";
 
 import { buildContact, buildTask, StoryWrapper } from "@/test/StoryWrapper";
 
-import { TaskCalendar } from "./TaskCalendar";
+import { formatMonthLabel, TaskCalendar } from "./TaskCalendar";
 import type { Task } from "../types";
 
 const contact = buildContact({ id: 1 });
@@ -31,6 +31,22 @@ const renderCalendar = async (tasks: Task[]) => {
 };
 
 describe("TaskCalendar", () => {
+  it("starts the week on Monday", async () => {
+    const { screen } = await renderCalendar([]);
+
+    const headers = screen.getByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/).all();
+    await expect.element(headers[0]).toHaveTextContent("Mon");
+    await expect.element(headers[6]).toHaveTextContent("Sun");
+  });
+
+  it("capitalises only the month, never the preposition", () => {
+    const september = new Date(2026, 8, 1);
+
+    expect(formatMonthLabel(september, "es")).toBe("Septiembre de 2026");
+    expect(formatMonthLabel(september, "fr")).toBe("Septembre 2026");
+    expect(formatMonthLabel(september, "en")).toBe("September 2026");
+  });
+
   it("places a task on its due date", async () => {
     const { screen } = await renderCalendar([
       buildTask({ id: 1, title: "Llamar a Ana", due_date: dayInThisMonth(10) }),

@@ -206,7 +206,7 @@ export const TeamMemberStatsPage = () => {
         <TeamWorkloadTiles source={member} />
         <StatTile
           label={translate("crm.teams_dashboard.cycle_time")}
-          value={formatCycleTime(taskTotals.avgCycleHours)}
+          value={formatCycleTime(taskTotals.avgCycleHours, translate)}
           hint={translate("crm.teams_dashboard.cycle_time_hint")}
         />
       </div>

@@ -1687,6 +1687,8 @@ export const frenchCrmMessages = {
         "Les modifications sont enregistrées en cliquant sur Enregistrer.",
     },
     common: {
+      won_n: "%{smart_count} gagnée |||| %{smart_count} gagnées",
+      lost_n: "%{smart_count} perdue |||| %{smart_count} perdues",
       reason_required:
         "Obligatoire : saisissez un motif pour activer le bouton.",
       see_all_tasks: "Voir toutes les tâches",
@@ -1798,7 +1800,7 @@ export const frenchCrmMessages = {
         open_pipeline: "Pipeline ouvert",
         won: "Gagné",
         win_rate: "Taux de réussite",
-        decided: "%{won} gagnées / %{lost} perdues",
+        decided: "%{won} / %{lost}",
         new_deals: "Nouvelles affaires",
         new_leads: "Nouveaux leads",
         lead_conversion: "Conversion des leads",
@@ -2208,7 +2210,7 @@ export const frenchCrmMessages = {
         "%{shown} équipes affichées sur %{total} : les totaux ci-dessous portent sur les équipes affichées.",
       lost: "Perdu",
       win_rate: "Taux de réussite",
-      decided_deals: "%{won} gagnées, %{lost} perdues",
+      decided_deals: "%{won}, %{lost}",
       at_risk: "Équipes en risque",
       at_risk_hint: "En retard sur le rythme de la période",
       pace: "Rythme",
@@ -2251,7 +2253,6 @@ export const frenchCrmMessages = {
       },
       kpi: {
         open_tasks: "Tâches ouvertes",
-        won_count: "%{count} gagnées",
         sample: "N=%{count}",
         unweighted_short: "%{amount} non pondéré",
       },

@@ -31,6 +31,7 @@ import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 import { ContactList } from "./ContactList";
+import { formatMoney } from "../misc/reporting";
 import { findDealLabel, formatISODateString, isPastDay } from "./dealUtils";
 
 export const DealShow = ({ open, id }: { open: boolean; id?: string }) => {
@@ -41,7 +42,7 @@ export const DealShow = ({ open, id }: { open: boolean; id?: string }) => {
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="lg:max-w-4xl p-4 overflow-y-auto max-h-9/10 top-1/20 translate-y-0">
+      <DialogContent className="sm:max-w-3xl lg:max-w-4xl p-4 overflow-y-auto max-h-9/10 top-1/20 translate-y-0">
         {id ? (
           <ShowBase id={id}>
             <DealShowContent />
@@ -64,7 +65,7 @@ const DealShowContent = () => {
       <div className="space-y-2">
         {record.archived_at ? <ArchivedTitle /> : null}
         <div className="flex-1">
-          <div className="flex justify-between items-start mb-8">
+          <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <ReferenceField
                 source="company_id"
@@ -90,8 +91,10 @@ const DealShowContent = () => {
             </div>
           </div>
 
-          <div className="flex gap-8 m-4">
-            <div className="flex flex-col mr-10">
+          {/* Wraps instead of squeezing: at a tablet width the four facts used to
+              share one row and each wrapped its own text into a column. */}
+          <div className="m-4 flex flex-wrap gap-x-10 gap-y-4">
+            <div className="flex flex-col">
               <span className="text-xs text-muted-foreground tracking-wide">
                 {translate("resources.deals.fields.expected_closing_date")}
               </span>
@@ -117,23 +120,17 @@ const DealShowContent = () => {
               </div>
             </div>
 
-            <div className="flex flex-col mr-10">
+            <div className="flex flex-col">
               <span className="text-xs text-muted-foreground tracking-wide">
                 {translate("resources.deals.fields.amount")}
               </span>
               <span className="text-sm">
-                {record.amount.toLocaleString(locale, {
-                  notation: "compact",
-                  style: "currency",
-                  currency,
-                  currencyDisplay: "narrowSymbol",
-                  minimumSignificantDigits: 3,
-                })}
+                {formatMoney(record.amount, currency, locale)}
               </span>
             </div>
 
             {record.category && (
-              <div className="flex flex-col mr-10">
+              <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground tracking-wide">
                   {translate("resources.deals.fields.category")}
                 </span>
@@ -144,7 +141,7 @@ const DealShowContent = () => {
               </div>
             )}
 
-            <div className="flex flex-col mr-10">
+            <div className="flex flex-col">
               <span className="text-xs text-muted-foreground tracking-wide">
                 {translate("resources.deals.fields.stage")}
               </span>

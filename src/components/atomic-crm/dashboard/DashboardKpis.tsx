@@ -9,6 +9,7 @@ import { useChartPalette } from "../misc/chartTheme";
 import { KpiCard } from "../misc/KpiCard";
 import { Sparkline } from "../misc/Sparkline";
 import { formatAttainment, formatMoney, winRate } from "../misc/reporting";
+import { decidedCounts } from "../misc/decidedCounts";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { DashboardPeriod } from "./dashboardPeriod";
 import { compareAmounts, compareRates } from "./kpiDelta";
@@ -130,8 +131,8 @@ export const DashboardKpis = ({
             className="size-full overflow-visible"
           />
         }
-        footerPrimary={translate("crm.dashboard.kpi.won_count", {
-          count: stats.totals.nbWon,
+        footerPrimary={translate("crm.common.won_n", {
+          smart_count: stats.totals.nbWon,
         })}
         footerSecondary={translate("crm.analytics.basis.expected_close")}
       />
@@ -167,10 +168,10 @@ export const DashboardKpis = ({
             className="size-full overflow-visible"
           />
         }
-        footerPrimary={translate("crm.analytics.kpi.decided", {
-          won: stats.totals.nbWon,
-          lost: stats.totals.nbLost,
-        })}
+        footerPrimary={translate(
+          "crm.analytics.kpi.decided",
+          decidedCounts(translate, stats.totals.nbWon, stats.totals.nbLost),
+        )}
         // The denominator, stated. A rate over four closed deals is not the
         // same claim as a rate over four hundred.
         footerSecondary={translate("crm.dashboard.kpi.sample", {

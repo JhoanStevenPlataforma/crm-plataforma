@@ -8,6 +8,7 @@ import {
 } from "../misc/reporting";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { LeadBreakdownStat, LeadFlowStat } from "../types";
+import { useLeadStatusChoices } from "../leads/useLeadStatusChoices";
 import { AnalyticsLayout } from "./AnalyticsLayout";
 import { rangeParams } from "./analyticsFilters";
 import { ANALYTICS_LEADS_PATH } from "./analyticsPath";
@@ -42,7 +43,8 @@ import { useAnalyticsQuery } from "./useAnalyticsQuery";
  */
 export const AnalyticsLeads = () => {
   const translate = useTranslate();
-  const { currency, leadSources, leadStatuses } = useConfigurationContext();
+  const { currency, leadSources } = useConfigurationContext();
+  const leadStatuses = useLeadStatusChoices();
   const filters = useAnalyticsFilters();
   const range = rangeParams(filters);
 
@@ -122,9 +124,8 @@ export const AnalyticsLeads = () => {
           subtitle={translate("crm.analytics.basis.lead_created")}
           layout="horizontal"
           rows={bucketsOf(breakdown.data, "status").map((point) => ({
-            // `converted` is written by `convert_lead()` and is absent from the
-            // configured list, so `labelOf` falls back to the key rather than
-            // dropping the biggest bucket on the chart.
+            // `converted` comes from `useLeadStatusChoices`, translated: the
+            // configured list alone printed the raw key on the biggest bucket.
             label: labelOf(leadStatuses, point.bucket),
             values: { leads: point.nbLeads },
           }))}

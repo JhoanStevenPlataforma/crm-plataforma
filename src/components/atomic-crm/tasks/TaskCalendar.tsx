@@ -22,8 +22,24 @@ import type { Task } from "../types";
 import { TaskEdit } from "./TaskEdit";
 import { STATUS_DOT_CLASS } from "./taskModel";
 
-/** Sunday-first, matching the `this_week` bucket semantics in `taskBuckets`. */
-const WEEK_OPTIONS = { weekStartsOn: 0 } as const;
+/**
+ * Monday-first, as the dashboard's "this week" is: every locale this CRM ships
+ * (en, es, fr) works Monday to Friday, and a Sunday column first split the
+ * working week across two rows.
+ */
+const WEEK_OPTIONS = { weekStartsOn: 1 } as const;
+
+/**
+ * "Septiembre de 2026", not "Septiembre De 2026": CSS `capitalize` raises
+ * every word, including the Spanish and French prepositions.
+ */
+export const formatMonthLabel = (month: Date, locale: string): string => {
+  const label = new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+  }).format(month);
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+};
 
 const MAX_CHIPS_PER_DAY = 3;
 
@@ -73,10 +89,7 @@ export const TaskCalendar = ({
   const tasks = data ?? [];
   const today = new Date();
 
-  const monthLabel = new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-  }).format(month);
+  const monthLabel = formatMonthLabel(month, locale);
   const weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: "short" });
 
   return (
@@ -109,9 +122,7 @@ export const TaskCalendar = ({
           >
             {translate("resources.tasks.calendar.today")}
           </Button>
-          <span className="ml-2 text-sm font-medium capitalize">
-            {monthLabel}
-          </span>
+          <span className="ml-2 text-sm font-medium">{monthLabel}</span>
         </div>
 
         <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border">

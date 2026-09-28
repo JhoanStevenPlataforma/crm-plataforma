@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ActivityLog } from "../activity/ActivityLog";
 
 import { StatTile } from "../misc/StatTile";
+import { decidedCounts } from "../misc/decidedCounts";
 import {
   formatAttainment,
   formatMonthLabel,
@@ -117,10 +118,10 @@ export const AnalyticsOverview = () => {
         <StatTile
           label={translate("crm.analytics.kpi.win_rate")}
           value={formatAttainment(winRate(totals.nbWon, totals.nbLost))}
-          hint={translate("crm.analytics.kpi.decided", {
-            won: totals.nbWon,
-            lost: totals.nbLost,
-          })}
+          hint={translate(
+            "crm.analytics.kpi.decided",
+            decidedCounts(translate, totals.nbWon, totals.nbLost),
+          )}
           to={winRateDrilldown(filters)}
         />
         <StatTile

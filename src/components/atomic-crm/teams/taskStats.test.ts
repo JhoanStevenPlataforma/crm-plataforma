@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import type { TeamTaskStat } from "../types";
 import { formatCycleTime, taskFlowByMonth, taskFlowTotals } from "./taskStats";
+import { i18nProvider } from "../providers/commons/i18nProvider";
 
 /**
  * The cube arrives one row per member per month, so every test here is really
@@ -162,12 +163,16 @@ describe("taskFlowTotals", () => {
 });
 
 describe("formatCycleTime", () => {
+  const translate = (key: string, options?: object) =>
+    i18nProvider.translate(key, options);
+
   test("keeps hours readable and switches to days past two of them", () => {
-    expect(formatCycleTime(31.4)).toBe("31h");
-    expect(formatCycleTime(56)).toBe("2.3d");
+    expect(formatCycleTime(31.4, translate)).toBe("31 h");
+    expect(formatCycleTime(56, translate)).toBe("2 d");
+    expect(formatCycleTime(312, translate)).toBe("13 d");
   });
 
   test("renders a missing cycle time as an em dash, not as zero hours", () => {
-    expect(formatCycleTime(null)).toBe("—");
+    expect(formatCycleTime(null, translate)).toBe("—");
   });
 });

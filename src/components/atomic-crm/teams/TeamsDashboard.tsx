@@ -14,6 +14,7 @@ import { StatTile } from "./TeamStatTile";
 import { sumWorkload, workloadByTeam, workloadByTeamId } from "./taskWorkload";
 import { TeamsOverviewCharts } from "./TeamsOverviewCharts";
 import { TeamsTable } from "./TeamsTable";
+import { decidedCounts } from "../misc/decidedCounts";
 import { TEAMS_DASHBOARD_PATH } from "./teamsDashboardPath";
 import { PageHeader } from "@/components/admin/page-header";
 
@@ -154,10 +155,10 @@ export const TeamsDashboard = () => {
         <StatTile
           label={translate("crm.teams_dashboard.win_rate")}
           value={formatAttainment(winRate(totals.nbWon, totals.nbLost))}
-          hint={translate("crm.teams_dashboard.decided_deals", {
-            won: totals.nbWon,
-            lost: totals.nbLost,
-          })}
+          hint={translate(
+            "crm.teams_dashboard.decided_deals",
+            decidedCounts(translate, totals.nbWon, totals.nbLost),
+          )}
         />
         <StatTile
           label={translate("crm.teams_dashboard.lost")}

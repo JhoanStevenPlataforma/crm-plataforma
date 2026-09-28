@@ -1,6 +1,7 @@
 import { useTranslate } from "ra-core";
 
 import { StatTile } from "../misc/StatTile";
+import { decidedCounts } from "../misc/decidedCounts";
 import {
   formatAttainment,
   formatMonthLabel,
@@ -123,10 +124,10 @@ export const AnalyticsPipeline = () => {
         <StatTile
           label={translate("crm.analytics.kpi.win_rate")}
           value={formatAttainment(winRate(totals.nbWon, totals.nbLost))}
-          hint={translate("crm.analytics.kpi.decided", {
-            won: totals.nbWon,
-            lost: totals.nbLost,
-          })}
+          hint={translate(
+            "crm.analytics.kpi.decided",
+            decidedCounts(translate, totals.nbWon, totals.nbLost),
+          )}
         />
         {/* "Expected", never "actual": this measures what people typed into
             `expected_closing_date`, not how long deals really take. The real

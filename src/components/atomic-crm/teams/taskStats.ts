@@ -1,3 +1,5 @@
+import type { TranslateFunction } from "ra-core";
+
 import type { TeamTaskStat } from "../types";
 
 /**
@@ -132,8 +134,21 @@ export const taskFlowTotals = (points: TaskFlowPoint[]): TaskFlowTotals => {
   };
 };
 
-/** `31.4` -> `"31h"`, `56` -> `"2.3d"`, `null` -> an em dash. */
-export const formatCycleTime = (hours: number | null) => {
+/** Past two days a cycle reads in days: "13 d", not "312 h". */
+const HOURS_BEFORE_DAYS = 48;
+
+/**
+ * `31.4` -> "31 h", `56` -> "2 d", `null` -> an em dash; the unit comes from
+ * the catalogue (`crm.analytics.kpi.hours` / `days`), so it is translated.
+ * Every cycle-time tile uses this one, so two screens never disagree on the
+ * unit for the same figure.
+ */
+export const formatCycleTime = (
+  hours: number | null,
+  translate: TranslateFunction,
+) => {
   if (hours == null) return "—";
-  return hours < 48 ? `${Math.round(hours)}h` : `${(hours / 24).toFixed(1)}d`;
+  return hours < HOURS_BEFORE_DAYS
+    ? translate("crm.analytics.kpi.hours", { count: Math.round(hours) })
+    : translate("crm.analytics.kpi.days", { count: Math.round(hours / 24) });
 };

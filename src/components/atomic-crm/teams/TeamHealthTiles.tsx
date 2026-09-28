@@ -2,6 +2,7 @@ import { useTranslate } from "ra-core";
 
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Team } from "../types";
+import { decidedCounts } from "../misc/decidedCounts";
 import { formatMoney } from "./teamBudget";
 import {
   formatCoverage,
@@ -57,10 +58,10 @@ export const TeamHealthTiles = ({ team }: { team: Team }) => {
         hint={
           rate == null
             ? undefined
-            : translate("crm.teams_dashboard.decided_deals", {
-                won: team.nb_won ?? 0,
-                lost: team.nb_lost ?? 0,
-              })
+            : translate(
+                "crm.teams_dashboard.decided_deals",
+                decidedCounts(translate, team.nb_won ?? 0, team.nb_lost ?? 0),
+              )
         }
       />
       <StatTile

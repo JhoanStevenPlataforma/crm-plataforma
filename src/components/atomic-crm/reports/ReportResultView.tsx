@@ -21,6 +21,7 @@ import {
   type LabelSources,
 } from "./reportFormat";
 import { useReportLabels } from "./reportLabels";
+import { useLeadStatusChoices } from "../leads/useLeadStatusChoices";
 
 /**
  * Turns one result into the visualisation the spec asked for.
@@ -65,6 +66,7 @@ export const ReportResultView = ({
 }) => {
   const translate = useTranslate();
   const config = useConfigurationContext();
+  const leadStatuses = useLeadStatusChoices();
   const labels = useReportLabels();
 
   const sources: LabelSources = useMemo(
@@ -72,9 +74,9 @@ export const ReportResultView = ({
       dealStages: config.dealStages,
       dealCategories: config.dealCategories,
       leadSources: config.leadSources,
-      leadStatuses: config.leadStatuses,
+      leadStatuses,
     }),
-    [config],
+    [config, leadStatuses],
   );
 
   const byKey = useMemo(

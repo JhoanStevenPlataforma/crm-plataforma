@@ -1,5 +1,10 @@
 import type { HTMLAttributes } from "react";
-import { genericMemo, useFieldValue, useTranslate } from "ra-core";
+import {
+  genericMemo,
+  useFieldValue,
+  useLocaleState,
+  useTranslate,
+} from "ra-core";
 
 import type { FieldProps } from "@/lib/field.type";
 
@@ -9,9 +14,10 @@ const DateFieldImpl = <
 >(
   inProps: DateFieldProps<RecordType>,
 ) => {
+  const [appLocale] = useLocaleState();
   const {
     empty,
-    locales,
+    locales = appLocale,
     options,
     showTime = false,
     showDate = true,
@@ -46,9 +52,14 @@ const DateFieldImpl = <
 
   let dateString = "";
   if (date) {
+    // Minutes, never seconds, unless the caller asks: "10:42:17" on a comment
+    // or a reminder is noise the audit flagged.
     if (showTime && showDate) {
       dateString = toLocaleStringSupportsLocales
-        ? date.toLocaleString(locales, options)
+        ? date.toLocaleString(
+            locales,
+            options ?? { dateStyle: "medium", timeStyle: "short" },
+          )
         : date.toLocaleString();
     } else if (showDate) {
       // If input is a date string (e.g. '2022-02-15') without time and time zone,
@@ -64,7 +75,7 @@ const DateFieldImpl = <
         : date.toLocaleDateString();
     } else if (showTime) {
       dateString = toLocaleStringSupportsLocales
-        ? date.toLocaleTimeString(locales, options)
+        ? date.toLocaleTimeString(locales, options ?? { timeStyle: "short" })
         : date.toLocaleTimeString();
     }
   }

@@ -61,6 +61,22 @@ describe("DealShow archive", () => {
   });
 });
 
+describe("DealShow amount", () => {
+  it("writes the amount as the board and the dashboard do ($1K, not $1.00K)", async () => {
+    const screen = await render(
+      <StoryWrapper data={{ deals: [deal] }}>
+        <ResourceContextProvider value="deals">
+          <DealShow open id="1" />
+        </ResourceContextProvider>
+      </StoryWrapper>,
+    );
+
+    await expect
+      .element(screen.getByText("$1K", { exact: true }))
+      .toBeVisible();
+  });
+});
+
 describe("getDealsByStage", () => {
   it("leaves out a deal whose archive is still pending", () => {
     const columns = getDealsByStage(
