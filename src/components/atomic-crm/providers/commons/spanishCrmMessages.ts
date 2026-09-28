@@ -191,6 +191,7 @@ export const spanishCrmMessages = {
         before_this_month: "Antes de este mes",
         before_this_week: "Antes de esta semana",
         managed_by_me: "Gestionados por mí",
+        active: "Filtros activos:",
         search: "Buscar por nombre, empresa...",
         this_week: "Esta semana",
         today: "Hoy",
@@ -1751,6 +1752,7 @@ export const spanishCrmMessages = {
         period: "Periodo",
         from: "Desde",
         to: "Hasta",
+        invalid_range: "La fecha inicial debe ser igual o anterior a la final.",
         owner: "Responsable",
         all_owners: "Todos",
         team: "Equipo",
@@ -2378,6 +2380,11 @@ export const spanishCrmMessages = {
         statuses: "Estados",
       },
       reset_defaults: "Restablecer los valores por defecto",
+      reset_defaults_title: "¿Restablecer todos los ajustes por defecto?",
+      reset_defaults_content:
+        "Etapas, categorías, estados, colores y logotipos vuelven a sus valores por defecto en este formulario. No se guarda nada hasta que pulses Guardar.",
+      reset_defaults_pending:
+        "Valores por defecto restablecidos en el formulario. Pulsa Guardar para aplicarlos.",
       save_error: "No se ha podido guardar la configuración",
       saved: "Configuración guardada correctamente",
       saving: "Guardando...",

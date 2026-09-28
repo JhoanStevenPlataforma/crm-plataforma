@@ -1,4 +1,8 @@
+import { ResourceContextProvider } from "ra-core";
 import { render } from "vitest-browser-react";
+
+import { buildContact, StoryWrapper } from "@/test/StoryWrapper";
+import { ContactList } from "./ContactList";
 
 import {
   DesktopEmpty,
@@ -20,6 +24,38 @@ describe("ContactList", () => {
       .toBeInTheDocument();
     await expect
       .element(screen.getByText("It seems your contact list is empty."))
+      .toBeVisible();
+  });
+
+  it("names a remembered tag filter above the list, even past the first page of tags", async () => {
+    // Eleven tags sort before "QA", so it is not among the ten the sidebar
+    // lists: the chip is the only place the filter shows.
+    const tags = [
+      ...Array.from({ length: 11 }, (_, index) => ({
+        id: index + 1,
+        name: `A${String(index).padStart(2, "0")}`,
+        color: "#eee",
+      })),
+      { id: 12, name: "QA", color: "#eee" },
+    ];
+    const filter = encodeURIComponent(JSON.stringify({ "tags@cs": "{12}" }));
+    const screen = await render(
+      <StoryWrapper
+        data={{
+          tags,
+          contacts: [buildContact({ id: 1, first_name: "Ada", tags: [12] })],
+        }}
+        initialEntries={[`/?filter=${filter}`]}
+      >
+        <ResourceContextProvider value="contacts">
+          <ContactList />
+        </ResourceContextProvider>
+      </StoryWrapper>,
+    );
+
+    await expect.element(screen.getByText("Active filters:")).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: /^QA/ }))
       .toBeVisible();
   });
 

@@ -192,6 +192,7 @@ export const frenchCrmMessages = {
         before_this_month: "Avant ce mois-ci",
         before_this_week: "Avant cette semaine",
         managed_by_me: "Géré par moi",
+        active: "Filtres actifs :",
         search: "Rechercher nom, entreprise...",
         this_week: "Cette semaine",
         today: "Aujourd'hui",
@@ -1755,6 +1756,8 @@ export const frenchCrmMessages = {
         period: "Période",
         from: "Du",
         to: "Au",
+        invalid_range:
+          "La date de début doit précéder ou égaler la date de fin.",
         owner: "Responsable",
         all_owners: "Tous",
         team: "Équipe",
@@ -2393,6 +2396,11 @@ export const frenchCrmMessages = {
         statuses: "Statuts",
       },
       reset_defaults: "Réinitialiser aux valeurs par défaut",
+      reset_defaults_title: "Réinitialiser tous les paramètres ?",
+      reset_defaults_content:
+        "Étapes, catégories, statuts, couleurs et logos reviennent aux valeurs par défaut dans ce formulaire. Rien n'est enregistré avant que vous cliquiez sur Enregistrer.",
+      reset_defaults_pending:
+        "Valeurs par défaut rétablies dans le formulaire. Cliquez sur Enregistrer pour les appliquer.",
       save_error: "Échec de l'enregistrement de la configuration",
       saved: "Configuration enregistrée avec succès",
       saving: "Enregistrement...",

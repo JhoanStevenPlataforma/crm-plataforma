@@ -1,4 +1,5 @@
 import { useCanAccess, useGetList, useTranslate } from "ra-core";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -113,38 +114,11 @@ export const AnalyticsFilterBar = ({
         </div>
       </div>
 
-      <div className="flex items-end gap-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-            {translate("crm.analytics.filters.from")}
-          </span>
-          <Input
-            type="date"
-            className="w-36"
-            value={filters.from}
-            max={filters.to}
-            onChange={(event) =>
-              event.target.value &&
-              apply({ ...filters, from: event.target.value })
-            }
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-            {translate("crm.analytics.filters.to")}
-          </span>
-          <Input
-            type="date"
-            className="w-36"
-            value={filters.to}
-            min={filters.from}
-            onChange={(event) =>
-              event.target.value &&
-              apply({ ...filters, to: event.target.value })
-            }
-          />
-        </label>
-      </div>
+      <DateRangeInputs
+        from={filters.from}
+        to={filters.to}
+        onApply={(range) => apply({ ...filters, ...range })}
+      />
 
       {canFilterByOwner ? (
         <label className="flex flex-col gap-1">
@@ -206,6 +180,85 @@ export const AnalyticsFilterBar = ({
             </SelectContent>
           </Select>
         </label>
+      ) : null}
+    </div>
+  );
+};
+
+const LABEL_CLASS =
+  "text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase";
+
+/**
+ * From / To, held as a draft until they make a valid range.
+ *
+ * Written straight to the URL, an inverted range was dropped by the parser and
+ * the screen silently snapped back to the default period, taking the date the
+ * user had just typed with it. Now the typed value stays, the problem is said
+ * in words, and the URL only changes once the range is valid.
+ */
+const DateRangeInputs = ({
+  from,
+  to,
+  onApply,
+}: {
+  from: string;
+  to: string;
+  onApply: (range: { from: string; to: string }) => void;
+}) => {
+  const translate = useTranslate();
+  const [draft, setDraft] = useState({ from, to });
+
+  // A preset or the back button changed the range: show it.
+  useEffect(() => {
+    setDraft({ from, to });
+  }, [from, to]);
+
+  const isInverted =
+    draft.from !== "" && draft.to !== "" && draft.from > draft.to;
+
+  const change = (next: { from: string; to: string }) => {
+    setDraft(next);
+    if (next.from && next.to && next.from <= next.to) onApply(next);
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-end gap-2">
+        <label className="flex flex-col gap-1">
+          <span className={LABEL_CLASS}>
+            {translate("crm.analytics.filters.from")}
+          </span>
+          <Input
+            type="date"
+            className="w-36"
+            value={draft.from}
+            aria-invalid={isInverted}
+            aria-describedby={isInverted ? "analytics-range-error" : undefined}
+            onChange={(event) => change({ ...draft, from: event.target.value })}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className={LABEL_CLASS}>
+            {translate("crm.analytics.filters.to")}
+          </span>
+          <Input
+            type="date"
+            className="w-36"
+            value={draft.to}
+            aria-invalid={isInverted}
+            aria-describedby={isInverted ? "analytics-range-error" : undefined}
+            onChange={(event) => change({ ...draft, to: event.target.value })}
+          />
+        </label>
+      </div>
+      {isInverted ? (
+        <p
+          id="analytics-range-error"
+          role="alert"
+          className="max-w-74 text-xs text-destructive"
+        >
+          {translate("crm.analytics.filters.invalid_range")}
+        </p>
       ) : null}
     </div>
   );

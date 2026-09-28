@@ -77,6 +77,11 @@ export const ReportBuilderPanel = ({
 }) => {
   const translate = useTranslate();
   const labels = useReportLabels();
+  const isRangeInverted =
+    spec.period?.preset === "custom" &&
+    !!spec.period.from &&
+    !!spec.period.to &&
+    spec.period.from > spec.period.to;
 
   const dataset: ReportDataset | undefined = catalog.find(
     (item) => item.key === spec.dataset,
@@ -263,6 +268,8 @@ export const ReportBuilderPanel = ({
                   <Input
                     type="date"
                     className="h-9 text-xs"
+                    aria-label={translate("crm.analytics.filters.from")}
+                    aria-invalid={isRangeInverted}
                     value={spec.period.from ?? ""}
                     onChange={(event) =>
                       onChange({
@@ -274,6 +281,8 @@ export const ReportBuilderPanel = ({
                   <Input
                     type="date"
                     className="h-9 text-xs"
+                    aria-label={translate("crm.analytics.filters.to")}
+                    aria-invalid={isRangeInverted}
                     value={spec.period.to ?? ""}
                     onChange={(event) =>
                       onChange({
@@ -283,6 +292,13 @@ export const ReportBuilderPanel = ({
                     }
                   />
                 </div>
+              ) : null}
+              {/* Until it is fixed the report runs over every date, so say so
+                  rather than let the figures pass for the typed range. */}
+              {isRangeInverted ? (
+                <p role="alert" className="text-xs text-destructive">
+                  {translate("crm.analytics.filters.invalid_range")}
+                </p>
               ) : null}
             </>
           ) : null}

@@ -1,5 +1,4 @@
 /* eslint-disable react-refresh/only-export-components */
-import { RotateCcw, Save } from "lucide-react";
 import type { RaRecord } from "ra-core";
 import { EditBase, Form, useGetList, useNotify, useTranslate } from "ra-core";
 import { useCallback, useMemo } from "react";
@@ -22,7 +21,7 @@ import {
   useConfigurationUpdater,
   type ConfigurationContextValue,
 } from "../root/ConfigurationContext";
-import { defaultConfiguration } from "../root/defaultConfiguration";
+import { SettingsSaveBar } from "./SettingsSaveBar";
 import { useActiveSection } from "./useActiveSection";
 
 const SECTIONS = [
@@ -200,12 +199,7 @@ const SettingsFormFields = () => {
   const translate = useTranslate();
   const activeSection = useActiveSection(SECTION_IDS);
   const currencyChoices = useMemo(() => getCurrencyChoices(), []);
-  const {
-    watch,
-    setValue,
-    reset,
-    formState: { isSubmitting },
-  } = useFormContext();
+  const { watch, setValue } = useFormContext();
 
   const dealStages = watch("dealStages");
   const dealPipelineStatuses: string[] = watch("dealPipelineStatuses") ?? [];
@@ -518,45 +512,7 @@ const SettingsFormFields = () => {
         </Card>
       </div>
 
-      {/* Sticky save button */}
-      <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4">
-        <div className="max-w-screen-xl mx-auto flex gap-8 px-4">
-          <div className="hidden md:block w-48 shrink-0" />
-          <div className="flex-1 min-w-0 max-w-2xl flex justify-between">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() =>
-                reset({
-                  ...defaultConfiguration,
-                  lightModeLogo: {
-                    src: defaultConfiguration.lightModeLogo,
-                  },
-                  darkModeLogo: { src: defaultConfiguration.darkModeLogo },
-                })
-              }
-            >
-              <RotateCcw className="h-4 w-4 mr-1" />
-              {translate("crm.settings.reset_defaults")}
-            </Button>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => window.history.back()}
-              >
-                {translate("ra.action.cancel")}
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                <Save className="h-4 w-4 mr-1" />
-                {isSubmitting
-                  ? translate("crm.settings.saving")
-                  : translate("ra.action.save")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <SettingsSaveBar />
     </div>
   );
 };

@@ -187,6 +187,7 @@ export const englishCrmMessages = {
         before_this_month: "Before this month",
         before_this_week: "Before this week",
         managed_by_me: "Managed by me",
+        active: "Active filters:",
         search: "Search name, company...",
         this_week: "This week",
         today: "Today",
@@ -1731,6 +1732,7 @@ export const englishCrmMessages = {
         period: "Period",
         from: "From",
         to: "To",
+        invalid_range: "The start date must be on or before the end date.",
         owner: "Owner",
         all_owners: "Everyone",
         team: "Team",
@@ -2355,6 +2357,11 @@ export const englishCrmMessages = {
         statuses: "Statuses",
       },
       reset_defaults: "Reset to Defaults",
+      reset_defaults_title: "Reset every setting to its default?",
+      reset_defaults_content:
+        "Stages, categories, statuses, colours and logos go back to the defaults in this form. Nothing is stored until you click Save.",
+      reset_defaults_pending:
+        "Defaults restored in the form. Click Save to apply them.",
       save_error: "Failed to save configuration",
       saved: "Configuration saved successfully",
       saving: "Saving...",

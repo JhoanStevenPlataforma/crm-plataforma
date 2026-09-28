@@ -10,6 +10,7 @@ import {
 import {
   useGetIdentity,
   useGetList,
+  useGetMany,
   useListContext,
   useTranslate,
 } from "ra-core";
@@ -172,14 +173,31 @@ export const ContactListFilter = () => {
   );
 };
 
+/** `"{3,7}"` -> `[3, 7]`: the tag ids a `tags@cs` filter holds. */
+const tagIdsOf = (value: unknown): number[] =>
+  typeof value === "string"
+    ? value.replace(/[{}]/g, "").split(",").filter(Boolean).map(Number)
+    : [];
+
+/**
+ * The filters in force, as removable chips above the list.
+ *
+ * Shown on every width: filters are remembered between visits, and a list
+ * silently narrowed by last week's tag reads as missing contacts. The tags are
+ * fetched by the ids in the filter, not from a first page of tags, so a
+ * remembered tag is always named.
+ */
 export const ContactListFilterSummary = () => {
+  const translate = useTranslate();
   const { noteStatuses } = useConfigurationContext();
   const { identity } = useGetIdentity();
-  const { data } = useGetList("tags", {
-    pagination: { page: 1, perPage: 10 },
-    sort: { field: "name", order: "ASC" },
-  });
   const { filterValues } = useListContext();
+  const tagIds = tagIdsOf(filterValues?.["tags@cs"]);
+  const { data } = useGetMany(
+    "tags",
+    { ids: tagIds },
+    { enabled: tagIds.length > 0 },
+  );
   const hasFilters = !!Object.entries(filterValues || {}).filter(
     ([key]) => key !== "q",
   ).length;
@@ -189,7 +207,10 @@ export const ContactListFilterSummary = () => {
   }
 
   return (
-    <div className="flex flex-wrap items-start mb-4 gap-1">
+    <div className="flex flex-wrap items-center mb-4 gap-1">
+      <span className="mr-1 text-sm text-muted-foreground">
+        {translate("resources.contacts.filters.active")}
+      </span>
       <ActiveFilterButton
         className="w-auto justify-between h-8"
         label="resources.contacts.filters.today"
