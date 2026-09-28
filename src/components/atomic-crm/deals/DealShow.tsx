@@ -125,7 +125,7 @@ const DealShowContent = () => {
                 {translate("resources.deals.fields.amount")}
               </span>
               <span className="text-sm">
-                {formatMoney(record.amount, currency, locale)}
+                {formatMoney(record.amount, currency)}
               </span>
             </div>
 
