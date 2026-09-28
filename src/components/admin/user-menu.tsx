@@ -5,6 +5,7 @@ import {
   useGetIdentity,
   useLogout,
   UserMenuContext,
+  useTranslate,
 } from "ra-core";
 import { LogOut } from "lucide-react";
 import {
@@ -17,6 +18,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export type UserMenuProps = {
   children?: React.ReactNode;
@@ -35,6 +41,7 @@ export function UserMenu({ children }: UserMenuProps) {
   const authProvider = useAuthProvider();
   const { data: identity } = useGetIdentity();
   const logout = useLogout();
+  const translate = useTranslate();
 
   const [open, setOpen] = useState(false);
 
@@ -48,20 +55,30 @@ export function UserMenu({ children }: UserMenuProps) {
 
   if (!authProvider) return null;
 
+  const label = translate("ra.auth.user_menu", { _: "Profile" });
+
   return (
     <UserMenuContext.Provider value={{ onClose: handleClose }}>
       <DropdownMenu open={open} onOpenChange={handleToggleOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="relative h-8 w-8 ml-2 rounded-full"
-          >
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={identity?.avatar} role="presentation" />
-              <AvatarFallback>{identity?.fullName?.charAt(0)}</AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="relative h-8 w-8 ml-2 rounded-full"
+                aria-label={label}
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={identity?.avatar} role="presentation" />
+                  <AvatarFallback>
+                    {identity?.fullName?.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent className="w-56" align="end" forceMount>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">

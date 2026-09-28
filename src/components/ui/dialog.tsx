@@ -45,12 +45,58 @@ function DialogOverlay({
   )
 }
 
+/**
+ * The last element focused outside menus and dialogs; for a menu item, the
+ * menu's trigger (Radix labels a menu by its trigger's id).
+ *
+ * Radix returns focus to whatever was focused before a dialog opened. When the
+ * dialog is opened from a dropdown item ("Cancel task" in a row's menu), focus
+ * has already left the vanishing item for <body> by then, so closing the
+ * dialog threw a keyboard user back to the top of the page. Tracked as focus
+ * moves, because by the time the dialog renders it is too late to ask.
+ */
+let lastFocusedOutsideOverlays: HTMLElement | null = null
+
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "focusin",
+    (event) => {
+      const target = event.target as HTMLElement
+      if (target.closest('[role="dialog"], [role="alertdialog"]')) return
+      const menu = target.closest<HTMLElement>('[role="menu"]')
+      if (menu) {
+        const triggerId = menu.getAttribute("aria-labelledby")
+        const trigger = triggerId ? document.getElementById(triggerId) : null
+        if (trigger) lastFocusedOutsideOverlays = trigger
+        return
+      }
+      lastFocusedOutsideOverlays = target
+    },
+    true
+  )
+}
+
+/** Where focus should return when the dialog about to open closes. */
+function returnFocusTarget(): HTMLElement | null {
+  if (typeof document === "undefined") return null
+  const active = document.activeElement as HTMLElement | null
+  if (active && active !== document.body && !active.closest('[role="menu"]')) {
+    return active
+  }
+  return lastFocusedOutsideOverlays
+}
+
 function DialogContent({
   className,
   children,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   const translate = useTranslate()
+  // Read as the dialog opens, before it moves focus into itself. Not in a
+  // render: this wrapper renders while the dialog is closed too.
+  const returnTo = React.useRef<HTMLElement | null>(null)
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -60,6 +106,18 @@ function DialogContent({
           "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border bg-card p-6 shadow-float duration-200 sm:max-w-lg",
           className
         )}
+        onOpenAutoFocus={(event) => {
+          returnTo.current = returnFocusTarget()
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          if (returnTo.current?.isConnected) {
+            event.preventDefault()
+            returnTo.current.focus()
+          }
+        }}
         {...props}
       >
         {children}

@@ -72,12 +72,22 @@ export function TagForm({
         </div>
 
         <div className="space-y-2">
-          <Label>{translate("resources.tags.dialog.color")}</Label>
-          <div className="flex flex-wrap">
-            {colors.map((color) => (
+          <Label id="tag-color-label">
+            {translate("resources.tags.dialog.color")}
+          </Label>
+          <div
+            className="flex flex-wrap"
+            role="group"
+            aria-labelledby="tag-color-label"
+          >
+            {colors.map((color, index) => (
               <RoundButton
                 key={color}
                 color={color}
+                label={translate("resources.tags.dialog.color_option", {
+                  number: index + 1,
+                  total: colors.length,
+                })}
                 selected={color === newTagColor}
                 handleClick={() => {
                   setNewTagColor(color);

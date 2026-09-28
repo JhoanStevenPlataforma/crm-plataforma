@@ -1365,6 +1365,7 @@ export const frenchCrmMessages = {
       },
       dialog: {
         color: "Couleur",
+        color_option: "Couleur %{number} sur %{total}",
         create_title: "Créer une nouvelle étiquette",
         edit_title: "Modifier l'étiquette",
         name_label: "Nom de l'étiquette",
@@ -2464,6 +2465,7 @@ export const frenchCrmMessages = {
       help: "Centre d'aide",
       search: "Rechercher",
       toggle: "Afficher ou masquer la navigation",
+      skip_to_content: "Aller au contenu",
       collapse: "Réduire",
       expand: "Déplier",
       groups: {

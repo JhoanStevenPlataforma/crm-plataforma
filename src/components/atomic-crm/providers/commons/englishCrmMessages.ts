@@ -1347,6 +1347,7 @@ export const englishCrmMessages = {
       },
       dialog: {
         color: "Color",
+        color_option: "Colour %{number} of %{total}",
         create_title: "Create a new tag",
         edit_title: "Edit tag",
         name_label: "Tag name",
@@ -2425,6 +2426,7 @@ export const englishCrmMessages = {
       help: "Help center",
       search: "Search",
       toggle: "Toggle navigation",
+      skip_to_content: "Skip to content",
       collapse: "Collapse",
       expand: "Expand",
       groups: {

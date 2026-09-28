@@ -8,6 +8,8 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useConfigurationLoader } from "../root/useConfigurationLoader";
 import { AppSidebar } from "./AppSidebar";
+import { useDocumentTitle } from "./documentTitle";
+import { SkipToContent } from "./SkipToContent";
 import { Topbar } from "./Topbar";
 
 /**
@@ -26,16 +28,20 @@ import { Topbar } from "./Topbar";
  */
 export const Layout = ({ children }: { children: ReactNode }) => {
   useConfigurationLoader();
+  useDocumentTitle();
 
   return (
     <SidebarProvider>
+      <SkipToContent targetId="main-content" />
       <AppSidebar />
       {/* `app-canvas`: the ground with its ambient light (index.css). */}
       <SidebarInset className="app-canvas min-w-0">
         <Topbar />
         <main
-          className="flex min-w-0 flex-1 flex-col gap-4 p-4 lg:px-8 lg:py-6"
+          className="flex min-w-0 flex-1 flex-col gap-4 p-4 outline-none lg:px-8 lg:py-6"
           id="main-content"
+          // Focusable only by the skip link, never by Tab.
+          tabIndex={-1}
         >
           <ErrorBoundary FallbackComponent={Error}>
             <Suspense

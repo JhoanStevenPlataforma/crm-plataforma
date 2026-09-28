@@ -1,5 +1,10 @@
-import { useRefresh, useLoading } from "ra-core";
+import { useRefresh, useLoading, useTranslate } from "ra-core";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LoaderCircle, RotateCw } from "lucide-react";
 
 /**
@@ -13,19 +18,29 @@ import { LoaderCircle, RotateCw } from "lucide-react";
 export const RefreshButton = () => {
   const refresh = useRefresh();
   const loading = useLoading();
+  const translate = useTranslate();
+  // An icon alone is announced as "button": the name is for screen readers,
+  // the tooltip for everybody else.
+  const label = translate("ra.action.refresh", { _: "Refresh" });
 
   const handleRefresh = () => {
     refresh();
   };
 
   return (
-    <Button
-      onClick={handleRefresh}
-      variant="ghost"
-      size="icon"
-      className="hidden sm:inline-flex"
-    >
-      {loading ? <LoaderCircle className="animate-spin" /> : <RotateCw />}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          onClick={handleRefresh}
+          variant="ghost"
+          size="icon"
+          className="hidden sm:inline-flex"
+          aria-label={label}
+        >
+          {loading ? <LoaderCircle className="animate-spin" /> : <RotateCw />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 };

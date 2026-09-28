@@ -1364,6 +1364,7 @@ export const spanishCrmMessages = {
       },
       dialog: {
         color: "Color",
+        color_option: "Color %{number} de %{total}",
         create_title: "Crear una etiqueta nueva",
         edit_title: "Editar la etiqueta",
         name_label: "Nombre de la etiqueta",
@@ -2448,6 +2449,7 @@ export const spanishCrmMessages = {
       help: "Centro de ayuda",
       search: "Buscar",
       toggle: "Mostrar u ocultar la navegación",
+      skip_to_content: "Saltar al contenido",
       collapse: "Contraer",
       expand: "Expandir",
       groups: {
