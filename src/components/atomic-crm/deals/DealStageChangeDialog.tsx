@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RequiredReasonField } from "../misc/RequiredReasonField";
 
 import { TaskAttachmentFileInput } from "../tasks/TaskAttachmentFileInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
@@ -146,21 +147,16 @@ export const DealStageChangeDialog = ({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="deal-stage-change-reason">
-            {translate("resources.deals.stage_change.reason")}
-          </Label>
-          <Textarea
-            id="deal-stage-change-reason"
-            value={reason}
-            rows={4}
-            autoFocus
-            placeholder={translate(
-              "resources.deals.stage_change.reason_placeholder",
-            )}
-            onChange={(event) => setReason(event.target.value)}
-          />
-        </div>
+        <RequiredReasonField
+          id="deal-stage-change-reason"
+          label={translate("resources.deals.stage_change.reason")}
+          value={reason}
+          rows={4}
+          placeholder={translate(
+            "resources.deals.stage_change.reason_placeholder",
+          )}
+          onChange={setReason}
+        />
 
         {isBlocked && canOverride ? (
           <div className="flex flex-col gap-2">

@@ -97,15 +97,29 @@ describe("QuoteActions", () => {
       .toBeVisible();
   });
 
-  it("refuses to send a document with no lines, and says which rule refused", async () => {
+  it("does not offer to send a document with no lines, and says why", async () => {
     const screen = await render(<EmptyDraft />);
 
+    await expect
+      .element(screen.getByText("Add at least one line to send this quote."))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Send", exact: true }))
+      .toBeDisabled();
+  });
+
+  it("says why Send is disabled when the link would last zero days", async () => {
+    const screen = await render(<Draft />);
+
     await clickButton(screen, "Send");
-    await clickButton(screen, "Send");
+    await screen.getByLabelText("Link valid (days)").fill("0");
 
     await expect
-      .element(screen.getByText(/A quote with no lines cannot be sent/))
+      .element(screen.getByText("The link must stay valid for at least 1 day."))
       .toBeVisible();
+    await expect
+      .element(screen.getByRole("dialog").getByRole("button", { name: "Send" }))
+      .toBeDisabled();
   });
 
   it("refuses to send an offer that already expired", async () => {

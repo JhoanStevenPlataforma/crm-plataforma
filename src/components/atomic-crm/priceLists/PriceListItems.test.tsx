@@ -63,6 +63,20 @@ describe("PriceListItems", () => {
     await expect.element(add).toBeEnabled();
   });
 
+  it("says why a negative price cannot be added", async () => {
+    const screen = await render(<Empty />);
+
+    await pickProduct(screen, "Implementation project (SRV-001)");
+    await screen.getByRole("spinbutton", { name: "Unit price" }).fill("-5");
+
+    await expect
+      .element(screen.getByText("The price cannot be negative."))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Add price" }))
+      .toBeDisabled();
+  });
+
   it("adds a price with its tax override to the list", async () => {
     const screen = await render(<Empty />);
 

@@ -84,13 +84,21 @@ export const PriceListItems = () => {
   const isUnknown = itemsError != null;
   const price = Number(unitPrice);
   const quantity = Number(minQuantity);
+  const isPriceValid = Number.isFinite(price) && price >= 0;
+  const isQuantityValid = Number.isFinite(quantity) && quantity > 0;
+  // Said in words, not only by a disabled "Add price": the audit found people
+  // typing -5 and clicking a button that did nothing.
+  const inputError =
+    unitPrice !== "" && !isPriceValid
+      ? "resources.price_lists.items.price_invalid"
+      : minQuantity !== "" && !isQuantityValid
+        ? "resources.price_lists.items.quantity_invalid"
+        : null;
   const canAdd =
     productId !== "" &&
     unitPrice !== "" &&
-    Number.isFinite(price) &&
-    price >= 0 &&
-    Number.isFinite(quantity) &&
-    quantity > 0 &&
+    isPriceValid &&
+    isQuantityValid &&
     !isMutating &&
     !isUnknown;
 
@@ -286,6 +294,11 @@ export const PriceListItems = () => {
           {translate("resources.price_lists.items.add")}
         </Button>
       </div>
+      {inputError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {translate(inputError)}
+        </p>
+      ) : null}
     </div>
   );
 };

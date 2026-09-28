@@ -90,6 +90,8 @@ export const QuoteIssueDialog = ({
   }, [open]);
 
   const days = Number(tokenDays);
+  // Whole days: the server takes an integer and would round a fraction away.
+  const isDaysValid = Number.isInteger(days) && days > 0;
   const isBlocked = gate != null && !gate.ok;
   // THE TWO MOTIVES ARE NOT CUMULATIVE, and the server says which one applies:
   // `issue_quote_version()` checks the band reason only on the branch where the
@@ -107,8 +109,7 @@ export const QuoteIssueDialog = ({
   const canConfirm =
     !isPending &&
     !isGatePending &&
-    Number.isFinite(days) &&
-    days > 0 &&
+    isDaysValid &&
     (!isBlocked || isOverridden) &&
     (!needsReason || trimmedReason !== "");
 
@@ -222,7 +223,12 @@ export const QuoteIssueDialog = ({
               id="quote-issue-days"
               type="number"
               min={1}
+              step={1}
               value={tokenDays}
+              aria-invalid={!isDaysValid}
+              aria-describedby={
+                isDaysValid ? undefined : "quote-issue-days-error"
+              }
               onChange={(event) => setTokenDays(event.target.value)}
             />
           </div>
@@ -240,6 +246,15 @@ export const QuoteIssueDialog = ({
             />
           </div>
         </div>
+        {isDaysValid ? null : (
+          <p
+            id="quote-issue-days-error"
+            role="alert"
+            className="-mt-2 text-sm text-destructive"
+          >
+            {translate("resources.quotes.issue.token_days_invalid")}
+          </p>
+        )}
 
         {/* A link never outlives the offer: the window is cut to the day after
             `valid_until`, so a long one can silently become a short one. Said

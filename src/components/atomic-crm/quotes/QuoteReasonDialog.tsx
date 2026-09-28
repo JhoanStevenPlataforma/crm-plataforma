@@ -10,8 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RequiredReasonField } from "../misc/RequiredReasonField";
 
 /**
  * "Why?", asked at the moment of the move.
@@ -65,21 +64,14 @@ export const QuoteReasonDialog = ({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="quote-reason">
-            {translate("resources.quotes.dialog.reason")}
-          </Label>
-          <Textarea
-            id="quote-reason"
-            value={reason}
-            rows={4}
-            autoFocus
-            placeholder={translate(
-              "resources.quotes.dialog.reason_placeholder",
-            )}
-            onChange={(event) => setReason(event.target.value)}
-          />
-        </div>
+        <RequiredReasonField
+          id="quote-reason"
+          label={translate("resources.quotes.dialog.reason")}
+          value={reason}
+          rows={4}
+          placeholder={translate("resources.quotes.dialog.reason_placeholder")}
+          onChange={setReason}
+        />
 
         <DialogFooter>
           <Button variant="outline" disabled={isPending} onClick={onCancel}>

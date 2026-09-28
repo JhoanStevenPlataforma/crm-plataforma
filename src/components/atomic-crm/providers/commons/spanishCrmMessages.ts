@@ -616,6 +616,8 @@ export const spanishCrmMessages = {
         product: "Producto",
         unit_price: "Precio unitario",
         min_quantity: "Cantidad mínima",
+        price_invalid: "El precio no puede ser negativo.",
+        quantity_invalid: "La cantidad mínima debe ser mayor que 0.",
         tax_rate_id: "Impuesto",
         no_override: "El impuesto del producto",
         remove: "Quitar el precio de %{name}",
@@ -718,6 +720,7 @@ export const spanishCrmMessages = {
       actions: {
         terminal: "Esta cotización está cerrada: no queda ningún movimiento.",
         moved: "Cotización actualizada: %{action}",
+        needs_lines: "Añade al menos una línea para enviar esta cotización.",
       },
       transitions: {
         issue: "Enviar",
@@ -760,6 +763,7 @@ export const spanishCrmMessages = {
         override_hint:
           "Solo administradores. Queda registrado para siempre y únicamente cuando el tope se superó de verdad.",
         token_days: "Enlace válido (días)",
+        token_days_invalid: "El enlace debe ser válido al menos 1 día.",
         token_label: "Para quién",
         token_label_placeholder: "Compras, Sra. López…",
         token_clamped:
@@ -1681,6 +1685,7 @@ export const spanishCrmMessages = {
       edit_hint: "Los cambios se guardan al pulsar Guardar.",
     },
     common: {
+      reason_required: "Obligatorio: escribe un motivo para activar el botón.",
       see_all_tasks: "Ver todas las tareas",
       no_results: "Sin resultados",
       no_results_hint: "Prueba con otra búsqueda o quita los filtros.",

@@ -617,6 +617,8 @@ export const frenchCrmMessages = {
         product: "Produit",
         unit_price: "Prix unitaire",
         min_quantity: "Quantité minimale",
+        price_invalid: "Le prix ne peut pas être négatif.",
+        quantity_invalid: "La quantité minimale doit être supérieure à 0.",
         tax_rate_id: "Taxe",
         no_override: "La taxe du produit",
         remove: "Retirer le prix de %{name}",
@@ -718,6 +720,7 @@ export const frenchCrmMessages = {
       actions: {
         terminal: "Ce devis est clos : il ne reste aucun mouvement possible.",
         moved: "Devis mis à jour : %{action}",
+        needs_lines: "Ajoutez au moins une ligne pour envoyer ce devis.",
       },
       transitions: {
         issue: "Envoyer",
@@ -760,6 +763,7 @@ export const frenchCrmMessages = {
         override_hint:
           "Administrateurs uniquement. Enregistré définitivement, et seulement lorsque le plafond a réellement été dépassé.",
         token_days: "Lien valable (jours)",
+        token_days_invalid: "Le lien doit rester valable au moins 1 jour.",
         token_label: "Pour qui",
         token_label_placeholder: "Achats, Mme Lopez…",
         token_clamped:
@@ -1683,6 +1687,8 @@ export const frenchCrmMessages = {
         "Les modifications sont enregistrées en cliquant sur Enregistrer.",
     },
     common: {
+      reason_required:
+        "Obligatoire : saisissez un motif pour activer le bouton.",
       see_all_tasks: "Voir toutes les tâches",
       no_results: "Aucun résultat",
       no_results_hint: "Essayez une autre recherche ou retirez les filtres.",

@@ -73,7 +73,7 @@ export const QuoteActions = () => {
   const refresh = useRefresh();
   const dataProvider = useDataProvider<CrmDataProvider>();
   const { identity } = useGetIdentity();
-  const { version } = useQuoteDraft(quote);
+  const { version, lines, isPending: isDraftPending } = useQuoteDraft(quote);
 
   const [pendingMove, setPendingMove] = useState<QuoteTransition | null>(null);
   const [isIssuing, setIsIssuing] = useState(false);
@@ -150,6 +150,9 @@ export const QuoteActions = () => {
   if (!quote) return null;
 
   const hasOpenDraft = version != null && version.issued_at == null;
+  // Said on the button rather than by the server after the dialog: an empty
+  // document is refused anyway (`quote_empty`), so the click led nowhere.
+  const needsLines = hasOpenDraft && !isDraftPending && lines.length === 0;
   const isPending = isTransitioning || isRevising || isIssuePending;
 
   const moves = (transitions ?? []).filter(
@@ -207,13 +210,23 @@ export const QuoteActions = () => {
             type="button"
             size="sm"
             variant={kind === "issue" ? "default" : "outline"}
-            disabled={isPending}
+            disabled={isPending || (kind === "issue" && needsLines)}
+            aria-describedby={
+              kind === "issue" && needsLines ? "quote-needs-lines" : undefined
+            }
             onClick={() => start(edge, kind)}
           >
             {labelOf(edge, kind)}
           </Button>
         );
       })}
+
+      {needsLines &&
+      moves.some((edge) => kindOf(edge, hasOpenDraft) === "issue") ? (
+        <span id="quote-needs-lines" className="text-sm text-muted-foreground">
+          {translate("resources.quotes.actions.needs_lines")}
+        </span>
+      ) : null}
 
       {moves.length === 0 ? (
         <span className="text-sm text-muted-foreground">

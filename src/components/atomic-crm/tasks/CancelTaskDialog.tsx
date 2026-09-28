@@ -10,8 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RequiredReasonField } from "../misc/RequiredReasonField";
 
 /**
  * Cancelling a task requires a reason (proposal §4.4).
@@ -50,17 +49,12 @@ export const CancelTaskDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="task-cancel-reason">
-            {translate("resources.tasks.cancel.reason")}
-          </Label>
-          <Textarea
-            id="task-cancel-reason"
-            value={reason}
-            autoFocus
-            onChange={(event) => setReason(event.target.value)}
-          />
-        </div>
+        <RequiredReasonField
+          id="task-cancel-reason"
+          label={translate("resources.tasks.cancel.reason")}
+          value={reason}
+          onChange={setReason}
+        />
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>

@@ -59,6 +59,13 @@ describe("DealStageChangeDialog", () => {
 
     const confirm = screen.getByRole("button", { name: "Move deal" });
     await expect.element(confirm).toBeDisabled();
+    // The disabled button explains itself: the field is marked required and
+    // says what unlocks the button.
+    await expect.element(screen.getByRole("textbox")).toBeRequired();
+    const hint = screen.getByText(
+      "Required: write a reason to enable the button.",
+    );
+    await expect.element(hint).toBeVisible();
 
     // Whitespace is not a reason.
     await screen.getByRole("textbox").fill("   ");
@@ -66,6 +73,7 @@ describe("DealStageChangeDialog", () => {
 
     await screen.getByRole("textbox").fill("Propuesta enviada tras la visita");
     await expect.element(confirm).toBeEnabled();
+    await expect.element(hint).not.toBeInTheDocument();
 
     await confirm.click();
 

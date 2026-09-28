@@ -607,6 +607,8 @@ export const englishCrmMessages = {
         product: "Product",
         unit_price: "Unit price",
         min_quantity: "Minimum quantity",
+        price_invalid: "The price cannot be negative.",
+        quantity_invalid: "The minimum quantity must be greater than 0.",
         tax_rate_id: "Tax rate",
         no_override: "The product's own rate",
         remove: "Remove the price of %{name}",
@@ -705,6 +707,7 @@ export const englishCrmMessages = {
       actions: {
         terminal: "This quote is closed: there is nothing left to move.",
         moved: "Quote updated: %{action}",
+        needs_lines: "Add at least one line to send this quote.",
       },
       transitions: {
         issue: "Send",
@@ -746,6 +749,7 @@ export const englishCrmMessages = {
         override_hint:
           "Administrators only. Recorded permanently and only when the ceiling was actually exceeded.",
         token_days: "Link valid (days)",
+        token_days_invalid: "The link must stay valid for at least 1 day.",
         token_label: "For whom",
         token_label_placeholder: "Purchasing, Ms. Lopez…",
         token_clamped:
@@ -1662,6 +1666,7 @@ export const englishCrmMessages = {
       unsaved_changes: "Unsaved changes",
     },
     common: {
+      reason_required: "Required: write a reason to enable the button.",
       see_all_tasks: "See all tasks",
       no_results: "No results",
       no_results_hint: "Try another search or clear the filters.",
