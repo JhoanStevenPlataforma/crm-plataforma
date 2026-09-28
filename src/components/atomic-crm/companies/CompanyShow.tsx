@@ -43,6 +43,7 @@ import {
   ContextInfo,
 } from "./CompanyAside";
 import { CompanyAvatar } from "./CompanyAvatar";
+import { contactDisplayName } from "../contacts/contactName";
 import { RecordBreadcrumb } from "../misc/RecordBreadcrumb";
 
 export const CompanyShow = () => {
@@ -236,9 +237,7 @@ const ContactsIterator = () => {
                 <Avatar />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium">
-                  {`${contact.first_name} ${contact.last_name}`}
-                </div>
+                <div className="font-medium">{contactDisplayName(contact)}</div>
                 <div className="text-sm text-muted-foreground">
                   {contact.title}
                   {contact.nb_tasks

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RotateCcw } from "lucide-react";
 
 import { RelativeDate } from "../misc/RelativeDate";
+import { markdownToPlainText } from "../misc/markdownText";
 import { Status } from "../misc/Status";
 import { useGetSalesName } from "../sales/useGetSalesName";
 import type { ContactNote } from "../types";
@@ -124,7 +125,7 @@ export const NoteMobile = ({
       </div>
       {note.text && (
         <p className="pt-2 text-sm line-clamp-3">
-          {note.text.replace(/\s+/g, " ").trim()}
+          {markdownToPlainText(note.text)}
         </p>
       )}
     </Link>

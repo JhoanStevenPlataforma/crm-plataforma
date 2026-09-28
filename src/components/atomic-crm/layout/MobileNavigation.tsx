@@ -6,13 +6,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Home, ListTodo, Plus, Settings, Users } from "lucide-react";
+import { Home, ListTodo, Plus, Users } from "lucide-react";
 import { useTranslate } from "ra-core";
 import { Link, matchPath, useLocation, useMatch } from "react-router";
 import { ContactCreateSheet } from "../contacts/ContactCreateSheet";
 import { useState } from "react";
 import { NoteCreateSheet } from "../notes/NoteCreateSheet";
 import { TaskCreateSheet } from "../tasks/TaskCreateSheet";
+import { MobileMoreMenu } from "./MobileMoreMenu";
 
 export const MobileNavigation = () => {
   const location = useLocation();
@@ -75,7 +76,7 @@ export const MobileNavigation = () => {
             label={translate("resources.tasks.name", { smart_count: 2 })}
             isActive={currentPath === "/tasks"}
           />
-          <SettingsButton />
+          <MobileMoreMenu />
         </>
       </div>
     </nav>
@@ -170,20 +171,5 @@ const CreateButton = () => {
         </DropdownMenuContent>
       </DropdownMenu>
     </>
-  );
-};
-
-const SettingsButton = () => {
-  const translate = useTranslate();
-  const location = useLocation();
-  const isActive = !!matchPath("/settings", location.pathname);
-
-  return (
-    <NavigationButton
-      href="/settings"
-      Icon={Settings}
-      label={translate("crm.settings.title")}
-      isActive={isActive}
-    />
   );
 };

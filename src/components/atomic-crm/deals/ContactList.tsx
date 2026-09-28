@@ -2,6 +2,7 @@ import { useListContext, useTranslate } from "ra-core";
 import { Link as RouterLink } from "react-router";
 
 import { Avatar } from "../contacts/Avatar";
+import { contactDisplayName } from "../contacts/contactName";
 
 export const ContactList = () => {
   const { data, error, isPending } = useListContext();
@@ -17,7 +18,7 @@ export const ContactList = () => {
               to={`/contacts/${contact.id}/show`}
               className="text-sm hover:underline"
             >
-              {contact.first_name} {contact.last_name}
+              {contactDisplayName(contact)}
             </RouterLink>
             <span className="text-xs text-muted-foreground">
               {contact.title && contact.company_name

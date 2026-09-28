@@ -8,6 +8,7 @@ import { useGetSalesName } from "../sales/useGetSalesName";
 import type { ActivityContactCreated } from "../types";
 import { useActivityLogContext } from "./ActivityLogContext";
 import { ActivityLogRow } from "./ActivityLogRow";
+import { contactDisplayName } from "../contacts/contactName";
 
 type ActivityLogContactCreatedProps = {
   activity: ActivityContactCreated;
@@ -33,7 +34,7 @@ export function ActivityLogContactCreated({
         { name: salesName },
       )}{" "}
       <Link to={`/contacts/${contact.id}/show`}>
-        {contact.first_name} {contact.last_name}
+        {contactDisplayName(contact)}
       </Link>
       {/* On a company's own page the company is implied. */}
       {context !== "company" && activity.company_id != null ? (

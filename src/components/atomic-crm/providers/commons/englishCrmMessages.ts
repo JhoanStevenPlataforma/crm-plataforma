@@ -595,6 +595,13 @@ export const englishCrmMessages = {
       },
     },
     quotes: {
+      no_price_list: {
+        can_create:
+          "A quote needs a price list, and there is none yet. Create one first; its prices are what the quote offers.",
+        ask_admin:
+          "A quote needs a price list, and there is none yet. Ask an administrator to create one.",
+        action: "Create a price list",
+      },
       name: "Quote |||| Quotes",
       forcedCaseName: "Quote",
       fields: {
@@ -2146,6 +2153,14 @@ export const englishCrmMessages = {
       title: "Upload and resize image",
       update_image: "Update Image",
     },
+    import_rows: {
+      title: "Rows that were not imported:",
+      line: "Line %{line}: %{reason}",
+      more: "…and %{smart_count} more row |||| …and %{smart_count} more rows",
+      malformed: "the row is malformed (check quotes and separators)",
+      missing_name: "first name or last name is required",
+      save_failed: "it could not be saved",
+    },
     import: {
       action: {
         download_error_report: "Download the error report",
@@ -2261,6 +2276,7 @@ export const englishCrmMessages = {
     },
     navigation: {
       label: "CRM navigation",
+      more: "More",
       help: "Help center",
       search: "Search",
       toggle: "Toggle navigation",

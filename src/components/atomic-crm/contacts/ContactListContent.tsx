@@ -21,6 +21,7 @@ import { Status } from "../misc/Status";
 import { formatRelativeDate } from "../misc/RelativeDate";
 import type { Contact } from "../types";
 import { Avatar } from "./Avatar";
+import { contactDisplayName } from "./contactName";
 import { TagsList } from "./TagsList";
 
 export const ContactListContent = () => {
@@ -128,9 +129,7 @@ const ContactItemContent = ({
       >
         <Avatar />
         <div className="flex-1 min-w-0">
-          <div className="font-medium">
-            {`${contact.first_name} ${contact.last_name ?? ""}`}
-          </div>
+          <div className="font-medium">{contactDisplayName(contact)}</div>
           {contact.title || contact.company_id != null || contact.nb_tasks ? (
             <div className="text-sm text-muted-foreground">
               {contact.title && contact.company_id != null

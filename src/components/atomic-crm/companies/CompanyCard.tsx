@@ -13,6 +13,7 @@ import { Avatar as ContactAvatar } from "../contacts/Avatar";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Company } from "../types";
 import { CompanyAvatar } from "./CompanyAvatar";
+import { contactDisplayName } from "../contacts/contactName";
 
 export const CompanyCard = (props: { record?: Company }) => {
   const createPath = useCreatePath();
@@ -94,7 +95,7 @@ const AvatarGroupIterator = () => {
           record={record}
           width={25}
           height={25}
-          title={`${record.first_name} ${record.last_name}`}
+          title={contactDisplayName(record)}
         />
       ))}
       {total > MAX_AVATARS && (

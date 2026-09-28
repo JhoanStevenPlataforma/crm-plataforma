@@ -1,13 +1,59 @@
-import { required, useGetList, useRecordContext, useTranslate } from "ra-core";
+import {
+  required,
+  useCanAccess,
+  useGetList,
+  useRecordContext,
+  useTranslate,
+} from "ra-core";
 import { useEffect } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
+import { Link } from "react-router";
 
+import { AutocompleteInput } from "@/components/admin/autocomplete-input";
 import { DateInput } from "@/components/admin/date-input";
 import { ReferenceInput } from "@/components/admin/reference-input";
 import { SelectInput } from "@/components/admin/select-input";
 import { TextInput } from "@/components/admin/text-input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
+import { AutocompleteCompanyInput } from "../companies/AutocompleteCompanyInput";
+import { contactDisplayName } from "../contacts/contactName";
+import { contactOptionText } from "../misc/ContactOption";
 import type { PriceList, QuoteSummary } from "../types";
+
+/**
+ * "Lista de precios" is required and there is none: without this, the form
+ * shows an empty mandatory select and no way forward. Whoever may create a
+ * list gets the link; anybody else is told whom to ask.
+ */
+const NoPriceListNotice = () => {
+  const translate = useTranslate();
+  const { canAccess } = useCanAccess({
+    resource: "price_lists",
+    action: "create",
+  });
+  return (
+    <Alert>
+      <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          {translate(
+            canAccess
+              ? "resources.quotes.no_price_list.can_create"
+              : "resources.quotes.no_price_list.ask_admin",
+          )}
+        </span>
+        {canAccess ? (
+          <Button asChild size="sm" variant="outline">
+            <Link to="/price_lists/create">
+              {translate("resources.quotes.no_price_list.action")}
+            </Link>
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
+};
 
 /** The catalogue is hundreds of rows, not CRM scale (quotes §11). */
 const CATALOGUE_PAGE = { page: 1, perPage: 1000 };
@@ -86,46 +132,59 @@ export const QuoteInputs = () => {
   const choices = (priceLists ?? []).filter(
     (list) => record == null || list.currency === record.currency,
   );
+  const companyId = useWatch({ name: "company_id" });
 
   return (
     <div className="flex flex-col gap-4 w-full">
+      {priceLists != null && choices.length === 0 ? (
+        <NoPriceListNotice />
+      ) : null}
       <TextInput source="title" helperText={false} />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-3">
-        <ReferenceInput source="company_id" reference="companies">
-          <SelectInput
-            label="resources.quotes.fields.company_id"
-            validate={required()}
-            className="sm:flex-1"
-            helperText={false}
-          />
-        </ReferenceInput>
-        <ReferenceInput
-          source="contact_id"
-          reference="contacts_summary"
-          filter={
-            record?.company_id ? { company_id: record.company_id } : undefined
-          }
-        >
-          <SelectInput
-            label="resources.quotes.fields.contact_id"
-            optionText={(contact) =>
-              `${contact.first_name} ${contact.last_name}`
-            }
-            className="sm:flex-1"
-            helperText={false}
-          />
-        </ReferenceInput>
+        {/* Searchable, not a plain select: a ReferenceInput loads one page
+            (25 rows), so a select silently hid every customer past the 25th. */}
+        <div className="sm:flex-1">
+          <ReferenceInput source="company_id" reference="companies">
+            <AutocompleteCompanyInput
+              label="resources.quotes.fields.company_id"
+              validate={required()}
+            />
+          </ReferenceInput>
+        </div>
+        {/* Filtered on the company being typed, not the saved record's: on a
+            new quote there is no saved record yet, and on an edit the user may
+            be changing the company right now. */}
+        <div className="sm:flex-1">
+          <ReferenceInput
+            source="contact_id"
+            reference="contacts"
+            filter={companyId ? { company_id: companyId } : undefined}
+          >
+            <AutocompleteInput
+              label="resources.quotes.fields.contact_id"
+              optionText={contactOptionText}
+              inputText={contactDisplayName}
+              helperText={false}
+            />
+          </ReferenceInput>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-3">
-        <ReferenceInput source="deal_id" reference="deals">
-          <SelectInput
-            label="resources.quotes.fields.deal_id"
-            className="sm:flex-1"
-            helperText={false}
-          />
-        </ReferenceInput>
+        <div className="sm:flex-1">
+          <ReferenceInput
+            source="deal_id"
+            reference="deals"
+            filter={companyId ? { company_id: companyId } : undefined}
+          >
+            <AutocompleteInput
+              label="resources.quotes.fields.deal_id"
+              optionText="name"
+              helperText={false}
+            />
+          </ReferenceInput>
+        </div>
         <SelectInput
           source="price_list_id"
           choices={choices.map((list) => ({

@@ -16,6 +16,7 @@ import { formatMoney } from "../misc/reporting";
 import { calendarDaysBetween, formatRelativeDay } from "../misc/relativeTime";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Contact, Deal, Task } from "../types";
+import { contactDisplayName } from "../contacts/contactName";
 import { COOLING_AFTER_DAYS, daysSinceTouch } from "./hotContactSignals";
 
 /**
@@ -41,7 +42,7 @@ export const HotContactRow = ({
   const [locale = "en"] = useLocaleState();
   const { currency, dealStages, taskTypes } = useConfigurationContext();
 
-  const name = `${contact.first_name} ${contact.last_name}`.trim();
+  const name = contactDisplayName(contact);
   const silentDays = daysSinceTouch(contact.last_seen, now);
   const isCooling = silentDays >= COOLING_AFTER_DAYS;
   const subtitle = [contact.title, contact.company_name]

@@ -15,9 +15,9 @@ import { FormToolbar } from "@/components/admin/simple-form";
 import { FileInput } from "@/components/admin/file-input";
 import { FileField } from "@/components/admin/file-field";
 
-import { usePapaParse } from "../misc/usePapaParse";
+import { usePapaParse, type ImportRowError } from "../misc/usePapaParse";
 import type { ContactImportSchema } from "./useContactImport";
-import { useContactImport } from "./useContactImport";
+import { useContactImport, validateContactRow } from "./useContactImport";
 import * as sampleCsv from "./contacts_export.csv?raw";
 
 export const ContactImportButton = () => {
@@ -65,6 +65,7 @@ export function ContactImportDialog({
   const { importer, parseCsv, reset } = usePapaParse<ContactImportSchema>({
     batchSize: 10,
     processBatch,
+    validateRow: validateContactRow,
   });
 
   const [file, setFile] = useState<File | null>(null);
@@ -161,6 +162,10 @@ export function ContactImportDialog({
               </Alert>
             )}
 
+            {importer.state === "complete" && importer.errors.length > 0 && (
+              <ImportRowErrors errors={importer.errors} />
+            )}
+
             {importer.state === "idle" && (
               <>
                 <Alert>
@@ -211,6 +216,36 @@ export function ContactImportDialog({
     </Dialog>
   );
 }
+
+// A long list of identical errors is noise: the first rows are enough to fix
+// the file, and the count says how many more there are.
+const MAX_LISTED_ERRORS = 20;
+
+const ImportRowErrors = ({ errors }: { errors: ImportRowError[] }) => {
+  const translate = useTranslate();
+  const sorted = [...errors].sort((a, b) => a.line - b.line);
+  const hidden = sorted.length - MAX_LISTED_ERRORS;
+  return (
+    <div className="flex flex-col gap-1 text-sm">
+      <p className="font-medium">{translate("crm.import_rows.title")}</p>
+      <ul className="max-h-48 overflow-y-auto list-disc pl-5">
+        {sorted.slice(0, MAX_LISTED_ERRORS).map((error) => (
+          <li key={`${error.line}-${error.reason}`}>
+            {translate("crm.import_rows.line", {
+              line: error.line,
+              reason: translate(error.reason),
+            })}
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <p className="text-muted-foreground">
+          {translate("crm.import_rows.more", { smart_count: hidden })}
+        </p>
+      ) : null}
+    </div>
+  );
+};
 
 function millisecondsToTime(ms: number) {
   const seconds = Math.floor((ms / 1000) % 60);

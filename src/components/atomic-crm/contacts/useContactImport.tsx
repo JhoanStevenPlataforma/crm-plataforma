@@ -2,6 +2,7 @@ import { useDataProvider, useGetIdentity, type DataProvider } from "ra-core";
 import { useCallback, useMemo } from "react";
 
 import type { Company, Tag } from "../types";
+import { contactFullName } from "./contactName";
 
 export type ContactImportSchema = {
   first_name: string;
@@ -24,6 +25,16 @@ export type ContactImportSchema = {
   tags: string;
   linkedin_url: string;
 };
+
+export const MISSING_CONTACT_NAME = "crm.import_rows.missing_name";
+
+/**
+ * A contact needs a first or a last name: the database refuses one without
+ * (`contacts_has_name`), and a nameless row is what an unrelated or shifted CSV
+ * produces, so it is rejected before anything is written.
+ */
+export const validateContactRow = (row: ContactImportSchema) =>
+  contactFullName(row) ? null : MISSING_CONTACT_NAME;
 
 export function useContactImport() {
   const today = new Date().toISOString();

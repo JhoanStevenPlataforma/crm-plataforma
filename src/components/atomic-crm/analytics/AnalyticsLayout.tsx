@@ -56,7 +56,7 @@ export const AnalyticsLayout = ({
         }
       />
 
-      <nav className="flex gap-1 border-b">
+      <nav className="flex gap-1 overflow-x-auto border-b">
         {ANALYTICS_TABS.map((item) => (
           <Link
             key={item.tab}
@@ -64,7 +64,7 @@ export const AnalyticsLayout = ({
             // must not silently reset the period a manager just chose.
             to={query ? `${item.path}?${query}` : item.path}
             className={cn(
-              "px-3 py-2 text-sm border-b-2 -mb-px",
+              "shrink-0 whitespace-nowrap px-3 py-2 text-sm border-b-2 -mb-px",
               item.tab === tab
                 ? "border-primary font-medium"
                 : "border-transparent text-muted-foreground hover:text-foreground",

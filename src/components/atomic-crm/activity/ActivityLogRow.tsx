@@ -5,6 +5,7 @@ import { Link } from "react-router";
 
 import { cn } from "@/lib/utils";
 
+import { markdownToPlainText } from "../misc/markdownText";
 import { formatTimeOfDay } from "./activityDays";
 
 /**
@@ -39,7 +40,7 @@ export const ActivityLogRow = ({
   noteLink?: string | false;
 }) => {
   const [locale = "en"] = useLocaleState();
-  const plainNote = note?.replace(/\s+/g, " ").trim();
+  const plainNote = note ? markdownToPlainText(note) : undefined;
   const dateObj = new Date(date);
 
   return (

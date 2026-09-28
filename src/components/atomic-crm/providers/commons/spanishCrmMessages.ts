@@ -604,6 +604,13 @@ export const spanishCrmMessages = {
       },
     },
     quotes: {
+      no_price_list: {
+        can_create:
+          "Una cotización necesita una lista de precios y todavía no hay ninguna. Crea una primero: sus precios son los que ofrece la cotización.",
+        ask_admin:
+          "Una cotización necesita una lista de precios y todavía no hay ninguna. Pide a un administrador que cree una.",
+        action: "Crear lista de precios",
+      },
       name: "Cotización |||| Cotizaciones",
       forcedCaseName: "Cotización",
       fields: {
@@ -2170,6 +2177,14 @@ export const spanishCrmMessages = {
       title: "Subir y redimensionar la imagen",
       update_image: "Actualizar la imagen",
     },
+    import_rows: {
+      title: "Filas que no se importaron:",
+      line: "Línea %{line}: %{reason}",
+      more: "…y %{smart_count} fila más |||| …y %{smart_count} filas más",
+      malformed: "la fila está mal formada (revisa comillas y separadores)",
+      missing_name: "falta el nombre o el apellido",
+      save_failed: "no se pudo guardar",
+    },
     import: {
       action: {
         download_error_report: "Descargar el informe de errores",
@@ -2284,6 +2299,7 @@ export const spanishCrmMessages = {
     },
     navigation: {
       label: "Navegación del CRM",
+      more: "Más",
       help: "Centro de ayuda",
       search: "Buscar",
       toggle: "Mostrar u ocultar la navegación",

@@ -605,6 +605,13 @@ export const frenchCrmMessages = {
       },
     },
     quotes: {
+      no_price_list: {
+        can_create:
+          "Un devis a besoin d’une liste de prix, et il n’y en a encore aucune. Créez-en une d’abord : ses prix sont ceux que propose le devis.",
+        ask_admin:
+          "Un devis a besoin d’une liste de prix, et il n’y en a encore aucune. Demandez à un administrateur d’en créer une.",
+        action: "Créer une liste de prix",
+      },
       name: "Devis |||| Devis",
       forcedCaseName: "Devis",
       fields: {
@@ -2182,6 +2189,15 @@ export const frenchCrmMessages = {
       title: "Télécharger et redimensionner l'image",
       update_image: "Mettre à jour l'image",
     },
+    import_rows: {
+      title: "Lignes non importées :",
+      line: "Ligne %{line} : %{reason}",
+      more: "…et %{smart_count} ligne de plus |||| …et %{smart_count} lignes de plus",
+      malformed:
+        "la ligne est mal formée (vérifiez les guillemets et les séparateurs)",
+      missing_name: "le prénom ou le nom est obligatoire",
+      save_failed: "elle n’a pas pu être enregistrée",
+    },
     import: {
       action: {
         download_error_report: "Téléchargez le rapport d'erreur",
@@ -2296,6 +2312,7 @@ export const frenchCrmMessages = {
     },
     navigation: {
       label: "Navigation CRM",
+      more: "Plus",
       help: "Centre d'aide",
       search: "Rechercher",
       toggle: "Afficher ou masquer la navigation",

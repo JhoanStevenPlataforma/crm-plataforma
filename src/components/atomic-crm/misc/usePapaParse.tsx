@@ -1,6 +1,22 @@
 import * as Papa from "papaparse";
 import { useCallback, useMemo, useRef, useState } from "react";
 
+/**
+ * One rejected CSV row. `line` is the line number the user sees in a
+ * spreadsheet (the header is line 1), and `reason` is an i18n key, so the
+ * dialog can tell the user exactly which rows to fix and why.
+ */
+export type ImportRowError = {
+  line: number;
+  reason: string;
+};
+
+export const MALFORMED_ROW = "crm.import_rows.malformed";
+export const SAVE_FAILED = "crm.import_rows.save_failed";
+
+// Data rows start on line 2: line 1 is the header.
+const lineOf = (rowIndex: number) => rowIndex + 2;
+
 type Import =
   | {
       state: "idle";
@@ -14,6 +30,7 @@ type Import =
       rowCount: number;
       importCount: number;
       errorCount: number;
+      errors: ImportRowError[];
 
       // The remaining time in milliseconds
       remainingTime: number | null;
@@ -30,11 +47,16 @@ type usePapaParseProps<T> = {
 
   // processBatch returns the number of imported items
   processBatch(batch: T[]): Promise<void>;
+
+  // Returns an i18n key explaining why a row cannot be imported, or null.
+  // A rejected row is never sent to processBatch.
+  validateRow?: (row: T) => string | null;
 };
 
 export function usePapaParse<T>({
   batchSize = 10,
   processBatch,
+  validateRow,
 }: usePapaParseProps<T>) {
   const importIdRef = useRef<number>(0);
 
@@ -64,24 +86,46 @@ export function usePapaParse<T>({
             return;
           }
 
+          // A row Papa could not parse is still returned in `data`, with its
+          // columns shifted: importing it would save garbage, so it is
+          // rejected with the rest of the invalid rows.
+          const malformed = new Set(
+            results.errors
+              .map((error) => error.row)
+              .filter((row): row is number => typeof row === "number"),
+          );
+          const rejected: ImportRowError[] = [];
+          const accepted: { row: T; index: number }[] = [];
+          results.data.forEach((row, index) => {
+            const reason = malformed.has(index)
+              ? MALFORMED_ROW
+              : (validateRow?.(row) ?? null);
+            if (reason) {
+              rejected.push({ line: lineOf(index), reason });
+            } else {
+              accepted.push({ row, index });
+            }
+          });
+
           setImporter({
             state: "running",
             rowCount: results.data.length,
-            errorCount: results.errors.length,
+            errorCount: rejected.length,
+            errors: rejected,
             importCount: 0,
             remainingTime: null,
           });
 
           let totalTime = 0;
-          for (let i = 0; i < results.data.length; i += batchSize) {
+          for (let i = 0; i < accepted.length; i += batchSize) {
             if (importIdRef.current !== importId) {
               return;
             }
 
-            const batch = results.data.slice(i, i + batchSize);
+            const batch = accepted.slice(i, i + batchSize);
             try {
               const start = Date.now();
-              await processBatch(batch);
+              await processBatch(batch.map(({ row }) => row));
               totalTime += Date.now() - start;
 
               const meanTime = totalTime / (i + batch.length);
@@ -92,7 +136,7 @@ export function usePapaParse<T>({
                     ...previous,
                     importCount,
                     remainingTime:
-                      meanTime * (results.data.length - importCount),
+                      meanTime * (accepted.length - i - batch.length),
                   };
                 }
                 return previous;
@@ -104,6 +148,13 @@ export function usePapaParse<T>({
                   ? {
                       ...previous,
                       errorCount: previous.errorCount + batch.length,
+                      errors: [
+                        ...previous.errors,
+                        ...batch.map(({ index }) => ({
+                          line: lineOf(index),
+                          reason: SAVE_FAILED,
+                        })),
+                      ],
                     }
                   : previous,
               );
@@ -130,7 +181,7 @@ export function usePapaParse<T>({
         dynamicTyping: true,
       });
     },
-    [batchSize, processBatch],
+    [batchSize, processBatch, validateRow],
   );
 
   return useMemo(

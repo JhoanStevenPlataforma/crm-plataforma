@@ -4,8 +4,16 @@ import type {
   DashboardComponent,
   LayoutComponent,
 } from "ra-core";
+import type { ResourceProps } from "ra-core";
 import { CustomRoutes, localStorageStore, Resource } from "ra-core";
-import { useEffect, useMemo } from "react";
+import {
+  createElement,
+  isValidElement,
+  useEffect,
+  useMemo,
+  type ComponentType,
+  type ReactElement,
+} from "react";
 import { Route } from "react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -30,6 +38,7 @@ import deals from "../deals";
 import leads from "../leads";
 import { Layout } from "../layout/Layout";
 import { MobileLayout } from "../layout/MobileLayout";
+import { MobileDesktopPage } from "../layout/MobileContent";
 import { SignupPage } from "../login/SignupPage";
 import { ConfirmationRequired } from "../login/ConfirmationRequired";
 import { ImportPage } from "../misc/ImportPage";
@@ -300,91 +309,188 @@ const DesktopAdmin = (
       </CustomRoutes>
 
       <CustomRoutes>
-        <Route path={ProfilePage.path} element={<ProfilePage />} />
-        {/* The customer portal's slides (quote-portal-presentation.md §7). */}
-        <Route path={PortalSlidesPage.path} element={<PortalSlidesPage />} />
         <Route path={SettingsPage.path} element={<SettingsPage />} />
-        <Route path={ImportPage.path} element={<ImportPage />} />
         <Route path={ChangelogPage.path} element={<ChangelogPage />} />
-        {/* The analytics module. Four sibling routes rather than a nested
-            layout: `CustomRoutes` renders its children inside one `Routes`,
-            and each page composes `AnalyticsLayout` itself, so there is no
-            `Outlet` to get wrong. Not registered on the mobile admin: these
-            are wide charts, and `MobileAdmin` has its own reduced route set. */}
-        <Route path={AnalyticsOverview.path} element={<AnalyticsOverview />} />
-        <Route path={AnalyticsPipeline.path} element={<AnalyticsPipeline />} />
-        <Route path={AnalyticsLeads.path} element={<AnalyticsLeads />} />
-        <Route
-          path={AnalyticsProductivity.path}
-          element={<AnalyticsProductivity />}
-        />
-        {/* The reports module. `/reports/new` is declared BEFORE
-            `/reports/:reportId` — react-router ranks static segments above
-            dynamic ones, so the order is not what makes this work, but keeping
-            them adjacent is what makes the pair readable. Both mount the same
-            page: a new report is a saved one with no id. */}
-        <Route path={ReportsLibrary.path} element={<ReportsLibrary />} />
-        <Route path={ReportPage.newPath} element={<ReportPage />} />
-        <Route path={ReportPrintPage.path} element={<ReportPrintPage />} />
-        <Route path={ReportPage.detailPath} element={<ReportPage />} />
-        <Route path={TeamsDashboard.path} element={<TeamsDashboard />} />
-        <Route path={TeamStatsPage.path} element={<TeamStatsPage />} />
-        <Route
-          path={TeamMemberStatsPage.path}
-          element={<TeamMemberStatsPage />}
-        />
+        {sharedRoutes(asIs)}
       </CustomRoutes>
-      <Resource name="leads" {...leads} />
-      <Resource name="deals" {...deals} />
       <Resource name="contacts" {...contacts} />
       <Resource name="companies" {...companies} />
-      <Resource name="contact_notes" />
-      <Resource name="deal_notes" />
       <Resource name="tasks" list={TaskList} />
-      <Resource name="sales" {...sales} />
-      <Resource name="teams" {...teams} />
-      <Resource name="team_members" />
-      <Resource name="team_budgets" />
-      <Resource name="team_member_budgets" />
-      {/* Read-only aggregate behind the dashboard drill-downs. */}
-      <Resource name="team_deal_stats" />
-      <Resource name="tags" />
-      {/* The quotes catalogue (docs/proposals/quotes-cpq-module.md, Phase 3).
-          A list's prices are edited inside the list, so `price_list_items`
-          has no screen of its own. */}
-      <Resource name="products" {...products} />
-      <Resource name="price_lists" {...priceLists} />
-      <Resource name="price_list_items" />
-      <Resource name="tax_rates" {...taxRates} />
-      {/* Quotations (docs/proposals/quotes-cpq-module.md, Phase 4). The
-          versions, the lines and the status catalogue have no screen of their
-          own: a version is edited through its quote, and `quote_statuses` is
-          read by the list filter. `price_book` is the line picker's view.
-          The print route (Phase 6) is a child of the resource: `:id/print`
-          outranks the editor's `:id/*`, because a static segment beats a splat.
-          It stays INSIDE the layout on purpose — only `Layout` runs the
-          configuration loader, so a `noLayout` route would print the default
-          letterhead instead of this installation's. */}
-      <Resource name="quotes" {...quotes}>
-        <Route path=":id/print" element={<QuotePrintPage />} />
-      </Resource>
-      <Resource name="quote_versions" />
-      <Resource name="quote_lines" />
-      {/* The negotiation thread (Phase 8), rendered on the quote's page. */}
-      <Resource name="quote_comments" />
-      <Resource name="quote_statuses" recordRepresentation="label" />
-      {/* The status machine as data (Phase 5): the quote toolbar reads the
-          legal edges from it instead of hardcoding which button a status
-          offers. `quote_access_tokens_summary` is the readable projection of a
-          table nobody may select — it omits the hash. */}
-      <Resource name="quote_transitions" />
-      <Resource name="quote_access_tokens_summary" />
-      <Resource name="price_book" />
-      <Resource name="portal_templates" />
-      <Resource name="portal_slides" />
+      {sharedResources(asIs)}
     </Admin>
   );
 };
+
+type Wrap = (element: ReactElement) => ReactElement;
+const asIs: Wrap = (element) => element;
+const inMobileFrame: Wrap = (element) => (
+  <MobileDesktopPage>{element}</MobileDesktopPage>
+);
+
+type ResourceViews = Pick<ResourceProps, "list" | "show" | "edit" | "create">;
+
+/**
+ * Frames every view of a resource definition. A view may be a component or an
+ * element; both are turned into an element, which `<Resource>` accepts.
+ */
+const wrapViews = <T extends ResourceViews>(definition: T, wrap: Wrap): T => {
+  const frame = (view: ResourceViews["list"]) => {
+    if (view == null) return undefined;
+    const element = isValidElement(view)
+      ? view
+      : createElement(view as ComponentType);
+    return wrap(element);
+  };
+  return {
+    ...definition,
+    list: frame(definition.list),
+    show: frame(definition.show),
+    edit: frame(definition.edit),
+    create: frame(definition.create),
+  };
+};
+
+/**
+ * The routes both admins serve. The phone used to get a hand-picked subset,
+ * and every other link answered "Not found": a rep could not open a deal or a
+ * quotation from their phone. The desktop screens are responsive enough to be
+ * useful there, so the phone now serves them too, framed for the bottom
+ * navigation.
+ */
+const sharedRoutes = (wrap: Wrap) => [
+  <Route
+    key="profile"
+    path={ProfilePage.path}
+    element={wrap(<ProfilePage />)}
+  />,
+  // The customer portal's slides (quote-portal-presentation.md §7).
+  <Route
+    key="portal"
+    path={PortalSlidesPage.path}
+    element={wrap(<PortalSlidesPage />)}
+  />,
+  <Route key="import" path={ImportPage.path} element={wrap(<ImportPage />)} />,
+  // The analytics module. Four sibling routes rather than a nested layout:
+  // `CustomRoutes` renders its children inside one `Routes`, and each page
+  // composes `AnalyticsLayout` itself, so there is no `Outlet` to get wrong.
+  <Route
+    key="analytics"
+    path={AnalyticsOverview.path}
+    element={wrap(<AnalyticsOverview />)}
+  />,
+  <Route
+    key="analytics-pipeline"
+    path={AnalyticsPipeline.path}
+    element={wrap(<AnalyticsPipeline />)}
+  />,
+  <Route
+    key="analytics-leads"
+    path={AnalyticsLeads.path}
+    element={wrap(<AnalyticsLeads />)}
+  />,
+  <Route
+    key="analytics-productivity"
+    path={AnalyticsProductivity.path}
+    element={wrap(<AnalyticsProductivity />)}
+  />,
+  // The reports module. `/reports/new` is declared BEFORE `/reports/:reportId`
+  // — react-router ranks static segments above dynamic ones, so the order is
+  // not what makes this work, but keeping them adjacent is what makes the pair
+  // readable. Both mount the same page: a new report is a saved one with no id.
+  <Route
+    key="reports"
+    path={ReportsLibrary.path}
+    element={wrap(<ReportsLibrary />)}
+  />,
+  <Route
+    key="reports-new"
+    path={ReportPage.newPath}
+    element={wrap(<ReportPage />)}
+  />,
+  <Route
+    key="reports-print"
+    path={ReportPrintPage.path}
+    element={wrap(<ReportPrintPage />)}
+  />,
+  <Route
+    key="reports-detail"
+    path={ReportPage.detailPath}
+    element={wrap(<ReportPage />)}
+  />,
+  <Route
+    key="teams-dashboard"
+    path={TeamsDashboard.path}
+    element={wrap(<TeamsDashboard />)}
+  />,
+  <Route
+    key="team-stats"
+    path={TeamStatsPage.path}
+    element={wrap(<TeamStatsPage />)}
+  />,
+  <Route
+    key="team-member-stats"
+    path={TeamMemberStatsPage.path}
+    element={wrap(<TeamMemberStatsPage />)}
+  />,
+];
+
+const sharedResources = (wrap: Wrap) => [
+  <Resource key="leads" name="leads" {...wrapViews(leads, wrap)} />,
+  <Resource key="deals" name="deals" {...wrapViews(deals, wrap)} />,
+  <Resource key="contact_notes" name="contact_notes" />,
+  <Resource key="deal_notes" name="deal_notes" />,
+  <Resource key="sales" name="sales" {...wrapViews(sales, wrap)} />,
+  <Resource key="teams" name="teams" {...wrapViews(teams, wrap)} />,
+  <Resource key="team_members" name="team_members" />,
+  <Resource key="team_budgets" name="team_budgets" />,
+  <Resource key="team_member_budgets" name="team_member_budgets" />,
+  // Read-only aggregate behind the dashboard drill-downs.
+  <Resource key="team_deal_stats" name="team_deal_stats" />,
+  <Resource key="tags" name="tags" />,
+  // The quotes catalogue (docs/proposals/quotes-cpq-module.md, Phase 3). A
+  // list's prices are edited inside the list, so `price_list_items` has no
+  // screen of its own.
+  <Resource key="products" name="products" {...wrapViews(products, wrap)} />,
+  <Resource
+    key="price_lists"
+    name="price_lists"
+    {...wrapViews(priceLists, wrap)}
+  />,
+  <Resource key="price_list_items" name="price_list_items" />,
+  <Resource key="tax_rates" name="tax_rates" {...wrapViews(taxRates, wrap)} />,
+  // Quotations (docs/proposals/quotes-cpq-module.md, Phase 4). The versions,
+  // the lines and the status catalogue have no screen of their own: a version
+  // is edited through its quote, and `quote_statuses` is read by the list
+  // filter. `price_book` is the line picker's view. The print route (Phase 6)
+  // is a child of the resource: `:id/print` outranks the editor's `:id/*`,
+  // because a static segment beats a splat. It stays INSIDE the layout on
+  // purpose — only the layouts run the configuration loader, so a `noLayout`
+  // route would print the default letterhead instead of this installation's.
+  <Resource key="quotes" name="quotes" {...wrapViews(quotes, wrap)}>
+    <Route path=":id/print" element={wrap(<QuotePrintPage />)} />
+  </Resource>,
+  <Resource key="quote_versions" name="quote_versions" />,
+  <Resource key="quote_lines" name="quote_lines" />,
+  // The negotiation thread (Phase 8), rendered on the quote's page.
+  <Resource key="quote_comments" name="quote_comments" />,
+  <Resource
+    key="quote_statuses"
+    name="quote_statuses"
+    recordRepresentation="label"
+  />,
+  // The status machine as data (Phase 5): the quote toolbar reads the legal
+  // edges from it instead of hardcoding which button a status offers.
+  // `quote_access_tokens_summary` is the readable projection of a table nobody
+  // may select — it omits the hash.
+  <Resource key="quote_transitions" name="quote_transitions" />,
+  <Resource
+    key="quote_access_tokens_summary"
+    name="quote_access_tokens_summary"
+  />,
+  <Resource key="price_book" name="price_book" />,
+  <Resource key="portal_templates" name="portal_templates" />,
+  <Resource key="portal_slides" name="portal_slides" />,
+];
 
 const MobileAdmin = (
   props: CoreAdminProps & {
@@ -439,18 +545,32 @@ const MobileAdmin = (
             path={SettingsPageMobile.path}
             element={<SettingsPageMobile />}
           />
-          <Route path={ChangelogPage.path} element={<ChangelogPage />} />
+          <Route
+            path={ChangelogPage.path}
+            element={inMobileFrame(<ChangelogPage />)}
+          />
+          {sharedRoutes(inMobileFrame)}
         </CustomRoutes>
         <Resource
           name="contacts"
           list={ContactListMobile}
           show={ContactShow}
+          edit={inMobileFrame(<contacts.edit />)}
           recordRepresentation={contacts.recordRepresentation}
         >
           <Route path=":id/notes/:noteId" element={<NoteShowPage />} />
         </Resource>
-        <Resource name="companies" show={CompanyShow} />
+        {/* The show page has a mobile layout of its own; the list did not
+            exist at all, so "Companies" answered with an empty page. */}
+        <Resource
+          name="companies"
+          list={inMobileFrame(<companies.list />)}
+          show={CompanyShow}
+          edit={inMobileFrame(<companies.edit />)}
+          create={inMobileFrame(<companies.create />)}
+        />
         <Resource name="tasks" list={MobileTasksList} />
+        {sharedResources(inMobileFrame)}
       </Admin>
     </PersistQueryClientProvider>
   );

@@ -1,4 +1,5 @@
 import type { Contact } from "../types";
+import { contactDisplayName } from "./contactName";
 import { ContactCreate } from "./ContactCreate";
 import { ContactEdit } from "./ContactEdit";
 import { ContactList } from "./ContactList";
@@ -9,6 +10,5 @@ export default {
   show: ContactShow,
   edit: ContactEdit,
   create: ContactCreate,
-  recordRepresentation: (record: Contact) =>
-    record?.first_name + " " + record?.last_name,
+  recordRepresentation: (record: Contact) => contactDisplayName(record),
 };
