@@ -364,6 +364,10 @@ export const frenchCrmMessages = {
       },
     },
     leads: {
+      validation: {
+        identity_required:
+          "Indiquez au moins un nom, un e-mail, un téléphone ou une entreprise.",
+      },
       name: "Prospect |||| Prospects",
       unnamed: "(sans nom)",
       action: {
@@ -406,6 +410,13 @@ export const frenchCrmMessages = {
         title: "Nouveau prospect",
       },
       convert: {
+        read_only:
+          "Ce prospect a déjà été converti et ne peut plus être modifié. Modifiez plutôt les fiches qu’il a créées.",
+        needs_contact_details:
+          "Ajoutez un nom, un e-mail ou un téléphone avant de convertir : un contact en a besoin d’au moins un.",
+        amount_negative: "Le montant ne peut pas être négatif.",
+        already_converted:
+          "Ce prospect a déjà été converti, sans doute par quelqu’un d’autre à l’instant. Rechargez la page pour voir ce qu’il a produit.",
         action: "Convertir",
         title: "Convertir ce prospect",
         description:
@@ -744,6 +755,10 @@ export const frenchCrmMessages = {
         confirm: "Envoyer",
       },
       link: {
+        close_uncopied:
+          "Vous n’avez pas encore copié le lien. Il n’est affiché qu’une fois : si vous fermez maintenant, il faudra en générer un nouveau.",
+        keep_open: "Revenir",
+        close_anyway: "Fermer sans copier",
         title: "Lien vers la version %{version}",
         description:
           "Ce lien est affiché une seule fois et n’est stocké nulle part : seule son empreinte est conservée. Copiez-le maintenant — ensuite, la seule issue est d’en créer un nouveau. L’ouvrir vous-même compte comme une consultation du client.",
@@ -1335,6 +1350,10 @@ export const frenchCrmMessages = {
     },
   },
   crm: {
+    duplicates: {
+      contact_exists: "Un contact avec cet e-mail existe déjà :",
+      company_exists: "Une entreprise portant ce nom existe déjà :",
+    },
     portal_slides: {
       templates: {
         label: "Modèle",
@@ -1497,6 +1516,20 @@ export const frenchCrmMessages = {
       clear_filter: "Effacer le filtre commercial",
     },
     auth: {
+      back_to_sign_in: "Retour à la connexion",
+      errors: {
+        invalid_credentials: "L’e-mail ou le mot de passe est incorrect.",
+        email_not_confirmed:
+          "Confirmez d’abord votre adresse e-mail : cherchez le lien de confirmation dans votre boîte de réception.",
+        rate_limited:
+          "Trop de tentatives. Patientez quelques minutes puis réessayez.",
+        account_disabled:
+          "Ce compte est désactivé. Demandez à un administrateur de le réactiver.",
+        network:
+          "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+        reset_failed:
+          "L’e-mail de réinitialisation n’a pas pu être envoyé. Réessayez dans quelques minutes.",
+      },
       first_name: "Prénom",
       last_name: "Nom",
       confirm_password: "Confirmer le mot de passe",
@@ -2117,8 +2150,7 @@ export const frenchCrmMessages = {
         evening_anonymous: "Bonsoir",
       },
       kpi: {
-        priority_actions: "Actions prioritaires",
-        urgent: "%{count} urgentes",
+        open_tasks: "Tâches ouvertes",
         won_count: "%{count} gagnées",
         sample: "N=%{count}",
         unweighted_short: "%{amount} non pondéré",

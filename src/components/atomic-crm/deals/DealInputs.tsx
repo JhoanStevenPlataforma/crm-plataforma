@@ -1,5 +1,5 @@
 import { Handshake, Link2 } from "lucide-react";
-import { required, useTranslate } from "ra-core";
+import { minValue, required, useTranslate } from "ra-core";
 import { AutocompleteArrayInput } from "@/components/admin/autocomplete-array-input";
 import { ReferenceArrayInput } from "@/components/admin/reference-array-input";
 import { ReferenceInput } from "@/components/admin/reference-input";
@@ -89,8 +89,9 @@ const DealMiscInputs = () => {
         <NumberInput
           source="amount"
           defaultValue={0}
+          min={0}
           helperText={false}
-          validate={required()}
+          validate={[required(), minValue(0)]}
         />
         <DateInput
           validate={required()}

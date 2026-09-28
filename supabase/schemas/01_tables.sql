@@ -109,7 +109,24 @@ create table public.contacts (
     sales_id bigint,
     linkedin_url text,
     email_jsonb jsonb,
-    phone_jsonb jsonb
+    phone_jsonb jsonb,
+    -- A contact is somebody the team can recognise or reach: a name, an
+    -- email or a phone. A row with neither is what a shifted CSV import produced, and it
+    -- rendered as "undefined undefined" in every list and picker.
+    constraint contacts_has_identity check (
+        nullif(btrim(first_name), '') is not null
+        or nullif(btrim(last_name), '') is not null
+        or case
+            when jsonb_typeof(email_jsonb) = 'array'
+                then jsonb_array_length(email_jsonb) > 0
+            else false
+        end
+        or case
+            when jsonb_typeof(phone_jsonb) = 'array'
+                then jsonb_array_length(phone_jsonb) > 0
+            else false
+        end
+    )
 );
 
 create table public.contact_notes (
@@ -142,7 +159,10 @@ create table public.deals (
     -- two teams would otherwise make the same amount count twice, and moving a
     -- rep between teams would silently rewrite closed history.
     -- The foreign key is added after public.teams exists, further down.
-    team_id bigint
+    team_id bigint,
+    -- A negative amount is not a deal, and it silently shrinks every pipeline
+    -- total it is summed into.
+    constraint deals_amount_not_negative check (amount >= 0)
 );
 
 create table public.deal_notes (
@@ -278,7 +298,18 @@ create table public.leads (
     converted_at timestamp with time zone,
     converted_contact_id bigint,
     converted_company_id bigint,
-    converted_deal_id bigint
+    converted_deal_id bigint,
+    -- Something to follow up on: a name, a way to reach them, or a company.
+    -- An entirely blank lead could be saved from the form and listed as
+    -- "(no name)" with nothing anybody could act on.
+    constraint leads_has_identity check (
+        nullif(btrim(first_name), '') is not null
+        or nullif(btrim(last_name), '') is not null
+        or email is not null
+        or nullif(btrim(phone), '') is not null
+        or nullif(btrim(company_name), '') is not null
+        or company_id is not null
+    )
 );
 
 create table public.tags (
@@ -286,6 +317,11 @@ create table public.tags (
     name text not null,
     color text not null
 );
+
+-- One tag per name, whatever its case or surrounding spaces: two "vip" tags
+-- meant a contact could wear the same label twice ("vip vip") and a filter on
+-- one of them silently missed the contacts wearing the other.
+create unique index tags_name_unique on public.tags (lower(btrim(name)));
 
 --
 -- Task catalogues (§3.3)

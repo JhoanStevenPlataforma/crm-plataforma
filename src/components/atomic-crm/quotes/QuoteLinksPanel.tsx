@@ -14,7 +14,12 @@ import { Button } from "@/components/ui/button";
 
 import { quoteErrorMessage } from "../providers/commons/quoteRpc";
 import type { CrmDataProvider } from "../providers/types";
-import type { QuoteAccessToken, QuoteLink, QuoteSummary } from "../types";
+import type {
+  QuoteAccessToken,
+  QuoteLink,
+  QuoteSummary,
+  QuoteVersion,
+} from "../types";
 import { QuoteLinkDialog } from "./QuoteLinkDialog";
 import { useQuoteDraft } from "./useQuoteDraft";
 
@@ -57,6 +62,22 @@ export const QuoteLinksPanel = () => {
     },
     { enabled: quote?.id != null },
   );
+
+  // The token carries the version's id; people know versions by number.
+  // Printing the id said "version 0" for version 1 (and "version 4817" once a
+  // database has been used for a while).
+  const { data: versions } = useGetList<QuoteVersion>(
+    "quote_versions",
+    {
+      filter: { quote_id: quote?.id },
+      sort: { field: "version_number", order: "ASC" },
+      pagination: LINKS_PAGE,
+    },
+    { enabled: quote?.id != null },
+  );
+  const versionNumberOf = (versionId: QuoteAccessToken["version_id"]) =>
+    versions?.find((candidate) => String(candidate.id) === String(versionId))
+      ?.version_number ?? "…";
 
   const onError = (failure: unknown) =>
     notify(quoteErrorMessage(failure), { type: "error" });
@@ -137,7 +158,7 @@ export const QuoteLinksPanel = () => {
               <span className="font-medium">
                 {token.label ||
                   translate("resources.quotes.links.unlabelled", {
-                    version: token.version_id,
+                    version: versionNumberOf(token.version_id),
                   })}
               </span>
               <Badge variant="outline" className="font-normal">

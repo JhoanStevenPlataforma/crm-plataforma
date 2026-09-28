@@ -365,6 +365,10 @@ export const spanishCrmMessages = {
       },
     },
     leads: {
+      validation: {
+        identity_required:
+          "Indica al menos un nombre, un email, un teléfono o una empresa.",
+      },
       name: "Lead |||| Leads",
       unnamed: "(sin nombre)",
       action: {
@@ -407,6 +411,13 @@ export const spanishCrmMessages = {
         title: "Nuevo lead",
       },
       convert: {
+        read_only:
+          "Este lead ya se convirtió, así que ya no se puede editar. Edita en su lugar los registros que generó.",
+        needs_contact_details:
+          "Añade un nombre, un email o un teléfono antes de convertir: un contacto necesita al menos uno.",
+        amount_negative: "El importe no puede ser negativo.",
+        already_converted:
+          "Este lead ya se ha convertido, probablemente otra persona acaba de hacerlo. Recarga la página para ver qué generó.",
         action: "Convertir",
         title: "Convertir este lead",
         description:
@@ -744,6 +755,10 @@ export const spanishCrmMessages = {
         confirm: "Enviar",
       },
       link: {
+        close_uncopied:
+          "Todavía no has copiado el enlace. Solo se muestra esta vez: si cierras ahora tendrás que generar uno nuevo.",
+        keep_open: "Volver",
+        close_anyway: "Cerrar sin copiar",
         title: "Enlace a la versión %{version}",
         description:
           "Este enlace se muestra una sola vez y no se guarda en ninguna parte: solo queda su huella. Cópielo ahora — después la única salida es crear uno nuevo. Si lo abre usted mismo, cuenta como una visita del cliente.",
@@ -1335,6 +1350,10 @@ export const spanishCrmMessages = {
     },
   },
   crm: {
+    duplicates: {
+      contact_exists: "Ya existe un contacto con este correo:",
+      company_exists: "Ya existe una empresa con este nombre:",
+    },
     portal_slides: {
       templates: {
         label: "Plantilla",
@@ -1498,6 +1517,20 @@ export const spanishCrmMessages = {
       clear_filter: "Quitar el filtro de comercial",
     },
     auth: {
+      back_to_sign_in: "Volver a iniciar sesión",
+      errors: {
+        invalid_credentials: "El correo o la contraseña no son correctos.",
+        email_not_confirmed:
+          "Primero confirma tu correo: busca el enlace de confirmación en tu bandeja de entrada.",
+        rate_limited:
+          "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
+        account_disabled:
+          "Esta cuenta está desactivada. Pide a un administrador que la reactive.",
+        network:
+          "No se pudo conectar con el servidor. Revisa tu conexión y vuelve a intentarlo.",
+        reset_failed:
+          "No se pudo enviar el correo de restablecimiento. Inténtalo de nuevo en unos minutos.",
+      },
       first_name: "Nombre",
       last_name: "Apellidos",
       confirm_password: "Confirma la contraseña",
@@ -2106,8 +2139,7 @@ export const spanishCrmMessages = {
         evening_anonymous: "Buenas noches",
       },
       kpi: {
-        priority_actions: "Acciones prioritarias",
-        urgent: "%{count} urgentes",
+        open_tasks: "Tareas abiertas",
         won_count: "%{count} ganadas",
         sample: "N=%{count}",
         unweighted_short: "%{amount} sin ponderar",

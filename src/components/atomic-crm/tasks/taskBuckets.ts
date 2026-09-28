@@ -54,13 +54,18 @@ export const buildBucketFilter = (
   // weekStartsOn: 0 keeps the original `tasksPredicate` semantics.
   const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
 
+  // Overdue means "its due time has passed", the definition the dashboard,
+  // the analytics and `team_workload_summary` all use (`due_date < now()`).
+  // Cutting at midnight instead filed a task due at 09:00 under "today" at
+  // 15:00, and the task list reported fewer overdue tasks than the dashboard
+  // above it. "Today" is what is still ahead today.
   switch (bucket) {
     case "overdue":
-      return { ...OPEN_TASK_FILTER, "due_date@lt": today.toISOString() };
+      return { ...OPEN_TASK_FILTER, "due_date@lt": now.toISOString() };
     case "today":
       return {
         ...OPEN_TASK_FILTER,
-        "due_date@gte": today.toISOString(),
+        "due_date@gte": now.toISOString(),
         "due_date@lt": tomorrow.toISOString(),
       };
     case "tomorrow":

@@ -8,6 +8,7 @@ import {
   useNotify,
   useRecordContext,
   useRedirect,
+  useLocaleState,
   useRefresh,
   useTranslate,
   useUpdate,
@@ -30,7 +31,7 @@ import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
 import { ContactList } from "./ContactList";
-import { findDealLabel, formatISODateString } from "./dealUtils";
+import { findDealLabel, formatISODateString, isPastDay } from "./dealUtils";
 
 export const DealShow = ({ open, id }: { open: boolean; id?: string }) => {
   const redirect = useRedirect();
@@ -53,6 +54,7 @@ export const DealShow = ({ open, id }: { open: boolean; id?: string }) => {
 
 const DealShowContent = () => {
   const translate = useTranslate();
+  const [locale = "en"] = useLocaleState();
   const { dealStages, dealCategories, currency } = useConfigurationContext();
   const record = useRecordContext<Deal>();
   if (!record) return null;
@@ -95,11 +97,19 @@ const DealShowContent = () => {
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-sm">
-                  {isValid(new Date(record.expected_closing_date))
-                    ? formatISODateString(record.expected_closing_date)
-                    : translate("resources.deals.invalid_date")}
+                  {/* A deal converted from a lead has no closing date yet:
+                      that is "not set", not an invalid date. */}
+                  {!record.expected_closing_date
+                    ? translate("resources.deals.board.no_close_date")
+                    : isValid(new Date(record.expected_closing_date))
+                      ? formatISODateString(
+                          record.expected_closing_date.slice(0, 10),
+                          locale,
+                        )
+                      : translate("resources.deals.invalid_date")}
                 </span>
-                {new Date(record.expected_closing_date) < new Date() ? (
+                {record.expected_closing_date &&
+                isPastDay(record.expected_closing_date) ? (
                   <Badge variant="destructive">
                     {translate("crm.common.past")}
                   </Badge>

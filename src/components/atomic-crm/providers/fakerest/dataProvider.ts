@@ -350,7 +350,14 @@ export const createDataProvider = ({
       // read at all (§13.3): the raw table carries `token_hash`. Demo mode has
       // neither the hash nor the view, so the projection is derived here — the
       // same shape, and still nothing that could be replayed as a link.
-      if (resource === "quote_access_tokens_summary") {
+      // The outer `withSupabaseFilterAdapter` strips the `_summary` suffix before
+      // this runs, so the view arrives here under the table's name. Matching
+      // only the view's name left `is_active` undefined, and every fresh link
+      // was listed as inactive.
+      if (
+        resource === "quote_access_tokens_summary" ||
+        resource === "quote_access_tokens"
+      ) {
         const { filter = {}, pagination, sort } = params;
         const result = await baseDataProvider.getList("quote_access_tokens", {
           filter,

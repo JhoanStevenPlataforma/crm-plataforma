@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
 import { AuthBrand, AuthLayout } from "./AuthLayout";
+import { authErrorKey } from "./authErrors";
 import { PasswordInput } from "./PasswordInput";
 import { PoweredBy } from "./PoweredBy";
 import { SSOAuthButton } from "./SSOAuthButton";
@@ -77,24 +78,7 @@ export const LoginPage = (props: { redirectTo?: string }) => {
       })
       .catch((error) => {
         setLoading(false);
-        notify(
-          typeof error === "string"
-            ? error
-            : typeof error === "undefined" || !error.message
-              ? "ra.auth.sign_in_error"
-              : error.message,
-          {
-            type: "error",
-            messageArgs: {
-              _:
-                typeof error === "string"
-                  ? error
-                  : error && error.message
-                    ? error.message
-                    : undefined,
-            },
-          },
-        );
+        notify(authErrorKey(error), { type: "error" });
       });
   };
 

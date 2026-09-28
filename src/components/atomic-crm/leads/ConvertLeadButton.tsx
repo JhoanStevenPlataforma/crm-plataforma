@@ -24,6 +24,17 @@ import { Label } from "@/components/ui/label";
 
 import type { CrmDataProvider } from "../providers/types";
 import type { Lead } from "../types";
+import { leadCanBecomeContact } from "./leadIdentity";
+
+/**
+ * The server speaks Postgres: "Lead 12 has already been converted". Two people
+ * converting the same lead is the one refusal a user can cause, so it gets its
+ * own sentence; anything else is the generic failure, never the raw message.
+ */
+const convertErrorKey = (error: Error) =>
+  /already been converted/i.test(error?.message ?? "")
+    ? "resources.leads.convert.already_converted"
+    : "resources.leads.convert.error";
 
 /**
  * Turns a qualified lead into a company + contact, and optionally a deal.
@@ -61,9 +72,7 @@ export const ConvertLeadButton = () => {
       redirect(`/contacts/${contactId}/show`);
     },
     onError: (error: Error) => {
-      notify(error.message || "resources.leads.convert.error", {
-        type: "error",
-      });
+      notify(convertErrorKey(error), { type: "error" });
     },
   });
 
@@ -72,12 +81,31 @@ export const ConvertLeadButton = () => {
     return null;
   }
 
+  // A contact needs a name, an email or a phone; say so rather than let the
+  // server refuse the conversion with a constraint name.
+  const canConvert = leadCanBecomeContact(record);
+  const amountIsValid = !createDeal || Number(dealAmount) >= 0;
+
   return (
     <>
-      <Button type="button" variant="default" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="default"
+        onClick={() => setOpen(true)}
+        disabled={!canConvert}
+        aria-describedby={canConvert ? undefined : "convert-lead-blocked"}
+      >
         <UserRoundPlus />
         {translate("resources.leads.convert.action")}
       </Button>
+      {canConvert ? null : (
+        <span
+          id="convert-lead-blocked"
+          className="text-xs text-muted-foreground"
+        >
+          {translate("resources.leads.convert.needs_contact_details")}
+        </span>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -125,7 +153,13 @@ export const ConvertLeadButton = () => {
                     min={0}
                     value={dealAmount}
                     onChange={(event) => setDealAmount(event.target.value)}
+                    aria-invalid={!amountIsValid}
                   />
+                  {amountIsValid ? null : (
+                    <p className="text-sm text-destructive">
+                      {translate("resources.leads.convert.amount_negative")}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -139,7 +173,11 @@ export const ConvertLeadButton = () => {
             >
               {translate("ra.action.cancel")}
             </Button>
-            <Button type="button" disabled={isPending} onClick={() => mutate()}>
+            <Button
+              type="button"
+              disabled={isPending || !amountIsValid}
+              onClick={() => mutate()}
+            >
               {translate("resources.leads.convert.confirm")}
             </Button>
           </DialogFooter>

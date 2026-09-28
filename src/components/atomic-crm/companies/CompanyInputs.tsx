@@ -15,6 +15,8 @@ import type { Company } from "../types";
 import { getTranslatedCompanySizeLabel } from "./getTranslatedCompanySizeLabel";
 import { sizes } from "./sizes";
 import { FormSection } from "../misc/FormSection";
+import { DuplicateHint } from "../misc/DuplicateHint";
+import { useWatch } from "react-hook-form";
 
 const isUrl = (url: string) => {
   if (!url) return;
@@ -72,6 +74,7 @@ const CompanyDisplayInputs = () => {
           _: "Company name",
         })}
       />
+      <CompanyDuplicateHint />
     </div>
   );
 };
@@ -176,5 +179,20 @@ const CompanyAdditionalInformationInputs = () => {
       </ArrayInput>
       <SaleInput />
     </FormSection>
+  );
+};
+
+const CompanyDuplicateHint = () => {
+  const name = useWatch({ name: "name" });
+  return (
+    <DuplicateHint<Company>
+      resource="companies"
+      value={name}
+      isSame={(company, typed) =>
+        company.name?.trim().toLowerCase() === typed.toLowerCase()
+      }
+      labelOf={(company) => company.name}
+      messageKey="crm.duplicates.company_exists"
+    />
   );
 };

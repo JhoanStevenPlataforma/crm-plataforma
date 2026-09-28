@@ -179,24 +179,24 @@ export const DashboardKpis = ({
       />
 
       <KpiCard
-        label={translate("crm.dashboard.kpi.priority_actions")}
+        // The big figure is the open tasks, so the card says so. It was titled
+        // "Priority actions" with an "urgent" badge that actually counted
+        // overdue tasks (not the "Urgent" priority) and repeated it below.
+        label={translate("crm.dashboard.kpi.open_tasks")}
         value={String(stats.workload.open)}
         icon={AlertTriangle}
         badge={
           stats.workload.overdue > 0 ? (
             <Badge variant="destructive" className="h-5 px-1.5 text-[0.625rem]">
-              {translate("crm.dashboard.kpi.urgent", {
+              {translate("crm.analytics.kpi.overdue_of_open", {
                 count: stats.workload.overdue,
               })}
             </Badge>
           ) : undefined
         }
-        // Overdue is a SUBSET of open, never a sibling: the footer says "of
-        // which", so the two figures are never added together.
-        footerPrimary={translate("crm.analytics.kpi.overdue_of_open", {
-          count: stats.workload.overdue,
-        })}
-        footerSecondary={translate("crm.analytics.kpi.due_soon", {
+        // Overdue is a SUBSET of open, never a sibling: it rides as the badge
+        // on the open figure, so the two are never read as a sum.
+        footerPrimary={translate("crm.analytics.kpi.due_soon", {
           count: stats.workload.dueNext7d,
         })}
         tone={stats.workload.overdue > 0 ? "alert" : "default"}

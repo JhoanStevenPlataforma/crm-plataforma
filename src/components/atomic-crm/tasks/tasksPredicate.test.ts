@@ -39,6 +39,12 @@ describe("tasksPredicate", () => {
     expect(isOverdue(futureDate)).toBe(false);
   });
 
+  it("a task due earlier today is overdue, not due today", () => {
+    const thisMorning = new Date(today.getTime() - 3 * 60 * 60 * 1000);
+    expect(isOverdue(thisMorning.toISOString())).toBe(true);
+    expect(isDueToday(thisMorning.toISOString())).toBe(false);
+  });
+
   it("isDueToday returns true for date before the end of the current day", () => {
     expect(isDueToday(today.toISOString())).toBe(true);
   });
@@ -112,24 +118,28 @@ describe("tasksPredicate", () => {
   });
 
   describe("boundaries", () => {
-    it("should consider date equal to start of today as due today only", () => {
-      const startOfTodayDate = startOfToday().toISOString();
-      expect(isOverdue(startOfTodayDate)).toBe(false);
-      expect(isDueToday(startOfTodayDate)).toBe(true);
-      expect(isDueTomorrow(startOfTodayDate)).toBe(false);
-      expect(isDueThisWeek(startOfTodayDate)).toBe(false);
-      expect(isDueLater(startOfTodayDate)).toBe(false);
+    // The overdue/today boundary is NOW, not midnight: the dashboard counts a
+    // task as overdue as soon as its due time passes (due_date < now()).
+    it("should consider a date equal to now as due today only", () => {
+      const nowDate = new Date().toISOString();
+      expect(isOverdue(nowDate)).toBe(false);
+      expect(isDueToday(nowDate)).toBe(true);
+      expect(isDueTomorrow(nowDate)).toBe(false);
+      expect(isDueThisWeek(nowDate)).toBe(false);
+      expect(isDueLater(nowDate)).toBe(false);
     });
 
-    it("should consider date equal to start of today minus 1 ms as overdue only", () => {
-      const justBeforeStartOfToday = new Date(
-        startOfToday().getTime() - 1,
-      ).toISOString();
-      expect(isOverdue(justBeforeStartOfToday)).toBe(true);
-      expect(isDueToday(justBeforeStartOfToday)).toBe(false);
-      expect(isDueTomorrow(justBeforeStartOfToday)).toBe(false);
-      expect(isDueThisWeek(justBeforeStartOfToday)).toBe(false);
-      expect(isDueLater(justBeforeStartOfToday)).toBe(false);
+    it("should consider a date 1 ms before now as overdue only", () => {
+      const justBeforeNow = new Date(Date.now() - 1).toISOString();
+      expect(isOverdue(justBeforeNow)).toBe(true);
+      expect(isDueToday(justBeforeNow)).toBe(false);
+      expect(isDueTomorrow(justBeforeNow)).toBe(false);
+      expect(isDueThisWeek(justBeforeNow)).toBe(false);
+      expect(isDueLater(justBeforeNow)).toBe(false);
+    });
+
+    it("should consider the start of today as overdue once the day has begun", () => {
+      expect(isOverdue(startOfToday().toISOString())).toBe(true);
     });
 
     it("should consider date equal to end of today as due tomorrow only", () => {

@@ -13,7 +13,7 @@ import {
   useNotify,
 } from "ra-core";
 import type { FocusEvent, ClipboardEventHandler } from "react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BooleanInput } from "@/components/admin/boolean-input";
@@ -36,6 +36,8 @@ import {
   translatePersonalInfoTypeLabel,
 } from "./contactModel.ts";
 import { FormSection } from "../misc/FormSection";
+import { DuplicateHint } from "../misc/DuplicateHint";
+import { contactDisplayName } from "./contactName";
 
 export const ContactInputs = () => {
   const isMobile = useIsMobile();
@@ -203,6 +205,7 @@ const ContactPersonalInformationInputs = () => {
           />
         </SimpleFormIterator>
       </ArrayInput>
+      <ContactDuplicateHint />
       <ArrayInput source="phone_jsonb" helperText={false}>
         <SimpleFormIterator
           inline
@@ -295,5 +298,24 @@ export const ContactStatusSelector = () => {
         triggerClassName="w-full"
       />
     </div>
+  );
+};
+
+const ContactDuplicateHint = () => {
+  const emails = useWatch({ name: "email_jsonb" }) as
+    | { email?: string }[]
+    | undefined;
+  return (
+    <DuplicateHint<Contact>
+      resource="contacts"
+      value={emails?.find((entry) => entry?.email)?.email}
+      isSame={(contact, typed) =>
+        (contact.email_jsonb ?? []).some(
+          (entry) => entry.email?.trim().toLowerCase() === typed.toLowerCase(),
+        )
+      }
+      labelOf={contactDisplayName}
+      messageKey="crm.duplicates.contact_exists"
+    />
   );
 };

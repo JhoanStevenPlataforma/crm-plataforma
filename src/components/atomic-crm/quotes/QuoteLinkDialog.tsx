@@ -45,11 +45,18 @@ export const QuoteLinkDialog = ({
 }) => {
   const translate = useTranslate();
   const [isCopied, setIsCopied] = useState(false);
+  // Closing discards the only copy of the link. A stray Escape or a click
+  // outside used to do that silently; now, until the link has been copied,
+  // any way of closing asks first.
+  const [isConfirmingClose, setIsConfirmingClose] = useState(false);
   const href = useHref(quotePortalLocation(link?.token ?? ""));
   const url = link ? new URL(href, window.location.href).toString() : "";
 
   useEffect(() => {
-    if (link) setIsCopied(false);
+    if (link) {
+      setIsCopied(false);
+      setIsConfirmingClose(false);
+    }
   }, [link]);
 
   const copy = async () => {
@@ -66,11 +73,19 @@ export const QuoteLinkDialog = ({
     }
   };
 
+  const requestClose = () => {
+    if (isCopied) {
+      onClose();
+    } else {
+      setIsConfirmingClose(true);
+    }
+  };
+
   return (
     <Dialog
       open={link != null}
       onOpenChange={(next) => {
-        if (!next) onClose();
+        if (!next) requestClose();
       }}
     >
       <DialogContent>
@@ -96,6 +111,8 @@ export const QuoteLinkDialog = ({
               value={url}
               className="font-mono text-xs"
               onFocus={(event) => event.currentTarget.select()}
+              // Copying by hand (ctrl+C on the selected text) counts too.
+              onCopy={() => setIsCopied(true)}
             />
             <Button
               type="button"
@@ -120,8 +137,29 @@ export const QuoteLinkDialog = ({
           ) : null}
         </div>
 
+        {isConfirmingClose ? (
+          <div
+            role="alert"
+            className="flex flex-col gap-3 rounded-md border border-warning/40 bg-warning-tint p-3 text-sm"
+          >
+            <p>{translate("resources.quotes.link.close_uncopied")}</p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsConfirmingClose(false)}
+              >
+                {translate("resources.quotes.link.keep_open")}
+              </Button>
+              <Button variant="destructive" size="sm" onClick={onClose}>
+                {translate("resources.quotes.link.close_anyway")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <DialogFooter>
-          <Button onClick={onClose}>
+          <Button onClick={requestClose}>
             {translate("resources.quotes.link.done")}
           </Button>
         </DialogFooter>

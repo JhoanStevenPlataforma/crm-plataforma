@@ -2,6 +2,7 @@ import { useDataProvider, useGetIdentity, type DataProvider } from "ra-core";
 import { useCallback, useMemo } from "react";
 
 import type { Company, Tag } from "../types";
+import { tagKey, useCreateTag } from "../tags/useCreateTag";
 import { contactFullName } from "./contactName";
 
 export type ContactImportSchema = {
@@ -29,9 +30,10 @@ export type ContactImportSchema = {
 export const MISSING_CONTACT_NAME = "crm.import_rows.missing_name";
 
 /**
- * A contact needs a first or a last name: the database refuses one without
- * (`contacts_has_name`), and a nameless row is what an unrelated or shifted CSV
- * produces, so it is rejected before anything is written.
+ * An imported contact needs a first or a last name. The database is looser
+ * (`contacts_has_identity` also accepts an email or a phone, which a lead
+ * conversion may carry alone), but a nameless CSV row is what an unrelated or
+ * shifted file produces, so the import rejects it before anything is written.
  */
 export const validateContactRow = (row: ContactImportSchema) =>
   contactFullName(row) ? null : MISSING_CONTACT_NAME;
@@ -64,23 +66,27 @@ export function useContactImport() {
     [companiesCache, user?.identity?.id, dataProvider],
   );
 
-  // Tags cache to avoid creating the same tag multiple times and costly roundtrips
+  // Tags are matched the way `tags_name_unique` compares them (case and spaces
+  // ignored): "VIP" in the CSV is the existing "vip" tag, not a second one the
+  // database would refuse, failing the whole batch.
+  const createTag = useCreateTag();
   // Cache is dependent of dataProvider, so it's safe to use it as a dependency
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tagsCache = useMemo(() => new Map<string, Tag>(), [dataProvider]);
   const getTags = useCallback(
-    async (names: string[]) =>
-      fetchRecordsWithCache<Tag>(
-        "tags",
-        tagsCache,
-        names,
-        (name) => ({
-          name,
-          color: "#f9f9f9",
-        }),
-        dataProvider,
-      ),
-    [tagsCache, dataProvider],
+    async (names: string[]) => {
+      const tags = new Map<string, Tag>();
+      for (const name of [...new Set(names.map((name) => name.trim()))]) {
+        let tag = tagsCache.get(tagKey(name));
+        if (!tag) {
+          tag = await createTag({ name, color: "#f9f9f9" });
+          tagsCache.set(tagKey(name), tag);
+        }
+        tags.set(name, tag);
+      }
+      return tags;
+    },
+    [createTag, tagsCache],
   );
 
   const processBatch = useCallback(

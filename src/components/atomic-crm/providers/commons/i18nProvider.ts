@@ -74,8 +74,23 @@ export const getInitialLocale = (): SupportedLocale => {
     : "en";
 };
 
+/**
+ * `<html lang>` follows the catalog in use. It was fixed at "en", so a screen
+ * reader read the Spanish interface with an English voice. Polyglot asks for a
+ * catalog every time a locale becomes active — the initial one, the one stored
+ * in the user's profile, and every change — which is exactly when to update it.
+ */
+const syncDocumentLanguage = (locale: string) => {
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = locale;
+  }
+};
+
 export const i18nProvider = polyglotI18nProvider(
-  (locale) => catalogs[locale as SupportedLocale] ?? englishCatalog,
+  (locale) => {
+    syncDocumentLanguage(locale);
+    return catalogs[locale as SupportedLocale] ?? englishCatalog;
+  },
   getInitialLocale(),
   [
     { locale: "en", name: "English" },

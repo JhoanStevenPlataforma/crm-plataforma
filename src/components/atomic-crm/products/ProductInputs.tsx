@@ -92,6 +92,8 @@ export const ProductInputs = () => {
             source="list_price"
             defaultValue={0}
             min={0}
+            // Cents are a price (19.99); the column is numeric(14,2).
+            step={0.01}
             validate={[required(), minValue(0)]}
             className="sm:flex-1"
             helperText={false}

@@ -1,5 +1,4 @@
 import { ShowBase, useRecordContext, useTranslate } from "ra-core";
-import { Link } from "react-router";
 import { DeleteButton } from "@/components/admin/delete-button";
 import { EditButton } from "@/components/admin/edit-button";
 import { ReferenceField } from "@/components/admin/reference-field";
@@ -11,6 +10,7 @@ import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Lead } from "../types";
 import { ConvertLeadButton } from "./ConvertLeadButton";
+import { ConvertedSummary } from "./ConvertedSummary";
 import { LeadCompanyField } from "./LeadCompanyField";
 import { LeadStatusBadge } from "./LeadStatusBadge";
 
@@ -35,7 +35,9 @@ const LeadShowContent = () => {
     <div className="mt-2 flex flex-col gap-4">
       <TopToolbar>
         <ConvertLeadButton />
-        <EditButton />
+        {/* A converted lead is a record of what it produced; editing it
+            changes nothing downstream and its status is no longer a choice. */}
+        {record.converted_at ? null : <EditButton />}
         <DeleteButton />
       </TopToolbar>
 
@@ -95,42 +97,6 @@ const LeadShowContent = () => {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-};
-
-/**
- * Once converted, the lead becomes an audit trail: it shows what it produced
- * rather than offering the conversion again.
- */
-const ConvertedSummary = ({ record }: { record: Lead }) => {
-  const translate = useTranslate();
-  return (
-    <div className="border-t pt-4 flex flex-col gap-1 text-sm">
-      <h3 className="text-sm font-medium text-muted-foreground">
-        {translate("resources.leads.convert.converted_title")}
-      </h3>
-      {record.converted_contact_id ? (
-        <Link
-          className="underline"
-          to={`/contacts/${record.converted_contact_id}/show`}
-        >
-          {translate("resources.leads.convert.see_contact")}
-        </Link>
-      ) : null}
-      {record.converted_company_id ? (
-        <Link
-          className="underline"
-          to={`/companies/${record.converted_company_id}/show`}
-        >
-          {translate("resources.leads.convert.see_company")}
-        </Link>
-      ) : null}
-      {record.converted_deal_id ? (
-        <Link className="underline" to={`/deals/${record.converted_deal_id}`}>
-          {translate("resources.leads.convert.see_deal")}
-        </Link>
-      ) : null}
     </div>
   );
 };

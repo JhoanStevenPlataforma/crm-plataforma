@@ -78,12 +78,18 @@ export const TagsListEdit = () => {
       if (!record) {
         throw new Error("No contact record found");
       }
+      // "Creating" a name that already exists returns the existing tag, which
+      // the contact may already wear: never attach it twice.
+      if (record.tags?.includes(tag.id)) {
+        setOpen(false);
+        return;
+      }
 
       await update(
         "contacts",
         {
           id: record.id,
-          data: { tags: [...record.tags, tag.id] },
+          data: { tags: [...(record.tags ?? []), tag.id] },
           previousData: record,
         },
         {

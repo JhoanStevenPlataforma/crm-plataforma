@@ -5,6 +5,8 @@ import { Layout } from "@/components/supabase/layout";
 import type { FieldValues, SubmitHandler } from "react-hook-form";
 import { TextInput } from "@/components/admin/text-input";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router";
+import { authErrorKey } from "@/components/atomic-crm/login/authErrors";
 
 interface FormData {
   email: string;
@@ -29,25 +31,10 @@ export const ForgotPasswordPage = () => {
       await resetPassword({
         email: values.email,
       });
-    } catch (error: any) {
-      notify(
-        typeof error === "string"
-          ? error
-          : typeof error === "undefined" || !error.message
-            ? "ra.auth.sign_in_error"
-            : error.message,
-        {
-          type: "warning",
-          messageArgs: {
-            _:
-              typeof error === "string"
-                ? error
-                : error && error.message
-                  ? error.message
-                  : undefined,
-          },
-        },
-      );
+    } catch (error: unknown) {
+      notify(authErrorKey(error, "crm.auth.errors.reset_failed"), {
+        type: "warning",
+      });
     } finally {
       setLoading(false);
     }
@@ -85,6 +72,14 @@ export const ForgotPasswordPage = () => {
           })}
         </Button>
       </Form>
+      {/* Without it this page was a dead end: the only way back to sign-in
+          was the browser's back button. */}
+      <Link
+        to="/login"
+        className="text-center text-sm text-brand hover:underline"
+      >
+        {translate("crm.auth.back_to_sign_in")}
+      </Link>
     </Layout>
   );
 };

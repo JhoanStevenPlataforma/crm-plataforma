@@ -357,6 +357,10 @@ export const englishCrmMessages = {
       },
     },
     leads: {
+      validation: {
+        identity_required:
+          "Enter at least a name, an email, a phone or a company.",
+      },
       name: "Lead |||| Leads",
       unnamed: "(no name)",
       action: {
@@ -399,6 +403,13 @@ export const englishCrmMessages = {
         title: "New lead",
       },
       convert: {
+        read_only:
+          "This lead has already been converted, so it can no longer be edited. Edit the records it produced instead.",
+        needs_contact_details:
+          "Add a name, an email or a phone before converting: a contact needs one of them.",
+        amount_negative: "The amount cannot be negative.",
+        already_converted:
+          "This lead has already been converted, probably by someone else just now. Reload the page to see what it produced.",
         action: "Convert",
         title: "Convert this lead",
         description:
@@ -730,6 +741,10 @@ export const englishCrmMessages = {
         confirm: "Send",
       },
       link: {
+        close_uncopied:
+          "You have not copied the link yet. It is shown only this once: if you close now you will have to generate a new one.",
+        keep_open: "Go back",
+        close_anyway: "Close without copying",
         title: "Link to version %{version}",
         description:
           "This link is shown once and is stored nowhere: only its fingerprint is kept. Copy it now — afterwards the only way is to create a new one. Opening it yourself counts as the customer's view.",
@@ -1317,6 +1332,10 @@ export const englishCrmMessages = {
     },
   },
   crm: {
+    duplicates: {
+      contact_exists: "A contact with this email already exists:",
+      company_exists: "A company with this name already exists:",
+    },
     portal_slides: {
       templates: {
         label: "Template",
@@ -1479,6 +1498,19 @@ export const englishCrmMessages = {
       clear_filter: "Clear the sales rep filter",
     },
     auth: {
+      back_to_sign_in: "Back to sign in",
+      errors: {
+        invalid_credentials: "The email or the password is not correct.",
+        email_not_confirmed:
+          "Confirm your email address first: check your inbox for the confirmation link.",
+        rate_limited: "Too many attempts. Wait a few minutes and try again.",
+        account_disabled:
+          "This account is disabled. Ask an administrator to reactivate it.",
+        network:
+          "The server could not be reached. Check your connection and try again.",
+        reset_failed:
+          "The reset email could not be sent. Try again in a few minutes.",
+      },
       first_name: "First name",
       last_name: "Last name",
       confirm_password: "Confirm password",
@@ -2085,8 +2117,7 @@ export const englishCrmMessages = {
         evening_anonymous: "Good evening",
       },
       kpi: {
-        priority_actions: "Priority actions",
-        urgent: "%{count} urgent",
+        open_tasks: "Open tasks",
         won_count: "%{count} won",
         sample: "N=%{count}",
         unweighted_short: "%{amount} unweighted",

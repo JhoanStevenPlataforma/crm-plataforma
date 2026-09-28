@@ -124,7 +124,7 @@ export const Task = ({
     <>
       <div className="flex items-start justify-between">
         <div
-          className="flex items-start gap-2 flex-1"
+          className="flex min-w-0 items-start gap-2 flex-1"
           onClick={isMobile ? handleToggleDone : undefined}
         >
           <Checkbox
@@ -137,8 +137,10 @@ export const Task = ({
           />
           <div
             className={cn(
-              "grow",
-              compact && "min-w-0",
+              // min-w-0 always: a flex item defaults to its content's width,
+              // so one long unbroken word (a pasted URL, a code) stretched the
+              // whole page sideways.
+              "grow min-w-0",
               isDone && "line-through",
             )}
           >
@@ -153,7 +155,14 @@ export const Task = ({
                   {typeLabel}
                 </span>
               )}
-              <span className={cn(compact && "truncate")}>{task.title}</span>
+              <span
+                className={cn(
+                  "min-w-0",
+                  compact ? "truncate" : "[overflow-wrap:anywhere]",
+                )}
+              >
+                {task.title}
+              </span>
               <TaskPriorityBadge task={task} />
               <TaskStatusBadge task={task} />
             </div>

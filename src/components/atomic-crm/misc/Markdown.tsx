@@ -50,6 +50,9 @@ export function Markdown({ children, className }: MarkdownProps) {
   return (
     <div
       className={cn(
+        // A long unbroken word (a pasted URL, a reference code) wraps instead
+        // of widening the note past its column.
+        "min-w-0 [overflow-wrap:anywhere]",
         // Paragraphs
         "[&_p]:leading-5 [&_p]:my-4 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
         // Headings

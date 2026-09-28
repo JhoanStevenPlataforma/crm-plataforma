@@ -11,6 +11,7 @@ import { AutocompleteCompanyInput } from "../companies/AutocompleteCompanyInput"
 import { SaleInput } from "../misc/SaleInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { FormSection } from "../misc/FormSection";
+import { validateLeadIdentity } from "./leadIdentity";
 
 export const LeadInputs = () => {
   const isMobile = useIsMobile();
@@ -36,7 +37,11 @@ const LeadIdentityInputs = () => {
       className="flex-1"
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <TextInput source="first_name" helperText={false} />
+        <TextInput
+          source="first_name"
+          validate={validateLeadIdentity}
+          helperText={false}
+        />
         <TextInput source="last_name" helperText={false} />
         <TextInput source="email" validate={email()} helperText={false} />
         <TextInput source="phone" helperText={false} />

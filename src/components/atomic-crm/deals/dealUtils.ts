@@ -53,14 +53,36 @@ function ucFirst(str: string): string {
 
 const isoDateStringRegex = /^\d{4}-\d{2}-\d{2}$/;
 
-export function formatISODateString(dateString: string) {
+export function formatISODateString(dateString: string, locale?: string) {
   if (!isoDateStringRegex.test(dateString)) {
     throw new Error("Invalid date format. Expected YYYY-MM-DD.");
   }
-  // Some browsers will consider a date in the format YYYY-MM-DD as UTC, which can cause off-by-one-day issues depending on the user's timezone.
-  // To avoid this, we can parse the date components manually and create a date object in the local timezone.
-  const [year, month, day] = dateString.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
+  const date = localDate(dateString);
+  // With a locale, the user's own format ("28 sept 2026"); without one, the
+  // historical date-fns "PP" ("Sep 28, 2026").
+  return locale
+    ? new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date)
+    : format(date, "PP");
+}
 
-  return format(date, "PP");
+// Some browsers will consider a date in the format YYYY-MM-DD as UTC, which can
+// cause off-by-one-day issues depending on the user's timezone. To avoid this,
+// parse the date components manually and create a date in the local timezone.
+function localDate(dateString: string) {
+  const [year, month, day] = dateString.slice(0, 10).split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Whether a closing date is strictly before today. Compared by calendar day:
+ * a deal due today is due, not overdue — comparing against `new Date()`
+ * flagged it "Past" from the first minute of the day.
+ */
+export function isPastDay(dateString: string, today: Date = new Date()) {
+  const startOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  return localDate(dateString) < startOfToday;
 }

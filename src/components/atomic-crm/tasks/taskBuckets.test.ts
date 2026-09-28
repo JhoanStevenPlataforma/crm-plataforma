@@ -21,23 +21,23 @@ describe("buildBucketFilter", () => {
     }
   });
 
-  test("overdue asks for tasks due strictly before today", () => {
+  test("overdue asks for tasks whose due time has passed, as the dashboard does", () => {
     const filter = buildBucketFilter("overdue", now);
 
-    expect(filter["due_date@lt"]).toBe(
-      new Date("2026-08-04T00:00:00.000").toISOString(),
-    );
+    // due_date < now(): a task due at 09:00 is overdue at 15:42, which is how
+    // the dashboard and team_workload_summary count it.
+    expect(filter["due_date@lt"]).toBe(now.toISOString());
     expect(filter["due_date@gte"]).toBeUndefined();
   });
 
-  test("today is a half-open range covering exactly one day", () => {
+  test("today is what is still ahead until midnight", () => {
     const filter = buildBucketFilter("today", now);
 
     const from = new Date(filter["due_date@gte"] as string);
     const to = new Date(filter["due_date@lt"] as string);
 
-    expect(to.getTime() - from.getTime()).toBe(24 * 60 * 60 * 1000);
-    expect(from.getDate()).toBe(4);
+    expect(from.getTime()).toBe(now.getTime());
+    expect(to.getTime()).toBe(new Date("2026-08-05T00:00:00.000").getTime());
   });
 
   test("tomorrow starts where today ends — no overlap, no gap", () => {
