@@ -44,6 +44,23 @@ describe("DataTable empty state", () => {
     await expect.element(screen.getByText("vip")).toBeVisible();
   });
 
+  it("draws no half-interpolated range while the first page loads", async () => {
+    const screen = await render(
+      <StoryWrapper
+        data={{ tags: [] }}
+        dataProvider={{
+          getList: () => new Promise(() => {}),
+        }}
+      >
+        <TagList />
+        <p>rendered</p>
+      </StoryWrapper>,
+    );
+
+    await expect.element(screen.getByText("rendered")).toBeVisible();
+    await expect.element(screen.getByText(/%\{/)).not.toBeInTheDocument();
+  });
+
   it("draws no '1-0 of 0' range under an empty list", async () => {
     const screen = await render(
       <StoryWrapper data={{ tags: [] }}>

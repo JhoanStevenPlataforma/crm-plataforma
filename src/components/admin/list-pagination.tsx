@@ -55,9 +55,11 @@ export const ListPagination = ({
     setPage,
   } = useListPaginationContext();
 
-  // Nothing to page through: "1-0 of 0" and a lone page "1" said nothing the
-  // empty state above does not already say better.
-  if (total === 0) return null;
+  // Nothing to page through yet or at all: "1-0 of 0" (and, while the first
+  // page loads, "1-%{offsetEnd} of %{total}") said nothing the empty state or
+  // the loading list does not already say better. `-1` (a partial count) is
+  // still paginated.
+  if (total == null || total === 0) return null;
 
   const pageStart = (page - 1) * perPage + 1;
   const pageEnd = hasNextPage ? page * perPage : total;
