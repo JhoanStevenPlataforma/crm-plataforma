@@ -16,6 +16,7 @@ import { getTranslatedCompanySizeLabel } from "./getTranslatedCompanySizeLabel";
 import { sizes } from "./sizes";
 import { FormSection } from "../misc/FormSection";
 import { DuplicateHint } from "../misc/DuplicateHint";
+import { isPhoneNumber, isRevenue } from "../misc/fieldValidators";
 import { useWatch } from "react-hook-form";
 
 const isUrl = (url: string) => {
@@ -95,7 +96,11 @@ const CompanyContactInputs = () => {
         helperText={false}
         validate={isLinkedinUrl}
       />
-      <TextInput source="phone_number" helperText={false} />
+      <TextInput
+        source="phone_number"
+        helperText={false}
+        validate={isPhoneNumber}
+      />
     </FormSection>
   );
 };
@@ -128,7 +133,7 @@ const CompanyContextInputs = () => {
           choices={translatedSizes}
           helperText={false}
         />
-        <TextInput source="revenue" helperText={false} />
+        <TextInput source="revenue" helperText={false} validate={isRevenue} />
       </div>
       <TextInput source="tax_identifier" helperText={false} />
     </FormSection>

@@ -11,6 +11,7 @@ import { AutocompleteCompanyInput } from "../companies/AutocompleteCompanyInput"
 import { SaleInput } from "../misc/SaleInput";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import { FormSection } from "../misc/FormSection";
+import { isPhoneNumber } from "../misc/fieldValidators";
 import { validateLeadIdentity } from "./leadIdentity";
 
 export const LeadInputs = () => {
@@ -44,7 +45,7 @@ const LeadIdentityInputs = () => {
         />
         <TextInput source="last_name" helperText={false} />
         <TextInput source="email" validate={email()} helperText={false} />
-        <TextInput source="phone" helperText={false} />
+        <TextInput source="phone" helperText={false} validate={isPhoneNumber} />
       </div>
       {/* Two ways to say "which company", because a lead can arrive either
           way. The link wins on conversion; the free-text name is what a web

@@ -12,6 +12,7 @@ import {
   RecordContextProvider,
   shallowEqual,
   useInput,
+  useNotify,
   useTranslate,
 } from "ra-core";
 import type {
@@ -24,6 +25,7 @@ import { useDropzone } from "react-dropzone";
 import { XCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploadLimit";
 import { FormError, FormField, FormLabel } from "@/components/admin/form";
 import { InputHelperText } from "@/components/admin/input-helper-text";
 import { Button } from "@/components/ui/button";
@@ -96,6 +98,7 @@ export const FileInput = (props: FileInputProps) => {
   } = props;
   const { onDrop: onDropProp } = options;
   const translate = useTranslate();
+  const notify = useNotify();
 
   // turn a browser dropped file structure into expected structure
   const transformFile = (file: unknown) => {
@@ -163,6 +166,21 @@ export const FileInput = (props: FileInputProps) => {
       onBlur();
     }
 
+    // Dropzone drops a refused file silently; say which one and why.
+    rejectedFiles
+      .filter((rejection) =>
+        rejection.errors.some((error) => error.code === "file-too-large"),
+      )
+      .forEach((rejection) =>
+        notify("crm.validation.file_too_large", {
+          type: "warning",
+          messageArgs: {
+            name: rejection.file.name,
+            limit: MAX_UPLOAD_LABEL,
+          },
+        }),
+      );
+
     if (onDropProp) {
       onDropProp(newFiles, rejectedFiles, event);
     }
@@ -201,7 +219,7 @@ export const FileInput = (props: FileInputProps) => {
 
   const { getRootProps, getInputProps } = useDropzone({
     accept,
-    maxSize,
+    maxSize: maxSize ?? MAX_UPLOAD_BYTES,
     minSize,
     multiple,
     disabled: disabled || readOnly,

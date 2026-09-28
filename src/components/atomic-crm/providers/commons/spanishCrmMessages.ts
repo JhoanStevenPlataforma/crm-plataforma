@@ -1135,6 +1135,7 @@ export const spanishCrmMessages = {
         error: "No se ha podido cambiar el estado de la tarea",
         completed: "Tarea completada",
       },
+      past_due_warning: "Esta fecha ya pasó: la tarea aparecerá como vencida.",
       badges: {
         rescheduled:
           "Reprogramada una vez |||| Reprogramada %{smart_count} veces",
@@ -2469,6 +2470,10 @@ export const spanishCrmMessages = {
     validation: {
       invalid_url: "Debe ser una URL válida",
       invalid_linkedin_url: "La URL debe pertenecer a linkedin.com",
+      invalid_phone:
+        "Escribe un teléfono: dígitos, espacios, +, - o paréntesis",
+      invalid_revenue: "Escribe un importe, p. ej. 250000 o $1M",
+      file_too_large: "%{name} pesa más de %{limit} y no se adjuntó",
     },
   },
 } satisfies CrmMessages;

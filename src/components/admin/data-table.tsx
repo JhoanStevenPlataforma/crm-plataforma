@@ -21,6 +21,8 @@ import {
   useDataTableSortContext,
   useDataTableStoreContext,
   useGetPathForRecordCallback,
+  useGetResourceLabel,
+  useListContextWithProps,
   useRecordContext,
   useResourceContext,
   useStore,
@@ -28,7 +30,7 @@ import {
   useTranslateLabel,
 } from "ra-core";
 import { useNavigate } from "react-router";
-import { ArrowDownAZ, ArrowUpZA, SearchX } from "lucide-react";
+import { ArrowDownAZ, ArrowUpZA, Inbox, SearchX } from "lucide-react";
 import get from "lodash/get";
 import { cn } from "@/lib/utils";
 import {
@@ -290,25 +292,62 @@ const isPromise = (value: any): value is Promise<any> =>
   value && typeof value.then === "function";
 
 /**
- * What an empty table says: nothing matched, and what to try. Drawn in the
- * table's own frame, centred, with an icon — not an alert, which reads as an
- * error when nothing went wrong.
+ * What an empty table says. Drawn in the table's own frame, centred, with an
+ * icon — not an alert, which reads as an error when nothing went wrong.
+ *
+ * Two different situations, told apart: nothing exists yet, or the filters hid
+ * everything. Saying "try another search" on a list nobody has filled sends
+ * the user looking for a filter that is not there.
  */
 const DataTableEmpty = () => {
   const translate = useTranslate();
+  const resource = useResourceContext();
+  const getResourceLabel = useGetResourceLabel();
+  const { filterValues, setFilters } = useListContextWithProps();
+  const isFiltered =
+    filterValues != null && Object.keys(filterValues).length > 0;
+  const name = resource
+    ? getResourceLabel(resource, 0).toLocaleLowerCase()
+    : "";
+
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-card px-6 py-14 text-center">
       <span className="mb-1 grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
-        <SearchX className="size-5" />
+        {isFiltered ? (
+          <SearchX className="size-5" />
+        ) : (
+          <Inbox className="size-5" />
+        )}
       </span>
-      <p className="text-sm font-medium">
-        {translate("crm.common.no_results", { _: "No results" })}
-      </p>
-      <p className="max-w-sm text-sm text-muted-foreground">
-        {translate("crm.common.no_results_hint", {
-          _: "Try another search or clear the filters.",
-        })}
-      </p>
+      {isFiltered ? (
+        <>
+          <p className="text-sm font-medium">
+            {translate("crm.common.no_results", { _: "No results" })}
+          </p>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {translate("crm.common.no_results_hint", {
+              _: "Try another search or clear the filters.",
+            })}
+          </p>
+          {setFilters ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => setFilters({}, [])}
+            >
+              {translate("ra.navigation.clear_filters", {
+                _: "Clear filters",
+              })}
+            </Button>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-sm font-medium">
+          {translate("ra.page.empty", { name, _: `No ${name} yet.` })}
+        </p>
+      )}
     </div>
   );
 };

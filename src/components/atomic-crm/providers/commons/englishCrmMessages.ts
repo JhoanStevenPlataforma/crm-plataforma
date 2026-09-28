@@ -1119,6 +1119,8 @@ export const englishCrmMessages = {
         error: "The task status could not be changed",
         completed: "Task completed",
       },
+      past_due_warning:
+        "This date has already passed: the task will show as overdue.",
       badges: {
         rescheduled: "Rescheduled once |||| Rescheduled %{smart_count} times",
         reassigned: "Reassigned once |||| Reassigned %{smart_count} times",
@@ -2445,6 +2447,9 @@ export const englishCrmMessages = {
     validation: {
       invalid_url: "Must be a valid URL",
       invalid_linkedin_url: "URL must be from linkedin.com",
+      invalid_phone: "Enter a phone number: digits, spaces, +, - or brackets",
+      invalid_revenue: "Enter an amount, e.g. 250000 or $1M",
+      file_too_large: "%{name} is larger than %{limit} and was not attached",
     },
   },
 } as const;

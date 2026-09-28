@@ -2,7 +2,9 @@ import { AutocompleteInput } from "@/components/admin/autocomplete-input";
 import { ReferenceInput } from "@/components/admin/reference-input";
 import { SelectInput } from "@/components/admin/select-input";
 import { TextInput } from "@/components/admin/text-input";
-import { required } from "ra-core";
+import { required, useTranslate } from "ra-core";
+import { useWatch } from "react-hook-form";
+import { TriangleAlert } from "lucide-react";
 import { DateTimeInput } from "@/components/admin";
 
 import { contactOptionText } from "../misc/ContactOption";
@@ -72,6 +74,7 @@ export const TaskFormContent = ({
           helperText={false}
         />
       </div>
+      <PastDueHint />
 
       <ReferenceInput
         source="priority_id"
@@ -85,5 +88,28 @@ export const TaskFormContent = ({
         />
       </ReferenceInput>
     </div>
+  );
+};
+
+/**
+ * A warning, not a refusal: logging a call made yesterday as a task is
+ * legitimate. It only says what will happen, so nobody is surprised to find
+ * the new task already in the overdue bucket.
+ */
+const PastDueHint = () => {
+  const translate = useTranslate();
+  const dueDate = useWatch({ name: "due_date" });
+  const due = dueDate ? new Date(dueDate) : null;
+  if (!due || Number.isNaN(due.getTime()) || due.getTime() >= Date.now()) {
+    return null;
+  }
+  return (
+    <p
+      role="status"
+      className="-mt-2 flex items-center gap-1.5 text-sm text-warning"
+    >
+      <TriangleAlert className="size-4 shrink-0" aria-hidden />
+      {translate("resources.tasks.past_due_warning")}
+    </p>
   );
 };

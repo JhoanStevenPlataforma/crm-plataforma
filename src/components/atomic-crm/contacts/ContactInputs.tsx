@@ -37,6 +37,7 @@ import {
 } from "./contactModel.ts";
 import { FormSection } from "../misc/FormSection";
 import { DuplicateHint } from "../misc/DuplicateHint";
+import { isPhoneNumber } from "../misc/fieldValidators";
 import { contactDisplayName } from "./contactName";
 
 export const ContactInputs = () => {
@@ -217,6 +218,7 @@ const ContactPersonalInformationInputs = () => {
             source="number"
             className="w-full"
             helperText={false}
+            validate={isPhoneNumber}
             label={false}
             placeholder={translate("resources.contacts.fields.phone_number")}
           />

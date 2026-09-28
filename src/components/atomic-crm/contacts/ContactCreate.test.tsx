@@ -16,6 +16,23 @@ describe("ContactCreate", () => {
       .toBeInTheDocument();
   });
 
+  it("refuses a phone number that cannot be dialled, and says what it expects", async () => {
+    const createMock = vi.fn().mockResolvedValue({ data: {} });
+    const screen = await render(
+      <ContactCreateBasic silent dataProvider={{ create: createMock }} />,
+    );
+
+    await screen.getByLabelText(/first name/i).fill("Ada");
+    await screen.getByLabelText(/last name/i).fill("Lovelace");
+    await screen.getByPlaceholder("Phone number").fill("call me");
+    await screen.getByRole("button", { name: /^save$/i }).click();
+
+    await expect
+      .element(screen.getByText(/Enter a phone number/))
+      .toBeVisible();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   it("does not submit empty email and phone entries", async () => {
     const createMock = vi
       .fn()
@@ -40,7 +57,6 @@ describe("ContactCreate", () => {
     await expect
       .poll(() => screen.getByText("Element created"))
       .toBeInTheDocument();
-    await screen.getByLabelText("Close toast").click();
 
     await expect(createMock).toBeCalledTimes(1);
 

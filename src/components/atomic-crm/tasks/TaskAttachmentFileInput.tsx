@@ -1,8 +1,9 @@
 import { Paperclip } from "lucide-react";
-import { useTranslate } from "ra-core";
+import { useNotify, useTranslate } from "ra-core";
 import { useId, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import { MAX_UPLOAD_LABEL, splitBySize } from "@/lib/uploadLimit";
 
 /**
  * "Attach files" — a labelled file input, reused by the task's Files tab and
@@ -23,6 +24,7 @@ export const TaskAttachmentFileInput = ({
   label?: string;
 }) => {
   const translate = useTranslate();
+  const notify = useNotify();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -40,7 +42,14 @@ export const TaskAttachmentFileInput = ({
           // Clearing the input is what lets the same file be picked twice in a
           // row: without it the change event never fires the second time.
           event.target.value = "";
-          onSelect(files);
+          const { accepted, tooLarge } = splitBySize(files);
+          tooLarge.forEach((file) =>
+            notify("crm.validation.file_too_large", {
+              type: "warning",
+              messageArgs: { name: file.name, limit: MAX_UPLOAD_LABEL },
+            }),
+          );
+          if (accepted.length > 0) onSelect(accepted);
         }}
       />
       <Button

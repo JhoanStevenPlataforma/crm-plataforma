@@ -1136,6 +1136,8 @@ export const frenchCrmMessages = {
         error: "Le statut de la tâche n'a pas pu être modifié",
         completed: "Tâche terminée",
       },
+      past_due_warning:
+        "Cette date est déjà passée : la tâche apparaîtra en retard.",
       badges: {
         rescheduled: "Reportée une fois |||| Reportée %{smart_count} fois",
         reassigned: "Réassignée une fois |||| Réassignée %{smart_count} fois",
@@ -2482,6 +2484,10 @@ export const frenchCrmMessages = {
     validation: {
       invalid_url: "Doit être une URL valide",
       invalid_linkedin_url: "L'URL doit provenir de linkedin.com",
+      invalid_phone:
+        "Saisissez un numéro : chiffres, espaces, +, - ou parenthèses",
+      invalid_revenue: "Saisissez un montant, p. ex. 250000 ou 1 M$",
+      file_too_large: "%{name} dépasse %{limit} et n'a pas été joint",
     },
   },
 } satisfies CrmMessages;

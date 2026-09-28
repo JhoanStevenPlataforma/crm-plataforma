@@ -9,6 +9,17 @@ import {
 } from "./ContactEdit.mobile.stories";
 import { page } from "vitest/browser";
 
+/**
+ * Dismisses the toast by its own close button. Scoped to the toast because the
+ * mobile edit sheet has a "Close" button of its own.
+ */
+const closeToast = () =>
+  page
+    .getByRole("listitem")
+    .filter({ hasText: "Element updated" })
+    .getByRole("button", { name: "Close" })
+    .click();
+
 describe("ContactEdit", () => {
   describe("desktop", () => {
     beforeAll(() => {
@@ -51,7 +62,7 @@ describe("ContactEdit", () => {
         .poll(() => screen.getByText("Element updated"))
         .toBeInTheDocument();
 
-      await screen.getByLabelText("Close toast").click();
+      await closeToast();
 
       // Verify the transform cleaned up the empty arrays
       expect(updateMock).toBeCalledTimes(1);
@@ -89,7 +100,7 @@ describe("ContactEdit", () => {
         .poll(() => screen.getByText("Element updated"))
         .toBeInTheDocument();
 
-      await screen.getByLabelText("Close toast").click();
+      await closeToast();
 
       // Wait for the update call to complete
       await expect.poll(() => updateMock.mock.calls.length).toBe(1);
@@ -129,7 +140,7 @@ describe("ContactEdit", () => {
         .poll(() => screen.getByText("Element updated"))
         .toBeInTheDocument();
 
-      await screen.getByLabelText("Close toast").click();
+      await closeToast();
 
       // Wait for the update call to complete
       expect(updateMock).toBeCalledTimes(1);
@@ -189,7 +200,7 @@ describe("ContactEdit", () => {
         .poll(() => screen.getByText("Element updated"))
         .toBeInTheDocument();
 
-      await screen.getByLabelText("Close toast").click();
+      await closeToast();
 
       // Verify the transform cleaned up the empty arrays
       expect(updateMock).toBeCalledTimes(1);
@@ -228,7 +239,7 @@ describe("ContactEdit", () => {
         .poll(() => screen.getByText("Element updated"))
         .toBeInTheDocument();
 
-      await screen.getByLabelText("Close toast").click();
+      await closeToast();
 
       // Wait for the update call to complete
       await expect.poll(() => updateMock.mock.calls.length).toBe(1);
@@ -269,7 +280,7 @@ describe("ContactEdit", () => {
         .poll(() => screen.getByText("Element updated"))
         .toBeInTheDocument();
 
-      await screen.getByLabelText("Close toast").click();
+      await closeToast();
 
       // Wait for the update call to complete
       expect(updateMock).toBeCalledTimes(1);

@@ -1,4 +1,4 @@
-import { userEvent } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { useDataProvider, type DataProvider } from "ra-core";
 import { describe, expect, it } from "vitest";
 import { render } from "vitest-browser-react";
@@ -136,6 +136,31 @@ describe("TaskAttachments", () => {
     const [stored] = await listAttachments(getDataProvider());
     expect(stored.storage_path.startsWith("1/")).toBe(true);
     expect(stored.size_bytes).toBe(14);
+  });
+
+  it("refuses a file over the Storage limit with a sentence, before uploading", async () => {
+    const { screen, getDataProvider } = await renderAttachments([]);
+
+    // Built in the page: the upload helper refuses buffers over 50 MB, which
+    // is exactly the size this has to exceed.
+    const input = screen
+      .getByLabelText(/add files/i)
+      .element() as HTMLInputElement;
+    const picked = new DataTransfer();
+    picked.items.add(
+      new File([new Uint8Array(51 * 1024 * 1024)], "video.mp4", {
+        type: "video/mp4",
+      }),
+    );
+    input.files = picked.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    await expect
+      .element(
+        page.getByText("video.mp4 is larger than 50 MB and was not attached"),
+      )
+      .toBeVisible();
+    expect(await listAttachments(getDataProvider())).toHaveLength(0);
   });
 
   it("keeps the task's attachment counter in step", async () => {
