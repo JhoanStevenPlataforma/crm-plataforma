@@ -456,6 +456,7 @@ export const englishCrmMessages = {
       },
       create: {
         error: "An error occurred while creating the user.",
+        email_taken: "A user with this email already exists.",
         success:
           "User created. They will soon receive an email to set their password.",
         title: "Create a new user",

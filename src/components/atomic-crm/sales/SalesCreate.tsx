@@ -9,6 +9,9 @@ import type { CrmDataProvider } from "../providers/types";
 import type { SalesFormData } from "../types";
 import { SalesInputs } from "./SalesInputs";
 
+/** How the `users` edge function (and the demo) refuses a taken email. */
+const EMAIL_TAKEN = /already exists/i;
+
 export function SalesCreate() {
   const dataProvider = useDataProvider<CrmDataProvider>();
   const notify = useNotify();
@@ -29,14 +32,15 @@ export function SalesCreate() {
       redirect("/sales");
     },
     onError: (error) => {
+      // The `users` function answers in English; show the one refusal a user
+      // can act on in their language, and the generic message otherwise.
       notify(
-        error.message ||
-          translate("resources.sales.create.error", {
-            _: "An error occurred while creating the user.",
-          }),
-        {
-          type: "error",
-        },
+        EMAIL_TAKEN.test(error.message ?? "")
+          ? "resources.sales.create.email_taken"
+          : translate("resources.sales.create.error", {
+              _: "An error occurred while creating the user.",
+            }),
+        { type: "error" },
       );
     },
   });
