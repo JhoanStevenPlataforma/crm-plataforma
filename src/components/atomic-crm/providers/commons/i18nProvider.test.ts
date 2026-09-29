@@ -21,6 +21,16 @@ describe("i18nProvider", () => {
     ]);
   });
 
+  it("keeps <html lang> on the language being shown", async () => {
+    // M15 (QA audit): `lang` was fixed at "en", so a screen reader read the
+    // Spanish interface with an English voice.
+    await i18nProvider.changeLocale("es");
+    expect(document.documentElement.lang).toBe("es");
+
+    await i18nProvider.changeLocale("fr");
+    expect(document.documentElement.lang).toBe("fr");
+  });
+
   it("translates the language key in french", async () => {
     await i18nProvider.changeLocale("fr");
 
