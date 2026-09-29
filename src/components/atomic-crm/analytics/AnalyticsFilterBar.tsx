@@ -94,7 +94,7 @@ export const AnalyticsFilterBar = ({
         <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
           {translate("crm.analytics.filters.period")}
         </span>
-        <div className="flex h-9 flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5">
+        <div className="flex min-h-9 flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {ANALYTICS_PRESETS.map((preset) => (
             <Button
               key={preset}
