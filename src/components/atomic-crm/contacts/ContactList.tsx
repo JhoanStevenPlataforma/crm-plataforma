@@ -61,11 +61,14 @@ const ContactListLayoutDesktop = () => {
   if (!data?.length && !hasFilters) return <ContactEmpty />;
 
   return (
-    <div className="flex flex-row gap-8">
+    <div className="flex flex-col gap-4 lg:flex-row lg:gap-8">
       <ContactListFilter />
-      <div className="w-full flex flex-col gap-4">
+      <div className="w-full min-w-0 flex flex-col gap-4">
         <ContactListFilterSummary />
-        <Card className="py-0">
+        {/* A container, so a row lays itself out by the width it actually
+            gets: beside the navigation and the filter panel, a ~800px
+            window leaves the list less than 300px. */}
+        <Card className="py-0 @container">
           <ContactListContent />
         </Card>
       </div>

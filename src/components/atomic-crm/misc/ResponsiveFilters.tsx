@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { COMPACT_BREAKPOINT, useIsBelow } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Filter } from "lucide-react";
@@ -31,7 +31,9 @@ export const ResponsiveFilters = ({
     className,
     ...otherSearchInputProps
   } = searchInput || {};
-  const isMobile = useIsMobile();
+  // Compact below `lg`, not only on phones: beside the navigation, a 224px
+  // panel in a ~800px window left the list under 300px, a word per line.
+  const isCompact = useIsBelow(COMPACT_BREAKPOINT);
   const { setFilters, filterValues } = useListContext();
 
   // Count active filters excluding the search filter
@@ -46,7 +48,7 @@ export const ResponsiveFilters = ({
     setFilters(preservedFilters, []);
   };
 
-  if (isMobile) {
+  if (isCompact) {
     return (
       <div className="flex flex-1 gap-2">
         <FilterLiveForm formComponent={FlexForm}>

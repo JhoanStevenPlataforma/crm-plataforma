@@ -1,4 +1,5 @@
 import { ResourceContextProvider } from "ra-core";
+import { page } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
 import { buildContact, StoryWrapper } from "@/test/StoryWrapper";
@@ -57,6 +58,34 @@ describe("ContactList", () => {
     await expect
       .element(screen.getByRole("button", { name: /^QA/ }))
       .toBeVisible();
+  });
+
+  it("folds the filters behind a button when a side panel would squeeze the list", async () => {
+    // Arrange: a ~900px window, where the navigation plus a side panel left
+    // the list a word per line.
+    await page.viewport(900, 800);
+    try {
+      // Act
+      const screen = await render(<DesktopSuccess />);
+
+      // Assert
+      await expect
+        .element(screen.getByRole("button", { name: "Add filter" }))
+        .toBeVisible();
+    } finally {
+      await page.viewport(1440, 900);
+    }
+  });
+
+  it("keeps the filter panel beside a wide list", async () => {
+    await page.viewport(1440, 900);
+
+    const screen = await render(<DesktopSuccess />);
+
+    await expect.element(screen.getByText("Hot")).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Add filter" }))
+      .not.toBeInTheDocument();
   });
 
   it("renders contacts in a list", async () => {

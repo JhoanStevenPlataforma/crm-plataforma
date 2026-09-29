@@ -125,7 +125,7 @@ const ContactItemContent = ({
       </div>
       <Link
         to={`/contacts/${contact.id}/show`}
-        className="flex-1 flex flex-row gap-4 items-center"
+        className="flex-1 min-w-0 grid grid-cols-[auto_1fr] @xl:grid-cols-[auto_1fr_auto] gap-x-4 gap-y-1 items-center"
       >
         <Avatar />
         <div className="flex-1 min-w-0">
@@ -157,7 +157,9 @@ const ContactItemContent = ({
           ) : null}
         </div>
         {contact.last_seen && (
-          <div className="text-right ml-4">
+          // Narrow list: under the name, rather than squeezing it to a word
+          // per line. Wide list: its own column on the right.
+          <div className="col-start-2 @xl:col-start-3 @xl:text-right @xl:ml-4">
             <div
               className="text-sm text-muted-foreground"
               title={contact.last_seen}
