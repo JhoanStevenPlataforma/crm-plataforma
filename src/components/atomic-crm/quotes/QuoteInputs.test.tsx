@@ -41,8 +41,10 @@ describe("QuoteInputs", () => {
     await companyInput.click();
     await screen.getByPlaceholder("Search").fill("Company 40");
 
+    // Exact: the list also offers "Create Company 40", which a substring
+    // match accepted before the search had returned anything.
     await expect
-      .element(screen.getByRole("option", { name: "Company 40" }))
+      .element(screen.getByRole("option", { name: "Company 40", exact: true }))
       .toBeVisible();
   });
 

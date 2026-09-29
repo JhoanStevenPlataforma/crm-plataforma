@@ -10,7 +10,8 @@ import { ContactAside } from "./ContactAside";
 import { MobileSuccess } from "./ContactShow.mobile.stories";
 
 const mockIsMobile = vi.hoisted(() => vi.fn(() => true));
-vi.mock("@/hooks/use-mobile", () => ({
+vi.mock("@/hooks/use-mobile", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-mobile")>()),
   useIsMobile: mockIsMobile,
 }));
 
