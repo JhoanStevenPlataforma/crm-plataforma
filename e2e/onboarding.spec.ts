@@ -78,6 +78,8 @@ test("user onboarding", async ({ page, isMobile, menu, dismissToast }) => {
   // and reassigning is a manager privilege (`ASSIGN_ACTION`), so a rep is no
   // longer offered the field. What the test meant is still true and still worth
   // checking: the contact belongs to whoever created it.
+  // On a phone the contact's details, ownership included, have their own tab.
+  if (isMobile) await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.getByText("Followed by you")).toBeVisible();
 
   await menu.goToDashboard();
@@ -114,13 +116,10 @@ test("user onboarding", async ({ page, isMobile, menu, dismissToast }) => {
   // whose text is the title and the subtitle, so every one of these three
   // assertions failed against a card that was rendering correctly. A locator
   // that counts DOM ancestors is a locator that fails on a styling change.
-  await expect(
-    page.getByText(/You added company Smith Corp today at/),
-  ).toBeVisible();
-  await expect(
-    page.getByText(/You added Jane Smith to Smith Corp today at/),
-  ).toBeVisible();
-  await expect(
-    page.getByText(/You added a note about Jane Smith today at/),
-  ).toBeVisible();
+  // The feed groups entries by day and shows only the time on each, so
+  // "today" is the group's heading rather than words inside the entry.
+  const today = page.getByRole("region", { name: "Today" });
+  await expect(today).toContainText(/You added company\s*Smith Corp/);
+  await expect(today).toContainText(/You added\s*Jane Smith\s*to\s*Smith Corp/);
+  await expect(today).toContainText(/You added a note about\s*Jane Smith/);
 });

@@ -97,10 +97,13 @@ test.describe("roles and permissions", () => {
     await expect(page.getByText("Owned ByManager")).toBeVisible();
   });
 
-  test("Leads has its own section in the main navigation", async ({ page }) => {
+  test("Leads has its own section in the main navigation", async ({
+    page,
+    menu,
+  }) => {
     await signIn(page, "repa@test.com");
 
-    await page.getByRole("link", { name: "Leads" }).click();
+    await menu.goTo("Leads");
     await expect(page).toHaveURL(/#\/leads/);
     await expect(page.getByText("Lead ForRepA")).toBeVisible();
   });
@@ -121,7 +124,11 @@ test.describe("roles and permissions", () => {
     await expect(page.getByText("Lead ForRepB")).toBeVisible();
   });
 
-  test("only a manager gets the bulk assign action", async ({ page }) => {
+  test("only a manager gets the bulk assign action", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "bulk actions are only available on desktop");
     await signIn(page, "manager@test.com");
     await page.goto("/#/contacts");
     await page.getByRole("checkbox").first().click();
@@ -130,7 +137,8 @@ test.describe("roles and permissions", () => {
     ).toBeVisible();
   });
 
-  test("a sales rep gets no bulk assign action", async ({ page }) => {
+  test("a sales rep gets no bulk assign action", async ({ page, isMobile }) => {
+    test.skip(isMobile, "bulk actions are only available on desktop");
     await signIn(page, "repa@test.com");
     await page.goto("/#/contacts");
     await page.getByRole("checkbox").first().click();

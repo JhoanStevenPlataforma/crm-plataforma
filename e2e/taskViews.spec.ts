@@ -61,7 +61,12 @@ test.describe("task views", () => {
     await dismissToast("Task added");
   };
 
-  test("reaches the task page from the navigation", async ({ page, menu }) => {
+  test("reaches the task page from the navigation", async ({
+    page,
+    menu,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "the board and the calendar are desktop views");
     await signIn(page);
     await menu.goToTasks();
 
@@ -73,7 +78,9 @@ test.describe("task views", () => {
   test("keeps the chosen view in the URL across a reload", async ({
     page,
     menu,
+    isMobile,
   }) => {
+    test.skip(isMobile, "the board and the calendar are desktop views");
     // The view is shareable state: a copied link has to open the same screen.
     await signIn(page);
     await menu.goToTasks();
@@ -93,8 +100,10 @@ test.describe("task views", () => {
   test("shows a task on the board and on the calendar", async ({
     page,
     menu,
+    isMobile,
     dismissToast,
   }) => {
+    test.skip(isMobile, "the board and the calendar are desktop views");
     await signIn(page);
     await menu.goToTasks();
     await addTask(page, "Call Jane about the renewal", dismissToast);
@@ -115,7 +124,9 @@ test.describe("task views", () => {
   test("does not offer a column a drag could never legally fill", async ({
     page,
     menu,
+    isMobile,
   }) => {
+    test.skip(isMobile, "the board and the calendar are desktop views");
     // Cancelling requires a reason (§4.4), which a drop cannot supply.
     await signIn(page);
     await menu.goToTasks();

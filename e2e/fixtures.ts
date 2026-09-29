@@ -632,7 +632,29 @@ async function issueQuote({
   };
 }
 
-const getMenuMethod = ({ page }: { page: Page; isMobile: boolean }) => ({
+const getMenuMethod = ({
+  page,
+  isMobile,
+}: {
+  page: Page;
+  isMobile: boolean;
+}) => ({
+  /**
+   * A section by its navigation label. On a phone only four sections sit in
+   * the bottom bar; every other one is inside the "More" sheet.
+   */
+  goTo: async (label: string) => {
+    if (isMobile) {
+      await page.getByRole("button", { name: "More" }).click();
+      await page
+        .getByRole("dialog")
+        .getByRole("link", { name: label, exact: true })
+        .click();
+    } else {
+      await page.getByRole("link", { name: label, exact: true }).click();
+    }
+    await page.waitForLoadState("networkidle");
+  },
   goToDashboard: async () => {
     // First: the menu entry. A list page also links "Dashboard" in its
     // breadcrumb.

@@ -52,7 +52,9 @@ test.describe("user adding a task", () => {
     await menu.goToContacts();
     await page.waitForLoadState("networkidle");
 
-    await page.getByText("Jane Smith").click();
+    // `first()`: the specs share one database, and onboarding creates a Jane
+    // Smith of its own; any of them can take the task.
+    await page.getByText("Jane Smith").first().click();
     await page.waitForLoadState("networkidle");
 
     if (isMobile) {
@@ -64,7 +66,14 @@ test.describe("user adding a task", () => {
     // Title, not Description: Phase 1 split the single `text` column into a
     // list-friendly title and an optional body (§3.3).
     await page.getByLabel("Title *").fill("Follow up with Jane");
-    await page.getByLabel("Due date").fill("2026-04-11T21:00");
+    // Three days ahead, at 21:00 local time. A fixed date turned this into
+    // an overdue task the day it passed, and the widget said "5 months ago".
+    const due = new Date();
+    due.setDate(due.getDate() + 3);
+    due.setHours(21, 0, 0, 0);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const dueInput = `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}T21:00`;
+    await page.getByLabel("Due date").fill(dueInput);
     await page.getByLabel("Type").click();
     await page.getByRole("option", { name: "Call" }).click();
 
@@ -77,7 +86,13 @@ test.describe("user adding a task", () => {
       await page.getByText("1 task").click();
 
       await expect(page.getByText("Follow up with Jane")).toBeVisible();
-      await expect(page.getByText("due 4/11/2026, 9:00:00 PM")).toBeVisible();
+      // Medium date and a short time, no seconds. "due" is followed by a
+      // no-break space and ICU may put a narrow one before "PM": hence \s,
+      // which a regex needs where a plain string would be normalised.
+      const dueDay = due.toLocaleDateString("en-US", { dateStyle: "medium" });
+      await expect(
+        page.getByText(new RegExp(`due\\s${dueDay}, 9:00\\sPM`)),
+      ).toBeVisible();
     } else {
       // The heading on the contact page, not the plain text: there is now a
       // "Tasks" entry in the main navigation too (§15.1).
@@ -105,7 +120,8 @@ test.describe("user adding a task", () => {
         .filter({ has: page.getByRole("heading", { name: "Upcoming Tasks" }) });
       await expect(upcoming).toContainText("Follow up with Jane");
       await expect(upcoming).toContainText("Call");
-      await expect(upcoming).toContainText("due 4/11/2026, 9:00:00 PM");
+      // The widget says when in words; the exact time is in its tooltip.
+      await expect(upcoming).toContainText("in 3 days");
       // Phase 1 turned the "(Re: …)" suffix into a link to the related record.
       await expect(upcoming).toContainText("Jane Smith");
     }

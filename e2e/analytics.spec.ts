@@ -53,10 +53,11 @@ test.describe("analytics", () => {
 
   test("opens from the nav and loads every tab without an error", async ({
     page,
+    menu,
   }) => {
     await signIn(page, "ada@doe.com");
 
-    await page.getByRole("link", { name: "Analytics", exact: true }).click();
+    await menu.goTo("Analytics");
     await expect(
       page.getByRole("heading", { name: "Analytics" }),
     ).toBeVisible();
