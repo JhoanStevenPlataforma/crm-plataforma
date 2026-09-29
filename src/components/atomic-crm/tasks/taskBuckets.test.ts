@@ -51,8 +51,9 @@ describe("buildBucketFilter", () => {
     const filter = buildBucketFilter("this_week", now);
 
     expect(new Date(filter["due_date@gte"] as string).getDate()).toBe(6);
-    // Week starts on Sunday, so it ends on Saturday the 8th.
-    expect(new Date(filter["due_date@lte"] as string).getDate()).toBe(8);
+    // The week starts on Monday, as on the calendar and the dashboard, so it
+    // ends on Sunday the 9th.
+    expect(new Date(filter["due_date@lte"] as string).getDate()).toBe(9);
   });
 
   test("later starts strictly after the end of the week", () => {
@@ -102,9 +103,14 @@ describe("hasThisWeekBucket", () => {
     expect(hasThisWeekBucket(new Date("2026-08-04T10:00:00.000Z"))).toBe(true);
   });
 
-  test("is false from Friday on, when the bucket is empty by construction", () => {
-    // Friday 7 August 2026: the day after tomorrow is Sunday the 9th, past the
-    // Saturday end of week.
-    expect(hasThisWeekBucket(new Date("2026-08-07T10:00:00.000Z"))).toBe(false);
+  test("is still true on Friday, when Sunday belongs to this week", () => {
+    // Friday 7 August 2026: the day after tomorrow is Sunday the 9th, the last
+    // day of the Monday-first week.
+    expect(hasThisWeekBucket(new Date("2026-08-07T10:00:00.000Z"))).toBe(true);
+  });
+
+  test("is false at the weekend, when the bucket is empty by construction", () => {
+    // Saturday 8 August 2026: the day after tomorrow is already next Monday.
+    expect(hasThisWeekBucket(new Date("2026-08-08T10:00:00.000Z"))).toBe(false);
   });
 });

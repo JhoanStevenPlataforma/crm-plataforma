@@ -1,4 +1,5 @@
 import { addDays } from "date-fns/addDays";
+import { WEEK_OPTIONS } from "../misc/week";
 import { endOfWeek } from "date-fns/endOfWeek";
 import { startOfDay } from "date-fns/startOfDay";
 
@@ -51,8 +52,7 @@ export const buildBucketFilter = (
   const today = startOfDay(now);
   const tomorrow = addDays(today, 1);
   const dayAfterTomorrow = addDays(today, 2);
-  // weekStartsOn: 0 keeps the original `tasksPredicate` semantics.
-  const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
+  const weekEnd = endOfWeek(now, WEEK_OPTIONS);
 
   // Overdue means "its due time has passed", the definition the dashboard,
   // the analytics and `team_workload_summary` all use (`due_date < now()`).
@@ -108,11 +108,10 @@ export const buildRecentlyDoneFilter = (
 });
 
 /**
- * `this_week` is empty by construction from Friday onwards (the day after
- * tomorrow is already past the end of the week), so the section is hidden
- * rather than rendered empty — the behaviour the original `isBeforeFriday`
- * guard produced.
+ * `this_week` is empty by construction on Saturday and Sunday (the day after
+ * tomorrow is already past the end of the Monday-first week), so the section
+ * is hidden rather than rendered empty.
  */
 export const hasThisWeekBucket = (now: Date = new Date()): boolean =>
   addDays(startOfDay(now), 2).getTime() <=
-  endOfWeek(now, { weekStartsOn: 0 }).getTime();
+  endOfWeek(now, WEEK_OPTIONS).getTime();

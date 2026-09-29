@@ -1,4 +1,5 @@
 import { addDays } from "date-fns/addDays";
+import { WEEK_OPTIONS } from "../misc/week";
 import { differenceInCalendarDays } from "date-fns/differenceInCalendarDays";
 import { endOfMonth } from "date-fns/endOfMonth";
 import { endOfQuarter } from "date-fns/endOfQuarter";
@@ -62,16 +63,6 @@ const toIsoDay = (date: Date): string => {
   return `${date.getFullYear()}-${month}-${day}`;
 };
 
-/**
- * The week starts on Monday.
- *
- * `date-fns` defaults to Sunday, which would put the weekend at the *start* of
- * "this week" and make Monday morning report two idle days as the period's
- * opening. Every locale this CRM ships (en, fr, es) treats the working week as
- * Monday to Friday.
- */
-const WEEK_STARTS_ON = 1 as const;
-
 export const rangeForDashboardPeriod = (
   period: DashboardPeriod,
   today: Date = new Date(),
@@ -81,8 +72,8 @@ export const rangeForDashboardPeriod = (
       return { from: toIsoDay(today), to: toIsoDay(today) };
     case "this_week":
       return {
-        from: toIsoDay(startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON })),
-        to: toIsoDay(endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON })),
+        from: toIsoDay(startOfWeek(today, WEEK_OPTIONS)),
+        to: toIsoDay(endOfWeek(today, WEEK_OPTIONS)),
       };
     case "this_quarter":
       return {
@@ -141,8 +132,8 @@ const PERIOD_BOUNDS: Record<
   }
 > = {
   this_week: {
-    start: (date) => startOfWeek(date, { weekStartsOn: WEEK_STARTS_ON }),
-    end: (date) => endOfWeek(date, { weekStartsOn: WEEK_STARTS_ON }),
+    start: (date) => startOfWeek(date, WEEK_OPTIONS),
+    end: (date) => endOfWeek(date, WEEK_OPTIONS),
     back: (start) => subWeeks(start, 1),
   },
   this_month: {

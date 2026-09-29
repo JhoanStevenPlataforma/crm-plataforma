@@ -1,4 +1,5 @@
 import { addMonths } from "date-fns/addMonths";
+import { WEEK_OPTIONS } from "../misc/week";
 import { eachDayOfInterval } from "date-fns/eachDayOfInterval";
 import { endOfMonth } from "date-fns/endOfMonth";
 import { endOfWeek } from "date-fns/endOfWeek";
@@ -22,13 +23,6 @@ import type { Task } from "../types";
 import { TaskEdit } from "./TaskEdit";
 import { STATUS_DOT_CLASS } from "./taskModel";
 import { formatMonthLabel } from "./calendarLabels";
-
-/**
- * Monday-first, as the dashboard's "this week" is: every locale this CRM ships
- * (en, es, fr) works Monday to Friday, and a Sunday column first split the
- * working week across two rows.
- */
-const WEEK_OPTIONS = { weekStartsOn: 1 } as const;
 
 const MAX_CHIPS_PER_DAY = 3;
 

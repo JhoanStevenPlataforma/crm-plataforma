@@ -1,4 +1,5 @@
 import { endOfToday } from "date-fns/endOfToday";
+import { WEEK_OPTIONS } from "../misc/week";
 import { endOfTomorrow } from "date-fns/endOfTomorrow";
 import { endOfWeek } from "date-fns/endOfWeek";
 
@@ -38,12 +39,11 @@ export const isDueTomorrow = (dateString: string) => {
 export const isDueThisWeek = (dateString: string) => {
   const dueDate = new Date(dateString);
   return (
-    dueDate >= endOfTomorrow() &&
-    dueDate < endOfWeek(new Date(), { weekStartsOn: 0 })
+    dueDate >= endOfTomorrow() && dueDate < endOfWeek(new Date(), WEEK_OPTIONS)
   );
 };
 
 export const isDueLater = (dateString: string) => {
   const dueDate = new Date(dateString);
-  return dueDate >= endOfWeek(new Date(), { weekStartsOn: 0 });
+  return dueDate >= endOfWeek(new Date(), WEEK_OPTIONS);
 };

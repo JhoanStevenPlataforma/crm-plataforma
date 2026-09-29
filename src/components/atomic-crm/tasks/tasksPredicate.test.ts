@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { WEEK_OPTIONS } from "../misc/week";
 import {
   isOverdue,
   isDueToday,
@@ -183,9 +184,7 @@ describe("tasksPredicate", () => {
     });
 
     it("should consider date equal to end of week as due later only", () => {
-      const endOfWeekDate = endOfWeek(new Date(), {
-        weekStartsOn: 0,
-      }).toISOString();
+      const endOfWeekDate = endOfWeek(new Date(), WEEK_OPTIONS).toISOString();
       expect(isOverdue(endOfWeekDate)).toBe(false);
       expect(isDueToday(endOfWeekDate)).toBe(false);
       expect(isDueTomorrow(endOfWeekDate)).toBe(false);
@@ -195,7 +194,7 @@ describe("tasksPredicate", () => {
 
     it("should consider date equal to end of week minus 1 ms as due this week only", () => {
       const justBeforeEndOfWeek = new Date(
-        endOfWeek(new Date(), { weekStartsOn: 0 }).getTime() - 1,
+        endOfWeek(new Date(), WEEK_OPTIONS).getTime() - 1,
       ).toISOString();
       expect(isOverdue(justBeforeEndOfWeek)).toBe(false);
       expect(isDueToday(justBeforeEndOfWeek)).toBe(false);
