@@ -1,4 +1,4 @@
-import { company, internet, name, random } from "faker/locale/en_US";
+import { company, datatype, internet, name, random } from "faker/locale/en_US";
 
 import type { Lead } from "../../../types";
 import { defaultLeadSources } from "../../../root/defaultConfiguration";
@@ -34,7 +34,7 @@ export const generateLeads = (db: Db): Lead[] =>
     const convertedAt = deal
       ? new Date(
           new Date(created_at).getTime() +
-            random.number({ min: 1, max: 45 }) * DAY_MS,
+            datatype.number({ min: 1, max: 45 }) * DAY_MS,
         ).toISOString()
       : null;
 
@@ -43,7 +43,7 @@ export const generateLeads = (db: Db): Lead[] =>
       first_name,
       last_name,
       email: internet.email(first_name, last_name),
-      phone: `+3460${random.number({ min: 1000000, max: 9999999 })}`,
+      phone: `+3460${datatype.number({ min: 1000000, max: 9999999 })}`,
       // Two thirds arrive as raw text from a form; the rest have already been
       // matched to a company record.
       company_name: index % 3 === 0 ? "" : company.companyName(),
@@ -53,7 +53,7 @@ export const generateLeads = (db: Db): Lead[] =>
       // `converted` is written by `convert_lead()` and is deliberately absent
       // from the configured status list, so it is set here rather than drawn.
       status: deal ? "converted" : random.arrayElement(STATUSES),
-      score: random.number({ min: 0, max: 100 }),
+      score: datatype.number({ min: 0, max: 100 }),
       notes: "",
       tags: [],
       sales_id: random.arrayElement(db.sales).id,

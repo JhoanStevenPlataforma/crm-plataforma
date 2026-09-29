@@ -41,6 +41,11 @@ import {
   USER_STORAGE_KEY,
 } from "./authProvider";
 import { computeDealStageGate } from "./dealStageGate";
+import {
+  assertSaleEmailFree,
+  productSkuCallbacks,
+  SALE_UPDATE_FAILED,
+} from "./demoConstraints";
 import generateData from "./dataGenerator";
 import { TASK_STATUSES } from "./dataGenerator/taskCatalogues";
 import type { Db } from "./dataGenerator/types";
@@ -259,6 +264,11 @@ export interface CreateFakeRestDataProviderOptions {
   db?: Db;
   latency?: number;
   authProvider?: Pick<typeof defaultAuthProvider, "getIdentity">;
+  /**
+   * Quiet by default: FakeRest logs every request and response as a console
+   * group, which buried every real warning in the demo. Pass `false` to trace
+   * the requests while debugging the demo itself.
+   */
   silent?: boolean;
 }
 
@@ -286,9 +296,10 @@ export const createDataProvider = ({
   db = generateData(),
   latency = 300,
   authProvider,
-  silent = false,
+  silent = true,
 }: CreateFakeRestDataProviderOptions = {}): CrmDataProvider => {
   const baseDataProvider = fakeRestDataProvider(db, !silent, latency);
+  const leadConversions = new Map<string, Promise<Identifier>>();
   let taskUpdateType = TASK_DONE_NOT_CHANGED;
   const getIdentity = async () =>
     authProvider?.getIdentity?.() ?? defaultAuthProvider.getIdentity?.();
@@ -484,6 +495,13 @@ export const createDataProvider = ({
      */
     subscribeToQuoteChanges: async () => () => {},
     /**
+     * Nothing to listen to either: a demo notification is written in this tab,
+     * and the inbox reads it on its next fetch. Reaching for the Supabase
+     * client here opened a socket to the demo's placeholder URL, retried
+     * forever in the console.
+     */
+    subscribeToTaskNotifications: async () => () => {},
+    /**
      * No storage behind the demo: a slide's picture or video has nowhere to
      * live, so the editor says so instead of pretending.
      */
@@ -586,6 +604,7 @@ export const createDataProvider = ({
       };
     },
     salesCreate: async ({ ...data }: SalesFormData): Promise<Sale> => {
+      await assertSaleEmailFree(dataProvider, data.email);
       const response = await dataProvider.create("sales", {
         data: {
           ...data,
@@ -606,6 +625,10 @@ export const createDataProvider = ({
       if (!previousData) {
         throw new Error("User not found");
       }
+      await assertSaleEmailFree(dataProvider, data.email, {
+        exceptId: id,
+        message: SALE_UPDATE_FAILED,
+      });
 
       const { data: sale } = await dataProvider.update<Sale>("sales", {
         id,
@@ -792,11 +815,20 @@ export const createDataProvider = ({
     mergeContacts: async (sourceId: Identifier, targetId: Identifier) => {
       return mergeContacts(sourceId, targetId, baseDataProvider);
     },
-    convertLead: async (
-      leadId: Identifier,
-      options: ConvertLeadOptions = {},
-    ) => {
-      return convertLead(leadId, options, baseDataProvider);
+    /**
+     * `convert_lead()` locks the lead row, so a double click converts once and
+     * the second call finds it converted. FakeRest has no lock, so both calls
+     * read an unconverted lead and each built a contact; queueing the calls
+     * per lead makes the second one see the first one's work, as on the server.
+     */
+    convertLead: (leadId: Identifier, options: ConvertLeadOptions = {}) => {
+      const key = String(leadId);
+      const previous = leadConversions.get(key) ?? Promise.resolve();
+      const conversion = previous
+        .catch(() => undefined)
+        .then(() => convertLead(leadId, options, baseDataProvider));
+      leadConversions.set(key, conversion);
+      return conversion;
     },
     getConfiguration: async (): Promise<ConfigurationContextValue> => {
       const { data } = await baseDataProvider.getOne("configuration", {
@@ -967,6 +999,24 @@ export const createDataProvider = ({
       } satisfies ResourceCallbacks<Contact>,
       {
         resource: "tasks",
+        beforeCreate: async (params) => {
+          // `tasks_before_insert()`: a task nobody was named on belongs to
+          // whoever it was filed for, else to whoever filed it. Without it a
+          // demo task had no owner and never reached "my tasks".
+          const { data } = params;
+          if (data.owner_sales_id != null && data.created_by != null) {
+            return params;
+          }
+          const fallback = data.sales_id ?? (await getIdentity())?.id;
+          return {
+            ...params,
+            data: {
+              ...data,
+              owner_sales_id: data.owner_sales_id ?? fallback,
+              created_by: data.created_by ?? fallback,
+            },
+          };
+        },
         afterCreate: async (result, dataProvider) => {
           // update the task count in the related contact.
           // A task no longer has to belong to a contact — it may hang off a
@@ -1056,6 +1106,8 @@ export const createDataProvider = ({
       // ... and for the comment thread's (Phase 8): authorship, depth, the
       // clock, and the three changes a written comment still accepts.
       quoteCommentCallbacks(getIdentity),
+      // ... and for two unique constraints FakeRest cannot declare.
+      productSkuCallbacks(),
       {
         // `teams_summary.nb_members` has no view here, so the counter is kept
         // on the team row — the same approach as `nb_tasks` / `nb_contacts`.

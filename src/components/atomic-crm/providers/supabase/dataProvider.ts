@@ -48,6 +48,7 @@ import { createQuoteMethods } from "./quoteMethods";
 import { subscribeToQuoteChanges, type Unsubscribe } from "./quoteRealtime";
 import { stripQuoteVirtuals, updateDraftVersionFields } from "./quoteWrites";
 import { getSupabaseClient } from "./supabase";
+import { subscribeToTaskNotifications } from "./taskNotificationRealtime";
 
 const getBaseDataProvider = () =>
   supabaseDataProvider({
@@ -896,6 +897,12 @@ const getDataProviderWithCustomMethods = () => {
       onChange: () => void,
     ): Promise<Unsubscribe> =>
       subscribeToQuoteChanges(getSupabaseClient(), quoteId, onChange),
+    /** Supabase Realtime, filtered to one recipient's inbox (tasks §9.4). */
+    subscribeToTaskNotifications: (
+      recipientId: Identifier,
+      onInsert: () => void,
+    ): Promise<Unsubscribe> =>
+      subscribeToTaskNotifications(getSupabaseClient(), recipientId, onInsert),
     /** A picture or video for a customer-portal slide; returns its path. */
     uploadPortalMedia: (file: File): Promise<string> =>
       uploadPortalMedia(getSupabaseClient(), file),

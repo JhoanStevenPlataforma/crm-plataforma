@@ -76,6 +76,43 @@ describe("NotificationsBell", () => {
     await expect.element(screen.getByText("Nothing to do here")).toBeVisible();
   });
 
+  it("opens no realtime socket in demo mode", async () => {
+    // Arrange: the demo build defines a placeholder Supabase URL, and the bell
+    // used to reach for the Supabase client on its own, so the demo retried a
+    // socket to that placeholder forever. Recreated here: env set, sockets
+    // recorded instead of opened.
+    vi.stubEnv("VITE_SUPABASE_URL", "https://demo.example.org");
+    vi.stubEnv("VITE_SB_PUBLISHABLE_KEY", "demo-key");
+    const opened: string[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class {
+        constructor(url: string) {
+          opened.push(String(url));
+        }
+        close() {}
+      },
+    );
+
+    try {
+      // Act
+      const screen = await render(<Empty />);
+      await screen.getByRole("button", { name: "Notifications" }).click();
+      await expect
+        .element(screen.getByText("You are all caught up"))
+        .toBeVisible();
+      // The subscription is set up after the first render; give it a moment
+      // to have tried, since an absence has no event to wait for.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Assert
+      expect(opened).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("shows no badge when there is nothing to report", async () => {
     const screen = await render(<Empty />);
 
