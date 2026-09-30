@@ -6,6 +6,7 @@ import { ErrorBoundary } from "react-error-boundary";
 
 import { useConfigurationLoader } from "../root/useConfigurationLoader";
 import { useDocumentTitle } from "./documentTitle";
+import { IdleSessionGuard } from "./IdleSessionGuard";
 import { MobileNavigation } from "./MobileNavigation";
 
 export const MobileLayout = ({ children }: { children: ReactNode }) => {
@@ -19,6 +20,7 @@ export const MobileLayout = ({ children }: { children: ReactNode }) => {
         </Suspense>
       </ErrorBoundary>
       <MobileNavigation />
+      <IdleSessionGuard />
       <Notification mobileOffset={{ bottom: "72px" }} />
     </>
   );

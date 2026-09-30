@@ -73,7 +73,9 @@ site_url = "http://localhost:5173"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://localhost:5173/auth-callback.html"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
-jwt_expiry = 3600
+# 15 minutes: a disabled account is banned, which stops the refresh but not
+# the access token already issued, so this is how long it keeps reading.
+jwt_expiry = 900
 # If disabled, the refresh token will never expire.
 enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
@@ -83,6 +85,14 @@ refresh_token_reuse_interval = 10
 enable_signup = true
 # Development signing keys
 signing_keys_path = "./signing_keys.json"
+
+# Session limits (NIST SP 800-63B AAL2). A session ends 12 hours after sign-in
+# whatever happens, and after 1 hour without a token refresh (browser closed,
+# device asleep). An open tab refreshes on its own, so the idle limit of a tab
+# left open is enforced in the browser by `IdleSessionGuard`.
+[auth.sessions]
+timebox = "12h"
+inactivity_timeout = "1h"
 
 [auth.oauth_server]
 enabled = true

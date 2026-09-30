@@ -1,10 +1,19 @@
-# CRM-specific settings for the self-hosted Supabase edge functions.
+# CRM-specific settings for the self-hosted Supabase auth server and edge
+# functions.
 #
 # deploy.sh copies this file into the Supabase docker project (~/supabase) and
 # adds it to COMPOSE_FILE, so the ${...} values below are read from that
 # project's .env, the one Supabase's setup.sh generated. Nothing secret lives
 # here.
 services:
+  auth:
+    environment:
+      # Session lifetime, mirrored in supabase/config.toml (see the comments
+      # there). Pinned here rather than in the server's .env so every deploy
+      # applies the same policy.
+      GOTRUE_JWT_EXP: "900"
+      GOTRUE_SESSIONS_TIMEBOX: 12h
+      GOTRUE_SESSIONS_INACTIVITY_TIMEOUT: 1h
   functions:
     environment:
       # _shared/authentication.ts builds a client with this key and checks the

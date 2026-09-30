@@ -72,7 +72,7 @@ for file in supabase/migrations/*.sql; do
 done
 echo "  $pending applied"
 
-step "Deploying edge functions"
+step "Deploying edge functions and auth settings"
 rsync -a --delete \
     --exclude '/main' --exclude '/deno.jsonc' --exclude '.env' --exclude '*.test.ts' \
     supabase/functions/ "$SUPABASE_DIR/volumes/functions/"
@@ -80,7 +80,8 @@ cp deploy/ec2/docker-compose.crm.yml "$SUPABASE_DIR/"
 (
     cd "$SUPABASE_DIR"
     grep -q '^COMPOSE_FILE=.*docker-compose.crm.yml' .env || sh run.sh config add crm
-    docker compose up -d functions
+    # `up -d` recreates auth only when its settings changed.
+    docker compose up -d auth functions
     docker compose restart functions
 )
 

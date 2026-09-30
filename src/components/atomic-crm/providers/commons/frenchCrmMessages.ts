@@ -1705,6 +1705,13 @@ export const frenchCrmMessages = {
         creating: "Création...",
         initial_user_created: "Utilisateur initial créé avec succès",
       },
+      idle: {
+        title: "Êtes-vous toujours là ?",
+        description:
+          "Par sécurité, votre session sera fermée dans %{time} pour inactivité.",
+        stay: "Rester connecté",
+        sign_out: "Se déconnecter",
+      },
       welcome_title: "Bienvenue sur Atomic CRM",
     },
     form_section: {

@@ -1684,6 +1684,13 @@ export const englishCrmMessages = {
         creating: "Creating...",
         initial_user_created: "Initial user successfully created",
       },
+      idle: {
+        title: "Are you still there?",
+        description:
+          "For your security, your session will close in %{time} due to inactivity.",
+        stay: "Stay signed in",
+        sign_out: "Sign out",
+      },
       welcome_title: "Welcome to Atomic CRM",
     },
     form_section: {

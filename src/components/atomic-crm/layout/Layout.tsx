@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useConfigurationLoader } from "../root/useConfigurationLoader";
 import { AppSidebar } from "./AppSidebar";
+import { IdleSessionGuard } from "./IdleSessionGuard";
 import { useDocumentTitle } from "./documentTitle";
 import { SkipToContent } from "./SkipToContent";
 import { Topbar } from "./Topbar";
@@ -57,6 +58,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
           </ErrorBoundary>
         </main>
       </SidebarInset>
+      <IdleSessionGuard />
       <Notification />
     </SidebarProvider>
   );
