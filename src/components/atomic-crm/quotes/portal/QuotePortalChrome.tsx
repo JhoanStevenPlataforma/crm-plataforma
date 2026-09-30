@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowUp } from "lucide-react";
 import { useTranslate } from "ra-core";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -43,17 +44,17 @@ export const QuotePortalProgress = () => {
 export const QuotePortalTopbar = ({
   brand,
   number,
-  versionNumber,
+  version,
   isCompact,
 }: {
   brand: string;
   number: string;
-  versionNumber: number;
+  /** The version pill: the version selector (`QuotePortalVersionPicker`). */
+  version: ReactNode;
   /** FX-25: the reader has scrolled; the bar gets out of the way. */
   isCompact: boolean;
 }) => {
   const isShrunk = fx(25) && isCompact;
-  const translate = useTranslate();
   return (
     <header
       className={cn(
@@ -72,14 +73,13 @@ export const QuotePortalTopbar = ({
         <span className="truncate">{brand}</span>
       </span>
       <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-        <span className="rounded-full border border-white/15 px-2.5 py-1.5 tabular-nums">
+        {/* On a phone the version selector matters more than the number,
+            which the document itself carries: the number yields its place so
+            the letterhead is not squeezed to one letter. */}
+        <span className="hidden rounded-full border border-white/15 px-2.5 py-1.5 tabular-nums sm:inline">
           {number}
         </span>
-        <span className="hidden rounded-full border border-white/15 px-2.5 py-1.5 sm:inline">
-          {translate("resources.quotes.document.version", {
-            number: versionNumber,
-          })}
-        </span>
+        {version}
       </span>
     </header>
   );

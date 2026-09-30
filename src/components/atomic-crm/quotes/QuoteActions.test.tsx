@@ -10,6 +10,7 @@ import {
   OverTheCeiling,
   OverTheCeilingAsAdmin,
   PendingApprovalAsRep,
+  Rejected,
   Sent,
 } from "./QuoteActions.stories";
 
@@ -70,30 +71,35 @@ describe("QuoteActions", () => {
       .toBeVisible();
   });
 
-  it("issues the document and hands over the customer link once, because it exists once", async () => {
+  it("issues the document and hands over the quotation's link, which the page keeps showing", async () => {
     const screen = await render(<Draft />);
 
     await clickButton(screen, "Send");
     await clickButton(screen, "Send"); // confirm, in the dialog
 
-    // The raw token — 64 hex characters, handed over at the only moment it is
-    // knowable — inside the portal link, in its FRAGMENT, where no server ever
-    // receives it. What is stored is its fingerprint.
-    const link = screen.getByLabelText("Customer link");
-    await expect.element(link).toBeVisible();
+    // The token — 64 hex characters — inside the portal link, in its
+    // FRAGMENT, where no server ever receives it.
+    const link = screen.getByRole("dialog").getByLabelText("Customer link");
     await expect
       .element(link)
       .toHaveValue(expect.stringMatching(/\/quote#[0-9a-f]{64}$/));
+    const url = (link.element() as HTMLInputElement).value;
 
-    // Nothing was copied, so closing asks first: it discards the only copy.
+    // Closing loses nothing: the link is the quotation's, not a one-time copy.
     await clickButton(screen, "Done");
-    await clickButton(screen, "Close without copying");
+    await expect.element(screen.getByRole("dialog")).not.toBeInTheDocument();
 
-    // And the quote moved with it: one transaction in the database, one button
-    // here.
+    // The quote moved with it, and its page shows the same link again, with
+    // the version the customer sees.
     await expect.element(screen.getByText("Sent")).toBeVisible();
     await expect
       .element(screen.getByRole("button", { name: "Revise" }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByLabelText("Customer link"))
+      .toHaveValue(url);
+    await expect
+      .element(screen.getByText("The customer sees version 1."))
       .toBeVisible();
   });
 
@@ -105,20 +111,6 @@ describe("QuoteActions", () => {
       .toBeVisible();
     await expect
       .element(screen.getByRole("button", { name: "Send", exact: true }))
-      .toBeDisabled();
-  });
-
-  it("says why Send is disabled when the link would last zero days", async () => {
-    const screen = await render(<Draft />);
-
-    await clickButton(screen, "Send");
-    await screen.getByLabelText("Link valid (days)").fill("0");
-
-    await expect
-      .element(screen.getByText("The link must stay valid for at least 1 day."))
-      .toBeVisible();
-    await expect
-      .element(screen.getByRole("dialog").getByRole("button", { name: "Send" }))
       .toBeDisabled();
   });
 
@@ -225,32 +217,62 @@ describe("QuoteActions", () => {
       .toBeVisible();
   });
 
-  it("withdraws the links to the version a revision replaced", async () => {
+  it("keeps the customer link through a revision, and says which version the customer sees", async () => {
+    // Issued before links were permanent: no link to read, one to create.
     const screen = await render(<Sent />);
 
-    await clickButton(screen, "New link");
-    await clickButton(screen, "Done");
-    await clickButton(screen, "Close without copying");
-    await expect.element(screen.getByText("Active")).toBeVisible();
+    await expect
+      .element(screen.getByText("This quotation has no customer link yet."))
+      .toBeVisible();
+    await clickButton(screen, "Create customer link");
+    const link = screen.getByLabelText("Customer link");
+    await expect
+      .element(link)
+      .toHaveValue(expect.stringMatching(/\/quote#[0-9a-f]{64}$/));
+    const url = (link.element() as HTMLInputElement).value;
 
     await clickButton(screen, "Revise");
     await screen.getByLabelText("Reason").fill("Cambio de alcance");
     await clickButton(screen, "Confirm");
 
-    // Leaving it live would let a customer accept a version we have just
-    // replaced, so the link stops working — and the panel says so rather than
-    // disappearing, because this is exactly the moment somebody wants to check.
-    await expect.element(screen.getByText("Inactive")).toBeVisible();
+    // The same link, still live, still showing the version that was sent —
+    // the draft reaches the customer only when it is sent.
+    await expect.element(screen.getByText("Draft")).toBeVisible();
     await expect
-      .element(screen.getByRole("button", { name: "Revoke" }))
-      .not.toBeInTheDocument();
-    // And no new one is offered while the revision is open: the server refuses
-    // it (`quote_draft_exists`), so a button for it would be a button that
-    // always fails.
+      .element(screen.getByLabelText("Customer link"))
+      .toHaveValue(url);
     await expect
-      .element(screen.getByRole("button", { name: "New link" }))
+      .element(
+        screen.getByText(
+          "The customer sees version 1. Version 2 is being prepared: they will see it once you send it.",
+        ),
+      )
+      .toBeVisible();
+    await expect.element(screen.getByText("Inactive")).not.toBeInTheDocument();
+  });
+
+  it("renegotiates a declined quotation instead of starting another", async () => {
+    const screen = await render(<Rejected />);
+
+    await expect
+      .element(screen.getByRole("button", { name: "Renegotiate" }))
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Revise" }))
       .not.toBeInTheDocument();
-    await expect.element(screen.getByText(/A revision is open/)).toBeVisible();
+
+    await clickButton(screen, "Renegotiate");
+    await expect
+      .element(screen.getByText(/Renegotiating keeps the same quotation/))
+      .toBeVisible();
+    await screen.getByLabelText("Reason").fill("Nuevo precio acordado");
+    await clickButton(screen, "Confirm");
+
+    // Back to a draft of the same quotation, ready to be sent again.
+    await expect.element(screen.getByText("Draft")).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Send", exact: true }))
+      .toBeVisible();
   });
 
   it("says plainly that a closed quote has nothing left to move", async () => {

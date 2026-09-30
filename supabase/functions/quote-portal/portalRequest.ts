@@ -33,18 +33,33 @@ const TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 /** A user agent is evidence, not an essay. */
 const MAX_USER_AGENT_LENGTH = 512;
 
+/** `quote_versions.version_number` is a `smallint`. */
+const MAX_VERSION_NUMBER = 32767;
+
+/**
+ * The version the page shows, for the actions that name one (the portal's
+ * version selector). Null means "the link as sent": the open and the poll then
+ * read the version on offer, and an answer the version the link was minted
+ * for. Anything that is not a version number is treated as null rather than
+ * refused -- the database decides what a number means, and an answer naming
+ * the wrong version is refused there.
+ */
+export type PortalVersion = number | null;
+
 export type PortalCall =
-  | { action: "view"; token: string }
-  | { action: "version"; token: string }
+  | { action: "view"; token: string; version: PortalVersion }
+  | { action: "version"; token: string; version: PortalVersion }
   | {
       action: "accept";
       token: string;
+      version: PortalVersion;
       name: string | null;
       email: string | null;
     }
   | {
       action: "reject";
       token: string;
+      version: PortalVersion;
       reasonCode: string | null;
       reason: string | null;
       name: string | null;
@@ -116,6 +131,14 @@ export const cleanParagraph = (value: unknown): string | null => {
   );
 };
 
+export const cleanVersion = (value: unknown): PortalVersion =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= 1 &&
+  value <= MAX_VERSION_NUMBER
+    ? value
+    : null;
+
 const isPortalAction = (value: unknown): value is PortalAction =>
   (PORTAL_ACTIONS as readonly unknown[]).includes(value);
 
@@ -144,15 +167,17 @@ export const parsePortalCall = (
     return { status: 404, body: { error: LINK_INVALID } };
   }
 
+  const version = cleanVersion(fields.version);
   switch (action) {
     case "view":
-      return { action, token };
+      return { action, token, version };
     case "version":
-      return { action, token };
+      return { action, token, version };
     case "accept":
       return {
         action,
         token,
+        version,
         name: cleanLine(fields.name),
         email: cleanLine(fields.email),
       };
@@ -160,6 +185,7 @@ export const parsePortalCall = (
       return {
         action,
         token,
+        version,
         reasonCode: cleanLine(fields.reason_code),
         reason: cleanParagraph(fields.reason),
         name: cleanLine(fields.name),
@@ -245,15 +271,26 @@ export const rpcCallFor = (
   };
   switch (call.action) {
     case "view":
-      return { fn: "quote_portal_view", args: origin };
+      return {
+        fn: "quote_portal_view",
+        args: { ...origin, p_version_number: call.version },
+      };
     case "version":
       // The poll writes nothing, so it records neither the address nor the
-      // browser: the hash is all it needs.
-      return { fn: "quote_portal_version", args: { p_token_hash: tokenHash } };
+      // browser: the hash and the version on screen are all it needs.
+      return {
+        fn: "quote_portal_version",
+        args: { p_token_hash: tokenHash, p_version_number: call.version },
+      };
     case "accept":
       return {
         fn: "quote_portal_accept",
-        args: { ...origin, p_name: call.name, p_email: call.email },
+        args: {
+          ...origin,
+          p_name: call.name,
+          p_email: call.email,
+          p_version_number: call.version,
+        },
       };
     case "reject":
       return {
@@ -264,6 +301,7 @@ export const rpcCallFor = (
           p_reason: call.reason,
           p_name: call.name,
           p_email: call.email,
+          p_version_number: call.version,
         },
       };
     case "comment":

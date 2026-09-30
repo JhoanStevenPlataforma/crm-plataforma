@@ -100,6 +100,50 @@ describe("syncDealFromQuote (demo mirror)", () => {
     });
   });
 
+  it("reopens a deal when the renegotiated quotation that lost it is sent again", async () => {
+    const dataProvider = setup();
+    await dataProvider.create("deal_stage_changes", {
+      data: {
+        deal_id: 2,
+        from_stage: "proposal-sent",
+        to_stage: "lost",
+        changed_at: "2026-09-02T00:00:00.000Z",
+        source: "quote",
+        quote_id: 20,
+        reason: "quote:rejected",
+      },
+    });
+
+    await syncDealFromQuote(dataProvider, 20, "sent", 5);
+
+    expect(await dealOf(dataProvider, 2)).toMatchObject({
+      stage: "proposal-sent",
+      amount: 999,
+    });
+  });
+
+  it("keeps a deal closed when something moved it after the quotation's refusal", async () => {
+    const dataProvider = setup();
+    for (const [source, quoteId, changedAt] of [
+      ["quote", 20, "2026-09-02T00:00:00.000Z"],
+      ["manual", null, "2026-09-03T00:00:00.000Z"],
+    ] as const) {
+      await dataProvider.create("deal_stage_changes", {
+        data: {
+          deal_id: 2,
+          to_stage: "lost",
+          changed_at: changedAt,
+          source,
+          quote_id: quoteId,
+        },
+      });
+    }
+
+    await syncDealFromQuote(dataProvider, 20, "sent", 5);
+
+    expect((await dealOf(dataProvider, 2)).stage).toBe("lost");
+  });
+
   it("does not lose a deal on one refusal while another quotation is open", async () => {
     const dataProvider = setup();
 

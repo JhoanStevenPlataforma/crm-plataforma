@@ -2,10 +2,14 @@
 -- Quotes module, access tokens, expiry and retention
 -- (docs/proposals/quotes-cpq-module.md §4, §6.2, §8, F5).
 --
---   * the raw token exists once, as the return value of the issue; only its
---     sha256 is stored, and a link never outlives the offer it points at;
---   * another link can be minted for the live document, never for a draft, an
---     open revision or an elapsed offer;
+--   * the issue hands out the quotation's PERMANENT link (2026-09-29): one per
+--     quote, reused by every later issue, kept through a revision, with no
+--     expiry, its raw token readable only through `quote_share_link()` by
+--     whoever may share the quote -- and minted there for a quote issued
+--     before links were permanent, or after its link was revoked;
+--   * another (expiring) link can still be minted for the live document, never
+--     for a draft, an open revision or an elapsed offer, and it never outlives
+--     the offer it points at;
 --   * revoking is restricted to people who see the quote, and idempotent, and no
 --     function a user can call hands back a token hash;
 --   * the sweeper expires overdue offers through the status machine, as
@@ -21,7 +25,7 @@
 --
 begin;
 
-select plan(38);
+select plan(50);
 
 create function public.quotes_test_error_of(p_sql text) returns text
     language plpgsql
@@ -121,25 +125,35 @@ select ok(
                and t.token_hash = sha256(decode(current_setting('quotes_test.issue')::jsonb ->> 'token', 'hex'))),
     'the stored value is the sha256 of the token that was handed out');
 
+-- The permanent link keeps its raw token, so the rep can copy it again -- in a
+-- column of a table no user holds any privilege on.
 select is(
     (select octet_length(t.token_hash) || '/'
-            || (t.token_hash = decode(current_setting('quotes_test.issue')::jsonb ->> 'token', 'hex'))::text
+            || (t.token = current_setting('quotes_test.issue')::jsonb ->> 'token')::text || '/'
+            || has_column_privilege('authenticated', 'public.quote_access_tokens', 'token', 'SELECT')::text
        from public.quote_access_tokens t
       where t.id = (current_setting('quotes_test.issue')::jsonb ->> 'token_id')::bigint),
-    '32/false',
-    'the token itself is stored nowhere');
+    '32/true/false',
+    'the permanent link keeps its token beside the hash, where no user can read it');
 
-select is(
-    (select expires_at from public.quote_access_tokens
-      where id = (current_setting('quotes_test.issue')::jsonb ->> 'token_id')::bigint),
-    (current_date + 6)::timestamp with time zone,
-    'a link never outlives the offer: 30 days requested, clamped to the day after valid_until');
+select matches(
+    public.quotes_test_error_of($$insert into public.quote_access_tokens
+        (quote_id, version_id, token_hash, token, expires_at)
+        select 9791, v.id, sha256('\x01'::bytea), repeat('ab', 32), 'infinity'
+          from public.quote_versions v where v.quote_id = 9791$$),
+    '^23514:Failing row',
+    'a stored token must be the one its hash was taken from');
 
+-- No expiry: the document stays readable, and whether the offer can still be
+-- ANSWERED is the version's `valid_until` (quote_portal.test.sql). The days and
+-- the label the issue is called with no longer shape the link.
 select is(
-    (select expires_at from public.quote_access_tokens
-      where id = (current_setting('quotes_test.issue_open')::jsonb ->> 'token_id')::bigint),
-    now() + interval '7 days',
-    'without a validity date the link lasts the requested window');
+    (select array_agg(t.expires_at::text || '/' || coalesce(t.label, '-') order by t.quote_id)
+       from public.quote_access_tokens t
+      where t.id in ((current_setting('quotes_test.issue')::jsonb ->> 'token_id')::bigint,
+                     (current_setting('quotes_test.issue_open')::jsonb ->> 'token_id')::bigint)),
+    array['infinity/-', 'infinity/-'],
+    'the permanent link has no expiry, whatever window or label the issue was asked for');
 
 select is(
     (select version_id from public.quote_access_tokens
@@ -168,6 +182,12 @@ select is(
     (select count(*)::int from public.quote_access_tokens where quote_id = 9791 and revoked_at is null),
     2,
     'the first link keeps working beside the new one');
+
+select is(
+    (select expires_at from public.quote_access_tokens
+      where id = (current_setting('quotes_test.link')::jsonb ->> 'token_id')::bigint),
+    (current_date + 6)::timestamp with time zone,
+    'an extra link never outlives the offer: 30 days requested, clamped to the day after valid_until');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
@@ -208,6 +228,80 @@ select is(
     public.quotes_test_error_of($$select public.create_quote_link(9794)$$),
     '23514:quote_draft_exists',
     'while a revision is open no new link points at the version it replaces');
+
+--
+-- 2b. The permanent link, from the quote's page.
+--
+select is(
+    (select concat_ws('/', (l ->> 'token' = current_setting('quotes_test.issue')::jsonb ->> 'token')::text,
+                      l ->> 'version_number', l ->> 'is_permanent')
+       from (select public.quote_share_link(9791) as l) s),
+    'true/1/true',
+    'the quote''s page reads the link the issue handed out, and the version it opens');
+
+select is(
+    (select concat_ws('/', l ->> 'version_number',
+                      (select (t.revoked_at is null)::text from public.quote_access_tokens_summary t
+                        where t.id = (l ->> 'token_id')::bigint))
+       from (select public.quote_share_link(9794) as l) s),
+    '1/true',
+    'a revision keeps the link, which shows the last issued version until the next issue');
+
+select is(
+    public.quote_share_link(9796),
+    null,
+    'a quote never issued has no link');
+
+select is(
+    public.quotes_test_error_of($$select public.quote_share_link(9796, true)$$),
+    'P0002:quote_not_issued',
+    'and none can be made for it');
+
+select set_config('request.jwt.claims',
+    '{"sub":"97990000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+
+select matches(
+    public.quotes_test_error_of($$select public.quote_share_link(9791)$$),
+    '^42501',
+    'a colleague cannot read the link to a quote they cannot see');
+
+select set_config('request.jwt.claims',
+    '{"sub":"97990000-0000-0000-0000-000000000004","role":"authenticated"}', true);
+
+select is(
+    public.quote_share_link(9791) ->> 'token',
+    current_setting('quotes_test.issue')::jsonb ->> 'token',
+    'a manager reads it too');
+
+reset role;
+
+-- A quotation issued before links were permanent has only hash-only links.
+update public.quote_access_tokens set token = null where quote_id = 9792;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"97990000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+select is(
+    public.quote_share_link(9792),
+    null,
+    'reading never mints: an older quotation says it has no permanent link yet');
+
+select set_config('quotes_test.legacy', public.quote_share_link(9792, true)::text, true);
+
+select is(
+    (select (current_setting('quotes_test.legacy')::jsonb ->> 'token')
+                <> (current_setting('quotes_test.issue_open')::jsonb ->> 'token')
+            and count(*) = 2
+       from public.quote_access_tokens_summary t
+      where t.quote_id = 9792 and t.is_active),
+    true,
+    'asked to, it mints the permanent link beside the old one, which keeps working');
+
+select is(
+    public.quote_share_link(9792, true) ->> 'token',
+    current_setting('quotes_test.legacy')::jsonb ->> 'token',
+    'asking again returns the same link, never a second one');
 
 reset role;
 
@@ -256,6 +350,24 @@ select is(
       where id = (current_setting('quotes_test.issue')::jsonb ->> 'token_id')::bigint),
     9791::bigint,
     'the second revocation did not rewrite who actually stopped the link');
+
+-- A revoked permanent link is how a leaked one is killed; the page then offers
+-- to make another, and it is a different one.
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"97990000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+select is(
+    public.quote_share_link(9791),
+    null,
+    'once its permanent link is revoked, the quote has none to read');
+
+select isnt(
+    public.quote_share_link(9791, true) ->> 'token',
+    current_setting('quotes_test.issue')::jsonb ->> 'token',
+    'and the next one made is a different link');
+
+reset role;
 
 -- The token row carries `token_hash`, so returning it from an RPC would put the
 -- hash in the browser -- what `quote_access_tokens_summary` exists to prevent.

@@ -48,12 +48,14 @@ export type QuoteRpcClient = {
   }>;
 };
 
-/** How long a portal link lives, unless the caller shortens it (§6.2). */
+/** How long an EXTRA portal link lives, unless the caller shortens it (§6.2). */
 export const DEFAULT_TOKEN_DAYS = 30;
 
+/**
+ * What the issue is told. Nothing about the link: the issue hands out the
+ * quotation's permanent link, which has no window and no label.
+ */
 export type IssueQuoteOptions = {
-  tokenDays?: number;
-  tokenLabel?: string | null;
   /**
    * Admin-only, and only when the discount gate refuses. Sent as typed: the
    * server decides whether the caller may use it, so a rep filling it in learns
@@ -89,6 +91,14 @@ export type QuoteMethods = {
     quoteId: Identifier,
     options?: CreateQuoteLinkOptions,
   ): Promise<QuoteLink>;
+  /**
+   * The quotation's permanent link, or null when it has none (issued before
+   * links were permanent, or revoked). `create` mints it.
+   */
+  getQuoteShareLink(
+    quoteId: Identifier,
+    options?: { create?: boolean },
+  ): Promise<QuoteLink | null>;
   reviseQuote(quoteId: Identifier, reason: string): Promise<QuoteVersion>;
   revokeQuoteToken(tokenId: Identifier): Promise<void>;
   markQuoteCommentsRead(quoteId: Identifier): Promise<number>;
@@ -149,23 +159,30 @@ export const createQuoteMethods = (
       ),
 
     /**
-     * Freezes the draft into a document and mints the link to it.
-     *
-     * The raw token comes back EXACTLY ONCE, in this response: the database
-     * stores only its sha256. Whatever needs the link has to build it here —
-     * asking again is not possible, only minting another one is.
+     * Freezes the draft into a document, and returns the quotation's permanent
+     * link — minted by the first issue, the same one for every later version.
      */
     issueQuoteVersion: (quoteId, options = {}) =>
       call<QuoteLink>(
         "issue_quote_version",
         {
           p_quote_id: quoteId,
-          p_token_days: options.tokenDays ?? DEFAULT_TOKEN_DAYS,
-          p_token_label: options.tokenLabel ?? null,
           p_override_reason: options.overrideReason ?? null,
           p_reason: options.reason ?? null,
         },
         "Failed to issue the quote",
+      ),
+
+    /**
+     * The permanent link, as many times as the rep asks: the one link a
+     * customer keeps for every version (`quote_share_link()`). Reading never
+     * writes; `create` mints it for a quotation that has none.
+     */
+    getQuoteShareLink: (quoteId, options = {}) =>
+      call<QuoteLink | null>(
+        "quote_share_link",
+        { p_quote_id: quoteId, p_create: options.create ?? false },
+        "Failed to read the customer link",
       ),
 
     /** Another link to the live document; the older ones keep working. */
@@ -181,8 +198,8 @@ export const createQuoteMethods = (
       ),
 
     /**
-     * Opens a new draft from the last issued document, and revokes the links
-     * that pointed at it.
+     * Opens a new draft from the last issued document. The quotation's link
+     * keeps working and keeps showing that document until the draft is issued.
      *
      * Copying rather than editing is what makes the snapshot hold (§4): the
      * customer's copy stays byte-identical to what they were shown.

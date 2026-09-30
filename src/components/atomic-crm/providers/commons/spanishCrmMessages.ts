@@ -727,6 +727,7 @@ export const spanishCrmMessages = {
       transitions: {
         issue: "Enviar",
         revise: "Revisar",
+        renegotiate: "Renegociar",
         pending_approval: "Pedir aprobación",
         approved: "Aprobar",
         draft: "Devolver",
@@ -740,12 +741,14 @@ export const spanishCrmMessages = {
         transition_description:
           "Cotización %{number}. El motivo queda registrado con el movimiento y después no se puede editar.",
         revise_description:
-          "Cotización %{number}. El documento emitido queda tal como lo vio el cliente; esto abre una versión nueva para trabajar, y los enlaces a la anterior dejan de funcionar.",
+          "Cotización %{number}. El documento emitido queda tal como lo vio el cliente; esto abre una versión nueva para trabajar. El cliente conserva el mismo enlace, que muestra la versión anterior hasta que envíes la nueva.",
+        renegotiate_description:
+          "La cotización %{number} fue rechazada. Renegociar mantiene la misma cotización, su número y el enlace del cliente: la versión rechazada queda registrada tal como se respondió y se abre una versión nueva para trabajar. El motivo queda registrado con el movimiento.",
       },
       issue: {
         title: "Enviar la cotización %{number}",
         description:
-          "La versión %{version} se congela tal como está y se crea un enlace para el cliente. Un documento emitido ya no se puede editar: cambiarlo después significa una versión nueva.",
+          "La versión %{version} se congela tal como está. El cliente conserva el enlace de la cotización y verá esta versión al abrirlo. Un documento emitido ya no se puede editar: cambiarlo después significa una versión nueva.",
         gate_checking: "Consultando la regla de descuento…",
         gate_no_rule:
           "Este documento otorga %{percent}% de descuento. No hay ningún tope vigente.",
@@ -764,24 +767,16 @@ export const spanishCrmMessages = {
           "¿Por qué se envía esta cotización por encima del límite?",
         override_hint:
           "Solo administradores. Queda registrado para siempre y únicamente cuando el tope se superó de verdad.",
-        token_days: "Enlace válido (días)",
-        token_days_invalid: "El enlace debe ser válido al menos 1 día.",
-        token_label: "Para quién",
-        token_label_placeholder: "Compras, Sra. López…",
-        token_clamped:
-          "Un enlace nunca dura más que la oferta: se cortará después del %{date}.",
         confirm: "Enviar",
       },
       link: {
-        close_uncopied:
-          "Todavía no has copiado el enlace. Solo se muestra esta vez: si cierras ahora tendrás que generar uno nuevo.",
-        keep_open: "Volver",
-        close_anyway: "Cerrar sin copiar",
-        title: "Enlace a la versión %{version}",
+        title: "Enlace para el cliente",
         description:
-          "Este enlace se muestra una sola vez y no se guarda en ninguna parte: solo queda su huella. Cópialo ahora — después la única salida es crear uno nuevo. Si lo abres tú mismo, cuenta como una visita del cliente.",
+          "Este es el enlace de la cotización: el mismo para todas las versiones, y no caduca. El cliente verá la versión %{version} al abrirlo. Puedes volver a copiarlo cuando quieras desde la página de la cotización.",
         url: "Enlace para el cliente",
         copy: "Copiar el enlace",
+        open: "Abrir el enlace",
+        open_counts: "si lo abres tú, cuenta como una visita del cliente",
         expires: "Deja de funcionar el %{date}",
         done: "Listo",
       },
@@ -795,10 +790,26 @@ export const spanishCrmMessages = {
         retry: "Reintentar",
         live: {
           link_closed:
-            "Este enlace ya no está activo: la cotización puede haber sido revisada o retirada. Lo que ve abajo es la copia que estaba leyendo; pida un enlace nuevo a quien se la envió.",
+            "Este enlace ya no está activo: la cotización puede haber sido retirada. Lo que ve abajo es la copia que estaba leyendo; pida un enlace nuevo a quien se la envió.",
           check_failed:
             "En este momento no podemos comprobar si esta cotización cambió, así que lo que ve puede no estar al día.",
           check_now: "Comprobar ahora",
+        },
+        versions: {
+          title: "Versiones de esta cotización",
+          choose: "Cambiar de versión (viendo la %{version})",
+          current: "Vigente",
+          superseded: "Reemplazada",
+          accepted: "Aceptada",
+          rejected: "Rechazada",
+          issued: "Enviada el %{date}",
+          older_notice:
+            "Está viendo la versión %{shown}, que fue reemplazada por la versión %{current}. Ya no se puede responder.",
+          show_current: "Ver la versión %{number}",
+          revising:
+            "%{name} está preparando una nueva versión de esta cotización. La encontrará en este mismo enlace.",
+          revising_anonymous:
+            "Se está preparando una nueva versión de esta cotización. La encontrará en este mismo enlace.",
         },
         accepted_notice:
           "Gracias. Su aceptación quedó registrada y la cotización de abajo ya la refleja.",
@@ -1010,11 +1021,18 @@ export const spanishCrmMessages = {
         load_error: "No se pudieron cargar los comentarios de esta cotización",
       },
       links: {
-        title: "Enlaces para el cliente",
-        new: "Enlace nuevo",
-        revision_open:
-          "Hay una revisión abierta: envíela antes de compartir un enlace nuevo.",
-        empty: "Todavía no se ha creado ningún enlace para esta cotización",
+        title: "Enlace para el cliente",
+        permanent_hint:
+          "Un solo enlace para todas las versiones: compártelo una vez.",
+        customer_sees: "El cliente ve la versión %{version}.",
+        draft_pending:
+          "La versión %{version} está en preparación: la verá cuando la envíes.",
+        none: "Esta cotización todavía no tiene enlace para el cliente.",
+        create: "Crear enlace para el cliente",
+        revoke_hint:
+          "Hace que este enlace deje de funcionar. Después puedes crear uno nuevo.",
+        others: "Otros enlaces",
+        permanent: "Enlace para el cliente (permanente)",
         load_error: "No se pudieron cargar los enlaces de esta cotización",
         unlabelled: "Enlace a la versión %{version}",
         active: "Activo",

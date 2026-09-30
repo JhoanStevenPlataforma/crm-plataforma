@@ -461,50 +461,101 @@ const mintToken = async (
     token_id: token.id,
     // 256 random bits, hex-encoded, exactly as the real token is shaped — and
     // kept nowhere, exactly as the real one is.
-    token: Array.from(crypto.getRandomValues(new Uint8Array(32)))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join(""),
+    token: randomToken(),
     expires_at: expiresAt.toISOString(),
   };
 };
 
-/** Withdraw every live link to a version: what `revise_quote()` does last. */
-const revokeVersionTokens = async (
-  dataProvider: DataProvider,
-  versionId: Identifier,
-  salesId: Identifier | null | undefined,
-) => {
-  const tokens = (
-    await listAll<QuoteAccessToken>(dataProvider, "quote_access_tokens")
-  ).filter(
-    (token) => sameId(token.version_id, versionId) && token.revoked_at == null,
-  );
+/** A demo token row: the permanent one keeps its raw token, as the real one does. */
+type DemoToken = QuoteAccessToken & { token?: string | null };
 
-  for (const token of tokens) {
-    await dataProvider.update("quote_access_tokens", {
-      id: token.id,
-      data: {
-        revoked_at: new Date().toISOString(),
-        revoked_by: salesId ?? null,
+/**
+ * The quotation's live permanent link, token included. Listing the table goes
+ * through the summary projection, which drops the raw token (as the real view
+ * does), so the row is found there and read back by id.
+ */
+const permanentLinkOf = async (
+  dataProvider: DataProvider,
+  quoteId: Identifier,
+): Promise<DemoToken | undefined> => {
+  const row = (
+    await listAll<DemoToken>(dataProvider, "quote_access_tokens")
+  ).find(
+    (candidate) =>
+      sameId(candidate.quote_id, quoteId) &&
+      candidate.is_permanent === true &&
+      !candidate.revoked_at,
+  );
+  if (!row) return undefined;
+  const { data } = await dataProvider.getOne<DemoToken>("quote_access_tokens", {
+    id: row.id,
+  });
+  return data;
+};
+
+const randomToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+/**
+ * `ensure_quote_share_link()`: the quotation's permanent link — the live one,
+ * or a new one. `version` is the newest issued version, the one it opens.
+ */
+const ensureShareLink = async (
+  dataProvider: DataProvider,
+  quote: Quote,
+  version: QuoteVersion,
+  salesId: Identifier | null | undefined,
+): Promise<QuoteLink> => {
+  let permanent = await permanentLinkOf(dataProvider, quote.id);
+
+  if (!permanent) {
+    const { data } = await dataProvider.create<DemoToken>(
+      "quote_access_tokens",
+      {
+        data: {
+          quote_id: quote.id,
+          version_id: version.id,
+          token: randomToken(),
+          label: null,
+          created_by: salesId ?? null,
+          created_at: new Date().toISOString(),
+          expires_at: null,
+          revoked_at: null,
+          revoked_by: null,
+          last_seen_at: null,
+          view_count: 0,
+        },
       },
-      previousData: token,
-    });
+    );
+    permanent = data;
   }
+
+  return {
+    quote_id: quote.id,
+    version_id: version.id,
+    version_number: version.version_number,
+    token_id: permanent.id,
+    token: permanent.token ?? "",
+    expires_at: null,
+    is_permanent: true,
+  };
 };
 
 /**
- * `quote_access_tokens_summary`: the token columns without the hash, plus the
- * one fact a screen needs — whether the link still opens.
+ * `quote_access_tokens_summary`: the token columns without the hash — and
+ * without the permanent link's raw token, which only `getQuoteShareLink`
+ * reads — plus whether the link still opens and whether it is the permanent one.
  */
-export const decorateQuoteTokens = (
-  tokens: QuoteAccessToken[],
-): QuoteAccessToken[] =>
-  tokens.map((token) => ({
-    ...token,
+export const decorateQuoteTokens = (tokens: DemoToken[]): QuoteAccessToken[] =>
+  tokens.map(({ token, ...row }) => ({
+    ...row,
     is_active:
-      token.revoked_at == null &&
-      (token.expires_at == null ||
-        new Date(token.expires_at).getTime() > Date.now()),
+      row.revoked_at == null &&
+      (row.expires_at == null ||
+        new Date(row.expires_at).getTime() > Date.now()),
+    is_permanent: token != null,
   }));
 
 /**
@@ -621,7 +672,7 @@ export const createDemoQuoteMethods = (
       },
     );
 
-    const link = await mintToken(dataProvider, quote, issued, options, salesId);
+    const link = await ensureShareLink(dataProvider, quote, issued, salesId);
 
     await applyQuoteStatus(dataProvider, quoteId, "sent", {
       reason: options.reason,
@@ -667,6 +718,25 @@ export const createDemoQuoteMethods = (
     }
 
     return mintToken(dataProvider, quote, live, options, salesId);
+  },
+
+  getQuoteShareLink: async (quoteId, options = {}) => {
+    const dataProvider = getDataProvider();
+    const quote = await quoteOf(dataProvider, quoteId);
+    const live = (await versionsOf(dataProvider, quoteId)).find(
+      (version) => version.issued_at != null,
+    );
+    const hasLink = (await permanentLinkOf(dataProvider, quoteId)) != null;
+
+    // Reading never writes.
+    if (!options.create && (!live || !hasLink)) return null;
+    if (!live) {
+      refuse(
+        QUOTE_ERROR.notIssued,
+        `Quote ${quoteId} has no issued version to link to`,
+      );
+    }
+    return ensureShareLink(dataProvider, quote, live, await getSalesId());
   },
 
   reviseQuote: async (quoteId, reason) => {
@@ -740,10 +810,8 @@ export const createDemoQuoteMethods = (
       });
     }
 
-    // The link that pointed at the superseded document stops working. Leaving
-    // it live would let a customer accept a version we have just replaced.
-    await revokeVersionTokens(dataProvider, last.id, salesId);
-
+    // The quotation's link is NOT revoked: it keeps showing the last issued
+    // document, which cannot be answered while the quote is a draft.
     return draft;
   },
 

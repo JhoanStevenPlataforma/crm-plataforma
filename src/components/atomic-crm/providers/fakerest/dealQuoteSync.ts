@@ -136,9 +136,28 @@ export const syncDealFromQuote = async (
   });
   if (!deal || deal.archived_at) return;
 
-  const isClosed = rules.some(
-    (row) => row.closes && row.to_stage === deal.stage,
-  );
+  // A renegotiation reopens what its own refusal closed: only when the deal's
+  // LAST move was this quotation closing it.
+  const lastMove =
+    trigger === "sent"
+      ? (
+          await list<{
+            id: Identifier;
+            changed_at: string;
+            source?: string;
+            quote_id?: Identifier | null;
+          }>(dataProvider, "deal_stage_changes", { deal_id: deal.id })
+        ).sort(
+          (a, b) =>
+            b.changed_at.localeCompare(a.changed_at) ||
+            Number(b.id) - Number(a.id),
+        )[0]
+      : undefined;
+  const isReopened =
+    lastMove?.source === "quote" && sameId(lastMove.quote_id, quoteId);
+  const isClosed =
+    !isReopened &&
+    rules.some((row) => row.closes && row.to_stage === deal.stage);
   const statuses = await list<QuoteStatus>(dataProvider, "quote_statuses");
   const quotes = await list<Quote>(dataProvider, "quotes", {
     deal_id: deal.id,

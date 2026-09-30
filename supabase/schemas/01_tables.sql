@@ -2032,11 +2032,32 @@ create table public.quote_access_tokens (
     -- A 32-byte digest. A shorter value here means somebody stored something
     -- that is not a sha256, and the only thing that could be is the token.
     constraint quote_access_tokens_hash_length
-        check (octet_length(token_hash) = 32)
+        check (octet_length(token_hash) = 32),
+    -- The quotation's PERMANENT link (`ensure_quote_share_link()`) keeps its
+    -- raw token, because the rep must be able to copy that one link again at
+    -- any time and for every version. Every other link stays hash-only. The
+    -- table has no policy and no privilege for `authenticated`, so the value
+    -- reaches a browser only through `quote_share_link()`, which restates who
+    -- may share the quote. It must be the token the hash was taken from: a
+    -- CASE, because a CHECK does not promise to short-circuit and `decode()`
+    -- raises on anything that is not hex.
+    token        text,
+    constraint quote_access_tokens_token_matches_hash check (
+        token is null
+        or case when token ~ '^[0-9a-f]{64}$'
+                then sha256(decode(token, 'hex')) = token_hash
+                else false
+           end)
 );
 
 create index quote_access_tokens_quote
     on public.quote_access_tokens (quote_id, created_at desc);
+
+-- One live permanent link per quotation: the link the customer keeps for every
+-- version. A revoked one stays as history, and the next is minted beside it.
+create unique index quote_access_tokens_one_permanent
+    on public.quote_access_tokens (quote_id)
+    where token is not null and revoked_at is null;
 
 --
 -- Audit trail (§5)

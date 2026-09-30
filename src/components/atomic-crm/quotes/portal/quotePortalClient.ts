@@ -83,6 +83,19 @@ export const payloadSchema = z.object({
   // Issued while the default template was active: the original designed
   // presentation, which the build ships and the page draws itself.
   standard_presentation: z.boolean().catch(false),
+  // Every issued version of the quotation, newest first: the version selector
+  // (2026-09-29). Never a draft. A list this page cannot vouch for is dropped
+  // rather than fatal: the customer still reads the document they opened.
+  versions: z
+    .array(
+      z.object({
+        number: z.number(),
+        issued_at: z.string(),
+        is_current: z.boolean(),
+        outcome: z.enum(["accepted", "rejected"]).nullable(),
+      }),
+    )
+    .catch([]),
   actions: z.object({
     can_accept: z.boolean(),
     can_reject: z.boolean(),
@@ -98,6 +111,8 @@ export const payloadSchema = z.object({
 export type QuotePortalPayload = z.infer<typeof payloadSchema>;
 
 export type QuotePortalThreadComment = QuotePortalPayload["comments"][number];
+
+export type QuotePortalVersion = QuotePortalPayload["versions"][number];
 
 /** `quote_portal_version()`: the poll's whole answer. */
 const versionSchema = z.object({ etag: z.string() });
@@ -173,20 +188,39 @@ export type QuotePortalComment = {
   email: string | null;
 };
 
+/**
+ * The version the page shows, by number. Null (or absent) is the link as sent:
+ * the version on offer, the newest issued one.
+ */
+export type QuotePortalVersionNumber = number | null | undefined;
+
 export type QuotePortalClient = {
   /** Opens the document. The server records a view for every call. */
-  view: (token: string) => Promise<QuotePortalPayload>;
+  view: (
+    token: string,
+    versionNumber?: QuotePortalVersionNumber,
+  ) => Promise<QuotePortalPayload>;
   /**
    * The document's `etag` as it stands on the server. Records nothing: it is
    * what the page asks every few seconds to learn whether to open it again.
    */
-  version: (token: string) => Promise<string>;
+  version: (
+    token: string,
+    versionNumber?: QuotePortalVersionNumber,
+  ) => Promise<string>;
+  /**
+   * An answer names the version on the customer's screen, so a version the
+   * rep replaced meanwhile is refused (`quote_version_superseded`) instead of
+   * a document the customer never saw being accepted.
+   */
   accept: (
     token: string,
+    versionNumber: number,
     answer: QuotePortalAcceptance,
   ) => Promise<QuotePortalPayload>;
   reject: (
     token: string,
+    versionNumber: number,
     answer: QuotePortalRejection,
   ) => Promise<QuotePortalPayload>;
   /** Resolves with the document, its thread now carrying the comment. */
@@ -246,13 +280,28 @@ export const createQuotePortalClient = ({
   };
 
   return {
-    view: (token) => call("view", { token }, payloadSchema),
-    version: async (token) =>
-      (await call("version", { token }, versionSchema)).etag,
-    accept: (token, answer) =>
-      call("accept", { token, ...answer }, payloadSchema),
-    reject: (token, answer) =>
-      call("reject", { token, ...answer }, payloadSchema),
+    view: (token, versionNumber) =>
+      call("view", { token, version: versionNumber ?? null }, payloadSchema),
+    version: async (token, versionNumber) =>
+      (
+        await call(
+          "version",
+          { token, version: versionNumber ?? null },
+          versionSchema,
+        )
+      ).etag,
+    accept: (token, versionNumber, answer) =>
+      call(
+        "accept",
+        { token, version: versionNumber, ...answer },
+        payloadSchema,
+      ),
+    reject: (token, versionNumber, answer) =>
+      call(
+        "reject",
+        { token, version: versionNumber, ...answer },
+        payloadSchema,
+      ),
     comment: (token, comment) =>
       call("comment", { token, ...comment }, payloadSchema),
   };

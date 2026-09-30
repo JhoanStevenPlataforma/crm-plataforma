@@ -134,14 +134,14 @@ select ok(
     not exists (select 1 from information_schema.columns
                  where table_schema = 'public'
                    and table_name = 'quote_access_tokens_summary'
-                   and column_name = 'token_hash'),
-    'the token summary does not expose the hash');
+                   and column_name in ('token_hash', 'token')),
+    'the token summary exposes neither the hash nor the permanent link''s token');
 
 select is(
     (select count(*)::int from public.quote_access_tokens_summary
-      where quote_id = 9781 and is_active),
+      where quote_id = 9781 and is_active and is_permanent and expires_at is null),
     1,
-    'the owner sees the live link to their quote');
+    'the owner sees the live permanent link to their quote, which has no expiry');
 
 --
 -- 4. Somebody else.
@@ -170,8 +170,8 @@ select is(
     (select current_version_number::int || '/' || (issued_at is null)::text || '/'
             || nb_issued_versions || '/' || nb_active_tokens
        from public.quotes_summary where id = 9781),
-    '2/true/1/0',
-    'the summary follows the new draft, keeps counting the issued version, and drops the revoked link');
+    '2/true/1/1',
+    'the summary follows the new draft, keeps counting the issued version, and keeps the quote''s link');
 
 --
 -- 6. The price book.

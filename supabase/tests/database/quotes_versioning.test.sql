@@ -7,8 +7,8 @@
 --   * issuing freezes the version -- its lines, its header, its snapshot of the
 --     customer -- and nothing can edit or delete it afterwards;
 --   * the one hole in the freeze is keyed on a single version id;
---   * revising COPIES the last document into a new draft and revokes the link to
---     the old one, rather than editing what was sent;
+--   * revising COPIES the last document into a new draft, rather than editing
+--     what was sent, and keeps the quotation's one link;
 --   * a draft's system-owned columns (issue stamp, totals) are not writable by a
 --     client, while its header is;
 --   * the quote's `valid_until` / `terms` mirror the version being worked on,
@@ -288,13 +288,16 @@ select is(
     array['true/true', 'false/true'],
     'issuing version 2 supersedes version 1, and only then');
 
+-- The link is the QUOTE's (2026-09-29): revising revoked nothing, and issuing
+-- version 2 handed back the link minted with version 1 instead of a new one.
 select is(
-    (select count(*)::int
+    (select string_agg(concat_ws('/', v.version_number, (t.token is not null)::text,
+                                 (t.revoked_at is null)::text), ',')
        from public.quote_access_tokens t
        join public.quote_versions v on v.id = t.version_id
-      where v.quote_id = 9741 and v.version_number = 1 and t.revoked_at is null),
-    0,
-    'the link to the superseded document was revoked when the quote was revised');
+      where t.quote_id = 9741),
+    '1/true/true',
+    'the quotation kept its one permanent link through the revision and the second issue');
 
 --
 -- 6. An accepted quote is a commitment.

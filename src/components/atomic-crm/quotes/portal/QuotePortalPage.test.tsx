@@ -290,4 +290,83 @@ describe("QuotePortalPage", () => {
       .element(screen.getByRole("button", { name: "Try again" }))
       .toBeVisible();
   });
+
+  it("lets the customer read an older version from the same link, and answers only the one on screen", async () => {
+    const portal = createFakeQuotePortal();
+    const screen = await render(
+      <QuotePortalClientProvider value={portal.client}>
+        <StoryWrapper initialEntries={[`/quote#${PORTAL_TOKEN}`]}>
+          {null}
+        </StoryWrapper>
+      </QuotePortalClientProvider>,
+    );
+
+    // The header names the version on screen, and offers every other one.
+    const picker = screen.getByRole("button", {
+      name: "Change version (showing Version 2)",
+    });
+    await picker.click();
+    await expect
+      .element(screen.getByRole("menuitemradio", { name: /Version 2/ }))
+      .toHaveAttribute("aria-checked", "true");
+    await screen.getByRole("menuitemradio", { name: /Version 1/ }).click();
+
+    // Version 1 was declined and replaced: readable, not answerable.
+    await expect
+      .element(
+        screen.getByText(
+          /You are viewing version 1, which was replaced by version 2/,
+        ),
+      )
+      .toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Accept", exact: true }))
+      .not.toBeInTheDocument();
+
+    // Back to the version on offer, which the answer then names.
+    await screen.getByRole("button", { name: "View version 2" }).click();
+    await screen.getByRole("button", { name: "Accept", exact: true }).click();
+    const dialog = screen.getByRole("dialog");
+    await dialog.getByRole("checkbox").click();
+    await dialog.getByRole("button", { name: "Accept quotation" }).click();
+    await expect
+      .element(screen.getByText(/Your acceptance has been recorded/))
+      .toBeVisible();
+
+    // Every open used the same link: the page only named the version.
+    expect(portal.openedVersions()).toEqual([null, 1, null]);
+    expect(portal.answeredVersions()).toEqual([2]);
+  });
+
+  it("tells the customer a new version is being prepared, at the same link", async () => {
+    const screen = await render(
+      <QuotePortalClientProvider
+        value={
+          createFakeQuotePortal({
+            payload: {
+              ...portalPayload,
+              quote: { ...portalPayload.quote, status: "draft" },
+              actions: {
+                can_accept: false,
+                can_reject: false,
+                can_comment: true,
+              },
+            },
+          }).client
+        }
+      >
+        <StoryWrapper initialEntries={[`/quote#${PORTAL_TOKEN}`]}>
+          {null}
+        </StoryWrapper>
+      </QuotePortalClientProvider>,
+    );
+
+    await expect
+      .element(
+        screen.getByText(
+          "Jane Doe is preparing a new version of this quotation. You will find it at this same link.",
+        ),
+      )
+      .toBeVisible();
+  });
 });

@@ -11,16 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import type { QuoteDiscountGate } from "../types";
-import { DEFAULT_TOKEN_DAYS } from "../providers/supabase/quoteMethods";
 
+/**
+ * Nothing about the link: sending hands out the quotation's permanent link,
+ * which has no window and no label (quotes §6.2, as revised 2026-09-29).
+ */
 export type IssueQuoteInput = {
-  tokenDays: number;
-  tokenLabel: string | null;
   reason: string | null;
   overrideReason: string | null;
 };
@@ -53,7 +53,6 @@ export const QuoteIssueDialog = ({
   open,
   quoteNumber,
   versionNumber,
-  validUntil,
   gate,
   isGatePending,
   canOverride,
@@ -64,7 +63,6 @@ export const QuoteIssueDialog = ({
   open: boolean;
   quoteNumber: string;
   versionNumber?: number | null;
-  validUntil?: string | null;
   /** What `quote_discount_gate()` answered; absent while it is being read. */
   gate?: QuoteDiscountGate;
   isGatePending?: boolean;
@@ -75,23 +73,16 @@ export const QuoteIssueDialog = ({
   onCancel: () => void;
 }) => {
   const translate = useTranslate();
-  const [tokenDays, setTokenDays] = useState(String(DEFAULT_TOKEN_DAYS));
-  const [tokenLabel, setTokenLabel] = useState("");
   const [reason, setReason] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
 
   useEffect(() => {
     if (open) {
-      setTokenDays(String(DEFAULT_TOKEN_DAYS));
-      setTokenLabel("");
       setReason("");
       setOverrideReason("");
     }
   }, [open]);
 
-  const days = Number(tokenDays);
-  // Whole days: the server takes an integer and would round a fraction away.
-  const isDaysValid = Number.isInteger(days) && days > 0;
   const isBlocked = gate != null && !gate.ok;
   // THE TWO MOTIVES ARE NOT CUMULATIVE, and the server says which one applies:
   // `issue_quote_version()` checks the band reason only on the branch where the
@@ -109,7 +100,6 @@ export const QuoteIssueDialog = ({
   const canConfirm =
     !isPending &&
     !isGatePending &&
-    isDaysValid &&
     (!isBlocked || isOverridden) &&
     (!needsReason || trimmedReason !== "");
 
@@ -214,59 +204,6 @@ export const QuoteIssueDialog = ({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="flex flex-col gap-2 sm:w-32">
-            <Label htmlFor="quote-issue-days">
-              {translate("resources.quotes.issue.token_days")}
-            </Label>
-            <Input
-              id="quote-issue-days"
-              type="number"
-              min={1}
-              step={1}
-              value={tokenDays}
-              aria-invalid={!isDaysValid}
-              aria-describedby={
-                isDaysValid ? undefined : "quote-issue-days-error"
-              }
-              onChange={(event) => setTokenDays(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-1 flex-col gap-2">
-            <Label htmlFor="quote-issue-label">
-              {translate("resources.quotes.issue.token_label")}
-            </Label>
-            <Input
-              id="quote-issue-label"
-              value={tokenLabel}
-              placeholder={translate(
-                "resources.quotes.issue.token_label_placeholder",
-              )}
-              onChange={(event) => setTokenLabel(event.target.value)}
-            />
-          </div>
-        </div>
-        {isDaysValid ? null : (
-          <p
-            id="quote-issue-days-error"
-            role="alert"
-            className="-mt-2 text-sm text-destructive"
-          >
-            {translate("resources.quotes.issue.token_days_invalid")}
-          </p>
-        )}
-
-        {/* A link never outlives the offer: the window is cut to the day after
-            `valid_until`, so a long one can silently become a short one. Said
-            here rather than discovered when the customer cannot open it. */}
-        {validUntil ? (
-          <p className="text-xs text-muted-foreground">
-            {translate("resources.quotes.issue.token_clamped", {
-              date: validUntil,
-            })}
-          </p>
-        ) : null}
-
         <DialogFooter>
           <Button variant="outline" disabled={isPending} onClick={onCancel}>
             {translate("ra.action.cancel")}
@@ -275,8 +212,6 @@ export const QuoteIssueDialog = ({
             disabled={!canConfirm}
             onClick={() =>
               onConfirm({
-                tokenDays: days,
-                tokenLabel: tokenLabel.trim() || null,
                 reason: trimmedReason || null,
                 overrideReason: trimmedOverride || null,
               })

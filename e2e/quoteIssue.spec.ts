@@ -135,7 +135,7 @@ test.describe("issuing a quote", () => {
     },
   );
 
-  test("a clean quote is sent, and its link is shown exactly once", async ({
+  test("a clean quote is sent, and its permanent link stays on the quote's page", async ({
     page,
     isMobile,
     createQuote,
@@ -162,17 +162,20 @@ test.describe("issuing a quote", () => {
     await confirmIssue(page).click();
     await page.waitForLoadState("networkidle");
 
-    // The raw token is in this response and nowhere else — the table holds its
-    // sha256. If the dialog stopped putting it in front of the rep, the link
-    // would be unrecoverable rather than merely hidden.
-    const url = page.getByLabel("Customer link");
-    await expect(url).toBeVisible();
+    // The quotation's permanent link, handed over right away — and, since
+    // links became the quote's, still on its page once the dialog is closed.
+    const url = page
+      .getByRole("dialog")
+      .getByRole("textbox", { name: "Customer link" });
     await expect(url).toHaveValue(/#\/quote#[0-9a-f]{64}$/);
+    const link = await url.inputValue();
 
     await page.getByRole("button", { name: "Done" }).click();
-    // Nothing was copied, so closing asks first: it discards the only copy.
-    await page.getByRole("button", { name: "Close without copying" }).click();
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(
+      page.getByRole("textbox", { name: "Customer link" }),
+    ).toHaveValue(link);
+    await expect(page.getByText("The customer sees version 1.")).toBeVisible();
 
     // Frozen from here: the document the customer holds has to still render
     // identically in a year. The version panel is where that is visible — the
@@ -214,7 +217,9 @@ test.describe("issuing a quote", () => {
     await confirmIssue(page).click();
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByLabel("Customer link")).toBeVisible();
+    await expect(
+      page.getByRole("dialog").getByRole("textbox", { name: "Customer link" }),
+    ).toBeVisible();
   });
 
   test("the ceiling follows the person sending, not the quote", async ({

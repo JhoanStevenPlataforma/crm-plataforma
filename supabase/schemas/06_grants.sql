@@ -765,6 +765,7 @@ revoke all on function public.revise_quote(bigint, text) from public, anon;
 revoke all on function public.create_quote_link(bigint, integer, text) from public, anon;
 revoke all on function public.revoke_quote_token(bigint) from public, anon;
 revoke all on function public.mark_quote_comments_read(bigint) from public, anon;
+revoke all on function public.quote_share_link(bigint, boolean) from public, anon;
 
 grant execute on function public.can_see_quote(bigint) to authenticated, service_role;
 grant execute on function public.transition_quote(bigint, text, text, jsonb) to authenticated, service_role;
@@ -774,14 +775,16 @@ grant execute on function public.revise_quote(bigint, text) to authenticated, se
 grant execute on function public.create_quote_link(bigint, integer, text) to authenticated, service_role;
 grant execute on function public.revoke_quote_token(bigint) to authenticated, service_role;
 grant execute on function public.mark_quote_comments_read(bigint) to authenticated, service_role;
+grant execute on function public.quote_share_link(bigint, boolean) to authenticated, service_role;
 
 -- `service_role` only. `apply_quote_status` above all: it trusts its
 -- `p_actor_kind` argument, so a user able to call it could simply declare
--- themselves the customer. `mint_quote_token` likewise trusts its caller to have
--- decided who may share the quote. The functions users may call reach both as
+-- themselves the customer. `mint_quote_token` and `ensure_quote_share_link`
+-- likewise trust their caller to have decided who may share the quote. The functions users may call reach both as
 -- the owner.
 revoke all on function public.apply_quote_status(bigint, text, text, text, bigint, jsonb, text) from public, anon, authenticated;
 revoke all on function public.mint_quote_token(bigint, integer, text) from public, anon, authenticated;
+revoke all on function public.ensure_quote_share_link(bigint) from public, anon, authenticated;
 revoke all on function public.purge_quotes(bigint[], boolean) from public, anon, authenticated;
 -- The catalogue's retention path (§13.6 #8, #19). Same status, same reason: a
 -- product is deactivated, never deleted, by anybody using the application.
@@ -796,6 +799,7 @@ revoke all on function public.notify_quote_event(bigint, text, text, text, text,
 
 grant execute on function public.apply_quote_status(bigint, text, text, text, bigint, jsonb, text) to service_role;
 grant execute on function public.mint_quote_token(bigint, integer, text) to service_role;
+grant execute on function public.ensure_quote_share_link(bigint) to service_role;
 grant execute on function public.purge_quotes(bigint[], boolean) to service_role;
 grant execute on function public.purge_catalogue(bigint[], boolean) to service_role;
 grant execute on function public.sweep_expired_quotes() to service_role;
@@ -847,23 +851,25 @@ grant execute on function public.quote_portal_events_notify() to service_role;
 -- would be one hash away from answering for a customer.
 revoke all on function public.quote_portal_log(bigint, bigint, bigint, text, inet, text, text, text, jsonb) from public, anon, authenticated;
 revoke all on function public.quote_portal_resolve(bytea, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_target_version(bigint, integer) from public, anon, authenticated;
 revoke all on function public.quote_portal_document(bigint) from public, anon, authenticated;
-revoke all on function public.quote_portal_view(bytea, inet, text) from public, anon, authenticated;
-revoke all on function public.quote_portal_begin_answer(bytea, text, text, boolean, inet, text) from public, anon, authenticated;
-revoke all on function public.quote_portal_accept(bytea, text, text, inet, text) from public, anon, authenticated;
-revoke all on function public.quote_portal_reject(bytea, text, text, text, text, inet, text) from public, anon, authenticated;
+revoke all on function public.quote_portal_view(bytea, inet, text, integer) from public, anon, authenticated;
+revoke all on function public.quote_portal_begin_answer(bytea, text, text, boolean, inet, text, integer) from public, anon, authenticated;
+revoke all on function public.quote_portal_accept(bytea, text, text, inet, text, integer) from public, anon, authenticated;
+revoke all on function public.quote_portal_reject(bytea, text, text, text, text, inet, text, integer) from public, anon, authenticated;
 revoke all on function public.quote_portal_comment(bytea, text, text, text, inet, text) from public, anon, authenticated;
-revoke all on function public.quote_portal_version(bytea) from public, anon, authenticated;
+revoke all on function public.quote_portal_version(bytea, integer) from public, anon, authenticated;
 
 grant execute on function public.quote_portal_log(bigint, bigint, bigint, text, inet, text, text, text, jsonb) to service_role;
 grant execute on function public.quote_portal_resolve(bytea, inet, text) to service_role;
+grant execute on function public.quote_portal_target_version(bigint, integer) to service_role;
 grant execute on function public.quote_portal_document(bigint) to service_role;
-grant execute on function public.quote_portal_view(bytea, inet, text) to service_role;
-grant execute on function public.quote_portal_begin_answer(bytea, text, text, boolean, inet, text) to service_role;
-grant execute on function public.quote_portal_accept(bytea, text, text, inet, text) to service_role;
-grant execute on function public.quote_portal_reject(bytea, text, text, text, text, inet, text) to service_role;
+grant execute on function public.quote_portal_view(bytea, inet, text, integer) to service_role;
+grant execute on function public.quote_portal_begin_answer(bytea, text, text, boolean, inet, text, integer) to service_role;
+grant execute on function public.quote_portal_accept(bytea, text, text, inet, text, integer) to service_role;
+grant execute on function public.quote_portal_reject(bytea, text, text, text, text, inet, text, integer) to service_role;
 grant execute on function public.quote_portal_comment(bytea, text, text, text, inet, text) to service_role;
-grant execute on function public.quote_portal_version(bytea) to service_role;
+grant execute on function public.quote_portal_version(bytea, integer) to service_role;
 
 --
 -- Customer portal slides. No `anon` grant: the customer reads the frozen copy

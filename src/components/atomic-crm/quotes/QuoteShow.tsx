@@ -122,6 +122,9 @@ const QuoteShowContent = () => {
           <QuoteComments quoteId={quote.id} versions={versions} />
         </div>
         <aside className="quote-print-hide flex flex-col gap-6">
+          {/* First: the one link the customer keeps, whichever version this
+              page shows. */}
+          <QuoteLinksPanel />
           {/* Above the versions, because it is about the one on screen — and
               beside the document rather than inside it: what the team keeps is
               not what the customer signed (§6.4). */}
@@ -132,7 +135,6 @@ const QuoteShowContent = () => {
             onSelect={select}
             isUnknown={isUnknown}
           />
-          <QuoteLinksPanel />
         </aside>
       </div>
     </div>

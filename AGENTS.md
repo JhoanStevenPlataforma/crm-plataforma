@@ -210,6 +210,14 @@ becomes "Pending Pending" the moment it signs in. The specs also found that
 and `QuoteEdit` were each offering a delete the database refuses for everybody;
 all four now pass `actions={<></>}`. Assume the same of any kit button: if a
 screen must not offer an action, the screen has to say so.
+**Since 2026-09-29 a quotation has ONE permanent customer link for every
+version** (`20260930120000_quote_permanent_link.sql`): the issue reuses it, a
+revision keeps it, the rep reads it again through `quote_share_link()` (its raw
+token is stored, only for that link), and the portal resolves the version from
+the quote — `versions` in the payload feeds a selector, and an answer names the
+version on screen (`p_version_number`), so one the rep replaced meanwhile is
+refused. Renegotiating a refused quotation is `revise_quote()` from `rejected`;
+re-sending it reopens the deal its own refusal lost.
 Status changes go through `transition_quote()` / `issue_quote_version()` /
 `revise_quote()` or a portal function, never a column write, and an issued
 version is immutable. **§13 of the proposal is the as-built contract** — which

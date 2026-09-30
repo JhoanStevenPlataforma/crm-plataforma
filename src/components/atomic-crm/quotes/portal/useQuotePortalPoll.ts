@@ -39,12 +39,19 @@ export type QuotePortalPoll = {
 export const useQuotePortalPoll = ({
   client,
   token,
+  versionNumber,
   etag,
   onRefreshed,
 }: {
   client: QuotePortalClient;
   /** Null while there is no document on screen to keep current. */
   token: string | null;
+  /**
+   * The version the customer chose, or null to follow the one on offer. The
+   * etag covers the list of versions too, so a new issue reaches a page
+   * reading an older one.
+   */
+  versionNumber: number | null;
   etag: string | null;
   /** Receives the document when it was opened again. Must be stable. */
   onRefreshed: (payload: QuotePortalPayload) => void;
@@ -79,8 +86,8 @@ export const useQuotePortalPoll = ({
       }
       isChecking = true;
       try {
-        if ((await client.version(token)) !== etag) {
-          const payload = await client.view(token);
+        if ((await client.version(token, versionNumber)) !== etag) {
+          const payload = await client.view(token, versionNumber);
           // The new etag restarts this effect; the timer set below is cleared
           // by that restart before it can fire.
           if (isActive) onRefreshed(payload);
@@ -117,7 +124,7 @@ export const useQuotePortalPoll = ({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [client, token, etag, isLinkClosed, onRefreshed, restarts]);
+  }, [client, token, versionNumber, etag, isLinkClosed, onRefreshed, restarts]);
 
   return {
     isLinkClosed,

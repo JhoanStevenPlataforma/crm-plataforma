@@ -40,6 +40,7 @@ const allStatuses = [
       ["pending_approval", "Pending approval", 20],
       ["approved", "Approved", 30],
       ["negotiating", "Negotiating", 70],
+      ["rejected", "Rejected", 90],
       ["canceled", "Canceled", 110],
     ] as const
   ).map(([key, label, rank], index) => ({
@@ -48,8 +49,8 @@ const allStatuses = [
     label,
     color: "#64748b",
     rank,
-    is_open: key !== "canceled",
-    is_terminal: key === "canceled",
+    is_open: key !== "canceled" && key !== "rejected",
+    is_terminal: key === "canceled" || key === "rejected",
     counts_as_won: false,
     is_system: true,
   })),
@@ -228,6 +229,25 @@ export const Sent = () => (
     scenario={{
       quote: { status_key: "sent" },
       version: { issued_at: "2026-09-10T10:00:00.000Z" },
+    }}
+  />
+);
+
+/**
+ * The customer declined the version they were sent. The way on is to
+ * renegotiate THIS quotation — a new version of it, the same link — not to
+ * start another one.
+ */
+export const Rejected = () => (
+  <Panel
+    withLinks
+    scenario={{
+      quote: { status_key: "rejected" },
+      version: {
+        issued_at: "2026-09-10T10:00:00.000Z",
+        rejected_at: "2026-09-12T10:00:00.000Z",
+        rejected_reason_code: "price",
+      },
     }}
   />
 );

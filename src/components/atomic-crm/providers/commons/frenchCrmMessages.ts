@@ -727,6 +727,7 @@ export const frenchCrmMessages = {
       transitions: {
         issue: "Envoyer",
         revise: "Réviser",
+        renegotiate: "Renégocier",
         pending_approval: "Demander l’approbation",
         approved: "Approuver",
         draft: "Renvoyer",
@@ -740,12 +741,14 @@ export const frenchCrmMessages = {
         transition_description:
           "Devis %{number}. Le motif est enregistré avec le mouvement et ne pourra plus être modifié.",
         revise_description:
-          "Devis %{number}. Le document émis reste exactement tel que le client l’a vu ; ceci ouvre une nouvelle version de travail, et les liens vers la précédente cessent de fonctionner.",
+          "Devis %{number}. Le document émis reste exactement tel que le client l’a vu ; ceci ouvre une nouvelle version de travail. Le client garde le même lien, qui affiche la version précédente jusqu’à l’envoi de la nouvelle.",
+        renegotiate_description:
+          "Le devis %{number} a été refusé. Renégocier conserve le même devis, son numéro et le lien du client : la version refusée reste enregistrée telle qu’elle a reçu sa réponse, et une nouvelle version de travail s’ouvre. Le motif est enregistré avec le mouvement.",
       },
       issue: {
         title: "Envoyer le devis %{number}",
         description:
-          "La version %{version} est figée en l’état et un lien est créé pour le client. Un document émis ne peut plus être modifié : le changer ensuite signifie une nouvelle version.",
+          "La version %{version} est figée en l’état. Le client garde le lien du devis et verra cette version en l’ouvrant. Un document émis ne peut plus être modifié : le changer ensuite signifie une nouvelle version.",
         gate_checking: "Lecture de la règle de remise…",
         gate_no_rule:
           "Ce document accorde %{percent}% de remise. Aucun plafond n’est en vigueur.",
@@ -764,24 +767,17 @@ export const frenchCrmMessages = {
           "Pourquoi ce devis est-il envoyé au-delà de la limite ?",
         override_hint:
           "Administrateurs uniquement. Enregistré définitivement, et seulement lorsque le plafond a réellement été dépassé.",
-        token_days: "Lien valable (jours)",
-        token_days_invalid: "Le lien doit rester valable au moins 1 jour.",
-        token_label: "Pour qui",
-        token_label_placeholder: "Achats, Mme Lopez…",
-        token_clamped:
-          "Un lien ne survit jamais à l’offre : il sera coupé après le %{date}.",
         confirm: "Envoyer",
       },
       link: {
-        close_uncopied:
-          "Vous n’avez pas encore copié le lien. Il n’est affiché qu’une fois : si vous fermez maintenant, il faudra en générer un nouveau.",
-        keep_open: "Revenir",
-        close_anyway: "Fermer sans copier",
-        title: "Lien vers la version %{version}",
+        title: "Lien pour le client",
         description:
-          "Ce lien est affiché une seule fois et n’est stocké nulle part : seule son empreinte est conservée. Copiez-le maintenant — ensuite, la seule issue est d’en créer un nouveau. L’ouvrir vous-même compte comme une consultation du client.",
+          "Voici le lien du devis : le même pour toutes les versions, et il n’expire pas. Le client verra la version %{version} en l’ouvrant. Vous pouvez le copier à nouveau à tout moment depuis la page du devis.",
         url: "Lien pour le client",
         copy: "Copier le lien",
+        open: "Ouvrir le lien",
+        open_counts:
+          "l’ouvrir vous-même compte comme une consultation du client",
         expires: "Cesse de fonctionner le %{date}",
         done: "Terminé",
       },
@@ -795,10 +791,26 @@ export const frenchCrmMessages = {
         retry: "Réessayer",
         live: {
           link_closed:
-            "Ce lien n’est plus actif : le devis a peut-être été révisé ou retiré. Ce que vous voyez ci-dessous est la copie que vous lisiez ; demandez un nouveau lien à la personne qui vous l’a envoyé.",
+            "Ce lien n’est plus actif : le devis a peut-être été retiré. Ce que vous voyez ci-dessous est la copie que vous lisiez ; demandez un nouveau lien à la personne qui vous l’a envoyé.",
           check_failed:
             "Nous ne pouvons pas vérifier pour l’instant si ce devis a changé ; ce que vous voyez n’est peut-être plus à jour.",
           check_now: "Vérifier maintenant",
+        },
+        versions: {
+          title: "Versions de ce devis",
+          choose: "Changer de version (affichée : %{version})",
+          current: "En vigueur",
+          superseded: "Remplacée",
+          accepted: "Acceptée",
+          rejected: "Refusée",
+          issued: "Envoyée le %{date}",
+          older_notice:
+            "Vous consultez la version %{shown}, remplacée par la version %{current}. Elle ne peut plus recevoir de réponse.",
+          show_current: "Voir la version %{number}",
+          revising:
+            "%{name} prépare une nouvelle version de ce devis. Vous la trouverez à ce même lien.",
+          revising_anonymous:
+            "Une nouvelle version de ce devis est en préparation. Vous la trouverez à ce même lien.",
         },
         accepted_notice:
           "Merci. Votre acceptation a été enregistrée, et le devis ci-dessous la mentionne désormais.",
@@ -1011,11 +1023,18 @@ export const frenchCrmMessages = {
         load_error: "Les commentaires de ce devis n’ont pas pu être chargés",
       },
       links: {
-        title: "Liens client",
-        new: "Nouveau lien",
-        revision_open:
-          "Une révision est ouverte : envoyez-la avant de partager un nouveau lien.",
-        empty: "Aucun lien n’a encore été créé pour ce devis",
+        title: "Lien pour le client",
+        permanent_hint:
+          "Un seul lien pour toutes les versions : partagez-le une fois.",
+        customer_sees: "Le client voit la version %{version}.",
+        draft_pending:
+          "La version %{version} est en préparation : il la verra une fois envoyée.",
+        none: "Ce devis n’a pas encore de lien pour le client.",
+        create: "Créer le lien pour le client",
+        revoke_hint:
+          "Ce lien cessera de fonctionner. Vous pourrez ensuite en créer un nouveau.",
+        others: "Autres liens",
+        permanent: "Lien pour le client (permanent)",
         load_error: "Les liens de ce devis n’ont pas pu être chargés",
         unlabelled: "Lien vers la version %{version}",
         active: "Actif",

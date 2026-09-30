@@ -284,11 +284,14 @@ export type QuoteDiscountGate = {
 };
 
 /**
- * What issuing a version and minting another link both return.
+ * What issuing a version, reading the quotation's link and minting another
+ * link return.
  *
- * `token` is the raw token and it exists exactly once, in this response: the
- * database stores only its sha256. A caller that does not build the link
- * immediately cannot ask for it again — it has to mint a new one.
+ * Since 2026-09-29 the issue hands out the quotation's PERMANENT link
+ * (`is_permanent`): one address for every version, no expiry, readable again
+ * at any time through `getQuoteShareLink`. `version_number` is the version the
+ * customer sees when they open it — the newest issued one. An extra link from
+ * `createQuoteLink` is still per-version, expiring, and shown once.
  */
 export type QuoteLink = {
   quote_id: Identifier;
@@ -296,7 +299,9 @@ export type QuoteLink = {
   version_number: number;
   token_id: Identifier;
   token: string;
-  expires_at: string;
+  /** Null for the permanent link, which does not expire. */
+  expires_at: string | null;
+  is_permanent?: boolean;
 };
 
 /**
@@ -318,6 +323,8 @@ export type QuoteAccessToken = {
   last_seen_at?: string | null;
   view_count: number;
   is_active: boolean;
+  /** The quotation's one permanent link (`expires_at` is then null). */
+  is_permanent?: boolean;
 };
 
 /**

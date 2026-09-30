@@ -50,6 +50,7 @@ import {
 } from "./quotePortalPresentation";
 import { fillSlidePlaceholders } from "./portalSlides";
 import { QuotePortalStamp } from "./QuotePortalStamp";
+import { QuotePortalVersionPicker } from "./QuotePortalVersionPicker";
 import { fx } from "./quotePortalFx";
 import { QuotePortalRejectDialog } from "./QuotePortalRejectDialog";
 import {
@@ -89,6 +90,13 @@ const RETRYABLE = new Set<QuotePortalErrorKey>([
   "quote_portal_unavailable",
   "quote_portal_throttled",
 ]);
+
+/**
+ * The statuses a quotation has while the team prepares a new version of it:
+ * `revise_quote()` puts it in `draft`, and a revision may go through approval
+ * before it is sent. The customer still reads the last version they were sent.
+ */
+const REVISION_STATUSES = new Set(["draft", "pending_approval", "approved"]);
 
 type Answer = "accepted" | "rejected";
 
@@ -172,6 +180,13 @@ export const QuotePortalPage = () => {
 
   const [attempt, setAttempt] = useState(0);
   const [dialog, setDialog] = useState<"accept" | "reject" | null>(null);
+  // The version the customer chose in the selector; null follows the one on
+  // offer, so a version issued while the page is open replaces it.
+  const [chosenVersion, setChosenVersion] = useState<number | null>(null);
+  const [switchingTo, setSwitchingTo] = useState<number | null>(null);
+  const [switchError, setSwitchError] = useState<QuotePortalErrorKey | null>(
+    null,
+  );
   const [state, setState] = useState<PortalState>({
     key: null,
     status: "loading",
@@ -262,6 +277,7 @@ export const QuotePortalPage = () => {
   const poll = useQuotePortalPoll({
     client,
     token: current.status === "loaded" ? token : null,
+    versionNumber: chosenVersion,
     etag: current.status === "loaded" ? current.payload.etag : null,
     onRefreshed,
   });
@@ -332,6 +348,34 @@ export const QuotePortalPage = () => {
 
   const { payload, answered } = current;
   const data = fromPortalPayload(payload, FALLBACK_BRANDING);
+  const currentVersion = payload.versions.find((version) => version.is_current);
+
+  /**
+   * Shows another version in place. The address does not change — the link is
+   * the quotation's — and the page does not reload: the document below is
+   * replaced when it arrives, and a failure leaves the one on screen.
+   */
+  const showVersion = async (versionNumber: number) => {
+    const follows = currentVersion?.number === versionNumber;
+    setSwitchingTo(versionNumber);
+    setSwitchError(null);
+    try {
+      const next = await client.view(token, follows ? null : versionNumber);
+      setChosenVersion(
+        next.quote.is_superseded ? next.quote.version_number : null,
+      );
+      setState({
+        key: current.key,
+        status: "loaded",
+        payload: next,
+        answered: null,
+      });
+    } catch (error) {
+      setSwitchError(portalErrorKeyOf(error));
+    } finally {
+      setSwitchingTo(null);
+    }
+  };
   const actions = poll.isLinkClosed ? DEAD_LINK_ACTIONS : payload.actions;
   const isOpen = actions.can_accept || actions.can_reject;
   // These three already say so on the paper itself (`QuoteDocument`).
@@ -409,7 +453,14 @@ export const QuotePortalPage = () => {
         isCompact={scroll.isScrolled}
         brand={brand}
         number={data.quote.number}
-        versionNumber={data.quote.version_number}
+        version={
+          <QuotePortalVersionPicker
+            versions={payload.versions}
+            shownNumber={payload.quote.version_number}
+            isSwitching={switchingTo != null}
+            onSelect={showVersion}
+          />
+        }
       />
       <QuotePortalMiniNav
         activeId={scroll.activeId}
@@ -517,9 +568,32 @@ export const QuotePortalPage = () => {
                 <QuotePortalNotice
                   isLinkClosed={poll.isLinkClosed}
                   answered={answered}
+                  olderVersion={
+                    payload.quote.is_superseded && currentVersion
+                      ? {
+                          shown: payload.quote.version_number,
+                          current: currentVersion.number,
+                        }
+                      : null
+                  }
+                  isBeingRevised={
+                    !payload.quote.is_superseded &&
+                    REVISION_STATUSES.has(payload.quote.status)
+                  }
                   isUnanswerable={!isOpen && !isSettled}
                   ownerName={data.parties.owner_name}
+                  onShowCurrent={() => {
+                    if (currentVersion) void showVersion(currentVersion.number);
+                  }}
                 />
+                {switchError ? (
+                  <p
+                    role="alert"
+                    className="quote-print-hide rounded-xl border border-destructive/40 px-4 py-3 text-sm text-destructive"
+                  >
+                    {translate(`resources.quotes.portal.errors.${switchError}`)}
+                  </p>
+                ) : null}
                 {poll.isFailing && !poll.isLinkClosed ? (
                   <div
                     role="status"
@@ -584,7 +658,10 @@ export const QuotePortalPage = () => {
         defaultEmail={data.parties.contact?.email ?? ""}
         onCancel={() => setDialog(null)}
         onSubmit={(acceptance) =>
-          settle(client.accept(token, acceptance), "accepted")
+          settle(
+            client.accept(token, payload.quote.version_number, acceptance),
+            "accepted",
+          )
         }
       />
       <QuotePortalRejectDialog
@@ -592,7 +669,10 @@ export const QuotePortalPage = () => {
         number={data.quote.number}
         onCancel={() => setDialog(null)}
         onSubmit={(rejection) =>
-          settle(client.reject(token, rejection), "rejected")
+          settle(
+            client.reject(token, payload.quote.version_number, rejection),
+            "rejected",
+          )
         }
       />
     </div>

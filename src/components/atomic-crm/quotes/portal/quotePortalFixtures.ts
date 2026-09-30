@@ -107,6 +107,21 @@ export const portalPayload: QuotePortalPayload = {
   branding: { title: "Acme CRM", logo_url: null },
   slides: [],
   standard_presentation: false,
+  // Version 1 was declined and renegotiated into version 2, the one on offer.
+  versions: [
+    {
+      number: 2,
+      issued_at: "2026-09-10T15:00:00.000Z",
+      is_current: true,
+      outcome: null,
+    },
+    {
+      number: 1,
+      issued_at: "2026-09-01T15:00:00.000Z",
+      is_current: false,
+      outcome: "rejected",
+    },
+  ],
   actions: { can_accept: true, can_reject: true, can_comment: true },
   acceptance: { accepted_at: null, accepted_by_name: null, rejected_at: null },
 };
@@ -170,6 +185,10 @@ export type FakeQuotePortal = {
   views: () => number;
   /** The times the page asked whether the document changed. */
   polls: () => number;
+  /** The version each open asked for, in order (null: the link as sent). */
+  openedVersions: () => (number | null)[];
+  /** The version each answer named, in order. */
+  answeredVersions: () => number[];
   /** The team changes the document on the server: a new etag with it. */
   change: (edit: (payload: QuotePortalPayload) => QuotePortalPayload) => void;
   /** The link dies — revoked by a revision, or withdrawn. */
@@ -198,6 +217,8 @@ export const createFakeQuotePortal = ({
   let current = payload;
   let viewCount = 0;
   let pollCount = 0;
+  const opened: (number | null)[] = [];
+  const answered: number[] = [];
   let revision = 0;
   let isRevoked = false;
   let pollFailure: QuotePortalErrorKey | null = null;
@@ -213,11 +234,44 @@ export const createFakeQuotePortal = ({
     return current;
   };
 
+  /**
+   * The document as the server builds it for one version: the current one, or
+   * an older one read-only, as `quote_portal_document()` marks it — superseded,
+   * nothing to answer, the thread (the quote's) as it stands. A number no
+   * version carries gets the current one, as `quote_portal_target_version()`.
+   */
+  const documentOf = (versionNumber?: number | null): QuotePortalPayload => {
+    const older = current.versions.find(
+      (version) => version.number === versionNumber && !version.is_current,
+    );
+    if (!older) return current;
+    return {
+      ...current,
+      etag: `${current.etag}:v${older.number}`,
+      quote: {
+        ...current.quote,
+        version_number: older.number,
+        issued_at: older.issued_at,
+        is_superseded: true,
+      },
+      actions: { ...current.actions, can_accept: false, can_reject: false },
+      acceptance: {
+        accepted_at: older.outcome === "accepted" ? older.issued_at : null,
+        accepted_by_name: null,
+        rejected_at: older.outcome === "rejected" ? older.issued_at : null,
+      },
+    };
+  };
+
   const answer = (
+    versionNumber: number,
     status: "accepted" | "rejected",
     acceptedBy: string | null,
   ) => {
+    answered.push(versionNumber);
     if (refuseAnswerWith) throw new QuotePortalError(refuseAnswerWith);
+    if (versionNumber !== current.quote.version_number)
+      throw new QuotePortalError("quote_version_superseded");
     return store({
       ...current,
       quote: { ...current.quote, status },
@@ -240,6 +294,8 @@ export const createFakeQuotePortal = ({
   return {
     views: () => viewCount,
     polls: () => pollCount,
+    openedVersions: () => [...opened],
+    answeredVersions: () => [...answered],
     change: (edit) => {
       store(edit(current));
     },
@@ -250,25 +306,30 @@ export const createFakeQuotePortal = ({
       pollFailure = key;
     },
     client: {
-      view: async (token) => {
+      view: async (token, versionNumber) => {
         viewCount += 1;
+        opened.push(versionNumber ?? null);
         open(token);
         if (refuseViewWith) throw new QuotePortalError(refuseViewWith);
-        return current;
+        return documentOf(versionNumber);
       },
-      version: async (token) => {
+      version: async (token, versionNumber) => {
         pollCount += 1;
         if (pollFailure) throw new QuotePortalError(pollFailure);
         open(token);
-        return current.etag;
+        return documentOf(versionNumber).etag;
       },
-      accept: async (token, { name }: QuotePortalAcceptance) => {
+      accept: async (token, versionNumber, { name }: QuotePortalAcceptance) => {
         open(token);
-        return answer("accepted", name);
+        return answer(versionNumber, "accepted", name);
       },
-      reject: async (token, _rejection: QuotePortalRejection) => {
+      reject: async (
+        token,
+        versionNumber,
+        _rejection: QuotePortalRejection,
+      ) => {
         open(token);
-        return answer("rejected", null);
+        return answer(versionNumber, "rejected", null);
       },
       comment: async (token, { body, name }: QuotePortalComment) => {
         open(token);

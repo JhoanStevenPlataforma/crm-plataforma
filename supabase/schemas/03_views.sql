@@ -890,6 +890,12 @@ from (
 -- other view declared this way is `init_state`, above. Running as the owner
 -- means row level security does not apply, so the quote visibility rule is
 -- RESTATED in the WHERE clause -- remove it and every rep reads every link.
+--
+-- Never the raw `token` of the permanent link either: that one is read through
+-- `quote_share_link()`. `expires_at` is null for the permanent link, which is
+-- stored as 'infinity' -- a date no screen can print. `is_permanent` is last so
+-- the view can be replaced rather than dropped (a dropped view comes back
+-- granted to `anon`).
 create or replace view public.quote_access_tokens_summary with (security_invoker = off) as
 select
     t.id,
@@ -898,12 +904,13 @@ select
     t.label,
     t.created_by,
     t.created_at,
-    t.expires_at,
+    nullif(t.expires_at, 'infinity'::timestamp with time zone) as expires_at,
     t.revoked_at,
     t.revoked_by,
     t.last_seen_at,
     t.view_count,
-    (t.revoked_at is null and t.expires_at > now()) as is_active
+    (t.revoked_at is null and t.expires_at > now()) as is_active,
+    (t.token is not null) as is_permanent
 from public.quote_access_tokens t
 where public.can_see_quote(t.quote_id);
 

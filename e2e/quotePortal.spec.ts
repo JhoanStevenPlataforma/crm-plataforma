@@ -253,4 +253,65 @@ test.describe("quote portal", () => {
     await expect(page.getByText("¿Incluye la instalación?")).toBeVisible();
     await expect(page.getByText("Carmen Pérez")).toBeVisible();
   });
+
+  test("a declined quotation is renegotiated and sent again, at the same link", async ({
+    page,
+    isMobile,
+    createQuote,
+    issueQuote,
+  }) => {
+    test.skip(isMobile, "the quote screens are desktop screens");
+    const { quote, token } = await issuedQuote({ createQuote, issueQuote });
+
+    // The customer declines version 1.
+    await page.goto(`/#/quote#${token}`);
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "Decline", exact: true }).click();
+    const declineDialog = page.getByRole("dialog");
+    await declineDialog.getByRole("radio", { name: "Price" }).click();
+    await declineDialog
+      .getByRole("button", { name: "Decline quotation" })
+      .click();
+    await expect(
+      page.getByText("Your answer has been recorded", { exact: false }),
+    ).toBeVisible();
+
+    // The rep reopens the SAME quotation, and sends version 2.
+    await signIn(page, "rita@doe.com");
+    await page.goto(`/#/quotes/${quote.id}/show`);
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "Renegotiate" }).click();
+    await page.getByLabel("Reason").fill("Precio revisado con el cliente");
+    await page.getByRole("button", { name: "Confirm" }).click();
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Send", exact: true })
+      .click();
+
+    // The link handed over is the one the customer already holds.
+    await expect(
+      page.getByRole("dialog").getByRole("textbox", { name: "Customer link" }),
+    ).toHaveValue(new RegExp(`#${token}$`));
+    await page.getByRole("button", { name: "Done" }).click();
+
+    // The customer opens it again: version 2, and version 1 still readable.
+    await page.goto(`/#/quote#${token}`);
+    await page.waitForLoadState("networkidle");
+    await page
+      .getByRole("button", { name: "Change version (showing Version 2)" })
+      .click();
+    await expect(
+      page.getByRole("menuitemradio", { name: /Version 1 · Declined/ }),
+    ).toBeVisible();
+    await page.getByRole("menuitemradio", { name: /Version 1/ }).click();
+    await expect(
+      page.getByText(
+        "You are viewing version 1, which was replaced by version 2",
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Accept" })).toBeHidden();
+    expect(page.url()).toContain(`#/quote#${token}`);
+  });
 });

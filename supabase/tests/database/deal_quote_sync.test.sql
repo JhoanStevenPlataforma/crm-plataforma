@@ -4,7 +4,9 @@
 --   * each quotation event moves its deal to the stage the rules name, and the
 --     move is recorded with `source = 'quote'` and the quotation;
 --   * a customer's comment opens the negotiation;
---   * a deal in a closing stage (won, lost) is never reopened;
+--   * a deal in a closing stage (won, lost) is never reopened -- except by the
+--     renegotiation of the quotation whose refusal closed it, when nothing
+--     else has moved the deal since;
 --   * a refusal closes the deal only when no other quotation is still open,
 --     an acceptance always does;
 --   * the deal's amount follows the version sent and is fixed once accepted;
@@ -13,7 +15,7 @@
 --
 begin;
 
-select plan(24);
+select plan(27);
 
 create function public.dq_test_error_of(p_sql text) returns text
     language plpgsql
@@ -189,6 +191,40 @@ select is(
     (select count(*)::int from public.deal_stage_changes sc where sc.quote_id = 9786),
     0,
     'a quotation raised against no deal moves nothing');
+
+--
+-- 5b. Renegotiating a refused quotation (2026-09-29).
+--
+-- The rep reopens 9785 -- the refusal that lost deal 9784 -- at a lower price
+-- and sends it again: the same negotiation going on, so the deal comes back.
+-- 9783 was refused too, but its deal was then WON by another quotation: sending
+-- 9783 again must not touch it.
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"97400000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select public.revise_quote(9785, 'Renegotiating at a lower price');
+update public.quote_lines set unit_price = 1000
+ where version_id = (select v.id from public.quote_versions v
+                     where v.quote_id = 9785 and v.issued_at is null);
+select public.issue_quote_version(9785);
+select public.revise_quote(9783, 'One more try');
+select public.issue_quote_version(9783);
+reset role;
+
+select is(
+    (select jsonb_build_array(d.stage, d.amount) from public.deals d where d.id = 9784),
+    '["proposal-sent", 3000]'::jsonb,
+    'sending the renegotiated quotation reopens the deal its own refusal lost, at the new total');
+select is(
+    (select jsonb_build_object('from', sc.from_stage, 'reason', sc.reason, 'quote_id', sc.quote_id)
+       from public.deal_stage_changes sc where sc.deal_id = 9784
+      order by sc.changed_at desc, sc.id desc limit 1),
+    '{"from": "lost", "reason": "quote:sent", "quote_id": 9785}'::jsonb,
+    'the reopening is recorded as the quotation''s move');
+select is(
+    (select jsonb_build_array(d.stage, d.amount) from public.deals d where d.id = 9783),
+    '["won", 3704]'::jsonb,
+    'a quotation never reopens a deal that something else closed after it');
 
 --
 -- 6. The rep's negotiation, and the expiry (as the sweeper applies it).

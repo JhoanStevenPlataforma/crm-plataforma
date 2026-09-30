@@ -49,22 +49,33 @@ describe("quote data-provider methods", () => {
     answers({ data: { quote_id: 7, token: "ab" } });
 
     await methods.issueQuoteVersion(7, {
-      tokenDays: 7,
-      tokenLabel: "Compras",
       reason: "Cierre de trimestre",
       overrideReason: "Autorizado por direccion",
     });
 
+    // Nothing about the link: the issue hands out the quotation's permanent
+    // one, which has no window and no label.
     expect(calls[0]).toEqual({
       fn: "issue_quote_version",
       args: {
         p_quote_id: 7,
-        p_token_days: 7,
-        p_token_label: "Compras",
         p_override_reason: "Autorizado por direccion",
         p_reason: "Cierre de trimestre",
       },
     });
+  });
+
+  it("reads the permanent link without minting it, unless asked to", async () => {
+    const { calls, methods, answers } = recorder();
+    answers({ data: null });
+
+    expect(await methods.getQuoteShareLink(7)).toBeNull();
+    await methods.getQuoteShareLink(7, { create: true });
+
+    expect(calls).toEqual([
+      { fn: "quote_share_link", args: { p_quote_id: 7, p_create: false } },
+      { fn: "quote_share_link", args: { p_quote_id: 7, p_create: true } },
+    ]);
   });
 
   it("defaults the link window to thirty days rather than leaving it unsaid", async () => {

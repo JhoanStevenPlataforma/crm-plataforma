@@ -5597,17 +5597,139 @@ begin
 end;
 $$;
 
--- Turn the working draft into a document, and mint the link that shows it.
+-- The quotation's permanent link: the one address the customer keeps for EVERY
+-- version (§6.2, as revised on 2026-09-29). Returns the live one, or mints it.
+--
+-- Bound to the QUOTE, not to a version: `version_id` records the document that
+-- was live when it was minted, and the portal resolves what to show from the
+-- quote (`quote_portal_target_version()`). So issuing version 3 needs no new
+-- link, and revising never has to revoke one: what a customer may answer is the
+-- status machine's decision, not the link's.
+--
+-- It keeps its RAW token (`quote_access_tokens.token`), which the per-version
+-- links never did. That is the price of a link the rep can copy again next
+-- week, and it is paid knowingly: the table has no privilege for
+-- `authenticated`, and whoever can read it past that can already read the
+-- quotation itself. No expiry ('infinity'): the document stays readable while
+-- the offer's own date governs whether it can be ANSWERED
+-- (`quote_portal_begin_answer()`). Revoking it is how a leaked link is killed;
+-- the next call mints another.
+--
+-- Trusts its caller to hold the quote's lock and to have checked who may share
+-- it -- `issue_quote_version()` and `quote_share_link()`.
+create or replace function public.ensure_quote_share_link(p_quote_id bigint)
+returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_version_id bigint;
+    v_token      public.quote_access_tokens;
+    v_raw        bytea;
+begin
+    -- A link to a quote that was never issued would open nothing.
+    select v.id into v_version_id
+      from public.quote_versions v
+     where v.quote_id = p_quote_id and v.issued_at is not null
+     order by v.version_number desc
+     limit 1;
+    if not found then
+        raise exception 'quote % has no issued version to link to', p_quote_id
+            using errcode = 'no_data_found', detail = 'quote_not_issued';
+    end if;
+
+    select * into v_token
+      from public.quote_access_tokens t
+     where t.quote_id = p_quote_id
+       and t.token is not null
+       and t.revoked_at is null;
+
+    if not found then
+        v_raw := extensions.gen_random_bytes(32);
+        insert into public.quote_access_tokens
+            (quote_id, version_id, token_hash, token, created_by, expires_at)
+        values (p_quote_id, v_version_id, sha256(v_raw), encode(v_raw, 'hex'),
+                public.current_sale_id(), 'infinity')
+        returning * into v_token;
+    end if;
+
+    return jsonb_build_object(
+        'token_id',     v_token.id,
+        'token',        v_token.token,
+        'expires_at',   null,
+        'is_permanent', true);
+end;
+$$;
+
+-- The permanent link, for the quote's page (`authenticated`).
+--
+-- Returns `{quote_id, version_id, version_number, token_id, token, expires_at,
+-- is_permanent}` -- the version being the one the customer sees by default, the
+-- newest issued -- or NULL when the quote has no live permanent link and
+-- `p_create` is false: a quote issued before links were permanent, or one whose
+-- link was revoked. `p_create` mints it; reading never writes.
+--
+-- Anyone who may issue the quote may read and create its link: the owner, or a
+-- manager (`can_see_quote()`, the rule `issue_quote_version()` restates).
+create or replace function public.quote_share_link(
+    p_quote_id bigint,
+    p_create   boolean default false
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_version public.quote_versions;
+begin
+    -- Locked, so two tabs creating the link at once serialise here instead of
+    -- one of them tripping over `quote_access_tokens_one_permanent`.
+    perform 1 from public.quotes q where q.id = p_quote_id for update;
+    if not found then
+        raise exception 'quote % not found', p_quote_id
+            using errcode = 'no_data_found';
+    end if;
+
+    -- Restated because SECURITY DEFINER bypasses RLS.
+    if not (select public.can_see_quote(p_quote_id)) then
+        raise exception 'no permission to share quote %', p_quote_id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    select * into v_version
+      from public.quote_versions v
+     where v.quote_id = p_quote_id and v.issued_at is not null
+     order by v.version_number desc
+     limit 1;
+
+    if not p_create and (v_version.id is null or not exists (
+        select 1 from public.quote_access_tokens t
+         where t.quote_id = p_quote_id
+           and t.token is not null
+           and t.revoked_at is null)) then
+        return null;
+    end if;
+
+    return jsonb_build_object(
+        'quote_id',       p_quote_id,
+        'version_id',     v_version.id,
+        'version_number', v_version.version_number)
+        || public.ensure_quote_share_link(p_quote_id);
+end;
+$$;
+
+-- Turn the working draft into a document, and make sure the quotation's link
+-- shows it.
 --
 -- Everything here happens in ONE transaction because the halves are not
--- independently meaningful: a version stamped issued with no token is a
--- document nobody can open, and a token pointing at a draft is a link whose
--- contents change while the customer reads them.
+-- independently meaningful: a version stamped issued with no link is a
+-- document nobody can open.
 --
--- Returns the RAW TOKEN, exactly once. Only its sha256 is stored, so there is no
--- second chance to read it -- which is the whole point, and why the UI offers
--- "generate a new link" (`create_quote_link()`) rather than a copy button that
--- cannot work.
+-- The link is the quotation's PERMANENT one (`ensure_quote_share_link()`): the
+-- first issue mints it, every later issue returns the same one, and the
+-- customer who holds it sees the new version from then on. `p_token_days` and
+-- `p_token_label` are kept for the signature only -- a permanent link has no
+-- expiry and needs no label -- because adding or removing a parameter would
+-- overload the function instead of replacing it.
 --
 -- Two written motives, kept apart because they mean different things:
 -- `p_override_reason` is an admin skipping the discount ceiling and lands on
@@ -5746,7 +5868,7 @@ begin
 
     perform set_config('app.quote_version_system_write', '', true);
 
-    v_link := public.mint_quote_token(v_version.id, p_token_days, p_token_label);
+    v_link := public.ensure_quote_share_link(p_quote_id);
 
     perform public.apply_quote_status(
         p_quote_id, 'sent', v_reason, 'internal', v_actor, null, v_override);
@@ -5839,12 +5961,11 @@ begin
      where l.version_id = v_last.id
      order by l."position", l.id;
 
-    -- The link that pointed at the superseded document stops working. Leaving it
-    -- live would let a customer accept a version we have just replaced.
-    update public.quote_access_tokens t
-       set revoked_at = now(), revoked_by = v_actor
-     where t.version_id = v_last.id and t.revoked_at is null;
-
+    -- The links are NOT revoked (they were, until links became the quote's).
+    -- The customer keeps reading the last issued document while this draft is
+    -- worked on, and cannot answer it: the quote is `draft` now, and the status
+    -- machine has no customer edge out of `draft`. Issuing the draft supersedes
+    -- that document and the same link shows the new one.
     return v_new;
 end;
 $$;
@@ -5853,10 +5974,11 @@ $$;
 -- currently being offered. Returns the raw token once, exactly like the issue;
 -- older links keep working until somebody revokes them.
 --
--- Refused while a revision is open: `revise_quote()` revoked the links to the
--- version it is replacing precisely so nobody accepts it, and a fresh link would
--- reopen that door. Refused for an elapsed offer too, because the expiry clamp
--- would hand back a link that is dead on arrival.
+-- Since links became the quote's (2026-09-29) the screens no longer offer this:
+-- the quotation has ONE permanent link (`quote_share_link()`). Kept for the
+-- callers that mint an extra, expiring link on purpose. Refused while a
+-- revision is open and for an elapsed offer, because the expiry clamp would
+-- hand back a link that is dead on arrival.
 create or replace function public.create_quote_link(
     p_quote_id    bigint,
     p_token_days  integer default 30,
@@ -6306,6 +6428,29 @@ begin
 end;
 $$;
 
+-- Which issued version a portal request is about (2026-09-29).
+--
+-- A link belongs to the QUOTE, so the page names the version it shows: the
+-- issued one with `p_version_number`, or -- when that is null, or names no
+-- issued version -- the newest issued one, which is what the customer is being
+-- offered. A draft is never a target: a number only a draft carries falls back
+-- to the live document, and says nothing about the draft existing.
+create or replace function public.quote_portal_target_version(
+    p_quote_id       bigint,
+    p_version_number integer
+) returns bigint
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select v.id
+      from public.quote_versions v
+     where v.quote_id = p_quote_id
+       and v.issued_at is not null
+     order by (v.version_number = p_version_number) desc nulls last,
+              v.version_number desc
+     limit 1;
+$$;
+
 -- The payload: one issued version, as the customer may see it (§6.3).
 --
 -- EVERY KEY BUILT HERE IS A PUBLIC DISCLOSURE. There is no row level security
@@ -6449,6 +6594,26 @@ as $$
         'slides', coalesce(v.slides, '[]'::jsonb),
         -- The default template: the designed presentation the build ships.
         'standard_presentation', v.standard_presentation,
+        -- Every document this quotation has been, newest first: what the
+        -- portal's version selector offers (2026-09-29). Issued versions ONLY
+        -- -- a draft is not a document, and the list must not even say that
+        -- one exists. Per version, what the customer needs to tell them apart:
+        -- the number, the day it was sent, whether it is the one on offer and
+        -- how it was answered. No totals: a version's figure is read by
+        -- opening it.
+        'versions', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                       'number',     o.version_number,
+                       'issued_at',  o.issued_at,
+                       'is_current', o.superseded_at is null,
+                       'outcome',    case
+                                         when o.accepted_at is not null then 'accepted'
+                                         when o.rejected_at is not null then 'rejected'
+                                     end)
+                   order by o.version_number desc)
+              from public.quote_versions o
+             where o.quote_id = q.id
+               and o.issued_at is not null), '[]'::jsonb),
         'actions', jsonb_build_object(
             'can_accept', answerable.is_answerable and exists (
                 select 1 from public.quote_transitions t
@@ -6460,12 +6625,13 @@ as $$
                  where t.from_status_key = q.status_key
                    and t.to_status_key = 'rejected'
                    and t.allowed_actor in ('customer', 'any')),
-            -- The thread stays open while the negotiation does: the live
-            -- version of a quote whose status is not terminal. Read off
-            -- `quote_statuses.is_terminal`, never a list of statuses, and read
-            -- HERE by `quote_portal_comment()` too, so the form and the refusal
-            -- are one predicate.
-            'can_comment', v.superseded_at is null and exists (
+            -- The thread stays open while the negotiation does: a quote whose
+            -- status is not terminal. Read off `quote_statuses.is_terminal`,
+            -- never a list of statuses, and read HERE by
+            -- `quote_portal_comment()` too, so the form and the refusal are one
+            -- predicate. The thread is the QUOTE's, so reading an older version
+            -- does not close it (it did while a link was a version's).
+            'can_comment', exists (
                 select 1 from public.quote_statuses st
                  where st.key = q.status_key
                    and not st.is_terminal)),
@@ -6487,17 +6653,22 @@ as $$
       ) doc;
 $$;
 
--- The customer opens the link.
+-- The customer opens the link, on the version they chose.
+--
+-- `p_version_number` is the portal's version selector: null (the link as
+-- sent) opens the document on offer, the newest issued one
+-- (`quote_portal_target_version()`).
 --
 -- Every successful open is one `viewed` event and one more on the token's
 -- `view_count`. The first look at the LIVE document also moves the quote to
 -- `viewed`, when the status machine has that edge for the customer from where
--- the quote stands. Opening a superseded version moves nothing: an old link is
--- not news about the document the rep is negotiating now.
+-- the quote stands. Opening a superseded version moves nothing: reading an
+-- older document is not news about the one the rep is negotiating now.
 create or replace function public.quote_portal_view(
-    p_token_hash bytea,
-    p_ip_address inet default null,
-    p_user_agent text default null
+    p_token_hash     bytea,
+    p_ip_address     inet    default null,
+    p_user_agent     text    default null,
+    p_version_number integer default null
 ) returns jsonb
     language plpgsql security definer
     set search_path to ''
@@ -6515,7 +6686,7 @@ begin
     select * into v_quote from public.quotes q
      where q.id = (v_access ->> 'quote_id')::bigint;
     select * into v_version from public.quote_versions v
-     where v.id = (v_access ->> 'version_id')::bigint;
+     where v.id = public.quote_portal_target_version(v_quote.id, p_version_number);
 
     update public.quote_access_tokens t
        set view_count = t.view_count + 1,
@@ -6556,6 +6727,13 @@ $$;
 --      rejected once, `quote_versions_one_outcome`), not past its validity
 --      (`quote_validity_elapsed`, the key the issue already uses).
 --
+-- THE ANSWER NAMES ITS VERSION (`p_version_number`, the one on the customer's
+-- screen). A link is the quote's, so without it a customer reading version 2
+-- while the rep issues version 3 would accept a document they never saw; with
+-- it, that click is refused as superseded. A number no issued version carries
+-- is refused the same way. Null -- a page from before the selector -- answers
+-- the version the link was minted for, which is what that page showed.
+--
 -- The status machine is the fourth check and the callers make it, through
 -- `apply_quote_status()`: that is where a second click lands, so idempotency
 -- comes from the state machine rather than from a mechanism that could
@@ -6566,7 +6744,8 @@ create or replace function public.quote_portal_begin_answer(
     p_email          text,
     p_party_required boolean,
     p_ip_address     inet,
-    p_user_agent     text
+    p_user_agent     text,
+    p_version_number integer default null
 ) returns jsonb
     language plpgsql security definer
     set search_path to ''
@@ -6602,8 +6781,20 @@ begin
         return v_access;
     end if;
 
-    select * into v_version from public.quote_versions v
-     where v.id = (v_access ->> 'version_id')::bigint;
+    if p_version_number is null then
+        select * into v_version from public.quote_versions v
+         where v.id = (v_access ->> 'version_id')::bigint;
+    else
+        select * into v_version from public.quote_versions v
+         where v.quote_id = (v_access ->> 'quote_id')::bigint
+           and v.version_number = p_version_number
+           and v.issued_at is not null;
+        if not found then
+            raise exception 'quote % has no issued version %',
+                    v_access ->> 'quote_id', p_version_number
+                using errcode = 'check_violation', detail = 'quote_version_superseded';
+        end if;
+    end if;
 
     if v_version.superseded_at is not null then
         raise exception 'quote version % was superseded by a newer one', v_version.id
@@ -6621,11 +6812,12 @@ begin
             using errcode = 'check_violation', detail = 'quote_validity_elapsed';
     end if;
 
-    return v_access || jsonb_build_object('name', v_name, 'email', v_email);
+    return v_access || jsonb_build_object(
+        'version_id', v_version.id, 'name', v_name, 'email', v_email);
 end;
 $$;
 
--- The customer accepts the version the link opens.
+-- The customer accepts the version on their screen (`p_version_number`).
 --
 -- One transaction writes what §6.4 lists: the status move (through
 -- `apply_quote_status()`, as 'customer'), the history row it triggers, the
@@ -6633,11 +6825,12 @@ $$;
 -- the only way past the freeze -- and the `accepted` portal event with the
 -- address and the browser. The owner's notification is Phase 11.
 create or replace function public.quote_portal_accept(
-    p_token_hash bytea,
-    p_name       text,
-    p_email      text,
-    p_ip_address inet default null,
-    p_user_agent text default null
+    p_token_hash     bytea,
+    p_name           text,
+    p_email          text,
+    p_ip_address     inet    default null,
+    p_user_agent     text    default null,
+    p_version_number integer default null
 ) returns jsonb
     language plpgsql security definer
     set search_path to ''
@@ -6647,7 +6840,8 @@ declare
     v_version public.quote_versions;
 begin
     v_answer := public.quote_portal_begin_answer(
-        p_token_hash, p_name, p_email, true, p_ip_address, p_user_agent);
+        p_token_hash, p_name, p_email, true, p_ip_address, p_user_agent,
+        p_version_number);
     if v_answer ? 'error' then
         return v_answer;
     end if;
@@ -6690,20 +6884,21 @@ begin
 end;
 $$;
 
--- The customer declines the version the link opens.
+-- The customer declines the version on their screen (`p_version_number`).
 --
 -- The same shape as accepting, with a reason instead of a signature: the code
 -- is required, so "why we lost it" is reportable; the free text, the name and
 -- the email are optional, because a customer asked to fill in a form to say no
 -- mostly does not say anything at all.
 create or replace function public.quote_portal_reject(
-    p_token_hash  bytea,
-    p_reason_code text,
-    p_reason      text default null,
-    p_name        text default null,
-    p_email       text default null,
-    p_ip_address  inet default null,
-    p_user_agent  text default null
+    p_token_hash     bytea,
+    p_reason_code    text,
+    p_reason         text    default null,
+    p_name           text    default null,
+    p_email          text    default null,
+    p_ip_address     inet    default null,
+    p_user_agent     text    default null,
+    p_version_number integer default null
 ) returns jsonb
     language plpgsql security definer
     set search_path to ''
@@ -6732,7 +6927,8 @@ begin
     end if;
 
     v_answer := public.quote_portal_begin_answer(
-        p_token_hash, p_name, p_email, false, p_ip_address, p_user_agent);
+        p_token_hash, p_name, p_email, false, p_ip_address, p_user_agent,
+        p_version_number);
     if v_answer ? 'error' then
         return v_answer;
     end if;
@@ -6768,7 +6964,8 @@ $$;
 --
 -- The comment is `customer`-authored and `shared` -- the only shape
 -- `quote_comments_author` lets a customer comment take -- signed with the name
--- the customer typed, and filed under the version the link opens. In the order
+-- the customer typed, and filed under the version on offer (the newest issued:
+-- the thread is the quote's, whichever version the customer reads). In the order
 -- the answers use, under the quote's lock:
 --
 --   1. the input: a body, a name to sign it with (the table requires one), an
@@ -6846,7 +7043,8 @@ begin
     v_token_id := (v_access ->> 'token_id')::bigint;
 
     select * into v_version from public.quote_versions v
-     where v.id = (v_access ->> 'version_id')::bigint;
+     where v.id = public.quote_portal_target_version(
+                      (v_access ->> 'quote_id')::bigint, null);
 
     if not coalesce((public.quote_portal_document(v_version.id)
                        -> 'actions' ->> 'can_comment')::boolean, false) then
@@ -6899,14 +7097,22 @@ $$;
 -- A dead link gets the answer `quote_portal_resolve()` gives it, without the
 -- trace: the page stops asking and says so, and it is a reload -- a real open
 -- -- that records the attempt as `token_invalid`.
-create or replace function public.quote_portal_version(p_token_hash bytea)
-returns jsonb
+--
+-- `p_version_number` is the version the page shows, exactly as the open takes
+-- it. The payload lists every version, so a new issue moves the etag of an
+-- older one too, and the page learns there is a newer document.
+create or replace function public.quote_portal_version(
+    p_token_hash     bytea,
+    p_version_number integer default null
+) returns jsonb
     language sql stable security definer
     set search_path to ''
 as $$
     select coalesce(
         (select jsonb_build_object(
-                    'etag', public.quote_portal_document(t.version_id) ->> 'etag')
+                    'etag', public.quote_portal_document(
+                                public.quote_portal_target_version(
+                                    t.quote_id, p_version_number)) ->> 'etag')
            from public.quote_access_tokens t
           where t.token_hash = p_token_hash
             and t.revoked_at is null
@@ -7461,6 +7667,23 @@ begin
     v_is_closed := exists (
         select 1 from public.deal_quote_stage_rules r
          where r.closes and r.to_stage = v_deal.stage);
+
+    -- A renegotiation reopens what its own refusal closed (2026-09-29). When
+    -- the deal's LAST move was this quotation closing it, and nobody has moved
+    -- the deal since, sending the renegotiated version is the same negotiation
+    -- going on -- not a quotation dragging a closed deal back. Any later move,
+    -- by a person or by another quotation, keeps the deal closed.
+    if v_is_closed and p_trigger = 'sent' then
+        v_is_closed := not exists (
+            select 1
+              from (select c.source, c.quote_id
+                      from public.deal_stage_changes c
+                     where c.deal_id = v_deal.id
+                     order by c.changed_at desc, c.id desc
+                     limit 1) last_move
+             where last_move.source = 'quote'
+               and last_move.quote_id = p_quote_id);
+    end if;
 
     -- The amount: the total of the version the customer was sent, and fixed
     -- once a quotation of this deal was accepted (a later proposal on the same

@@ -37,19 +37,35 @@ describe("createQuotePortalClient", () => {
     );
     expect(url).not.toContain(PORTAL_TOKEN);
     expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body))).toEqual({ token: PORTAL_TOKEN });
+    // No version named: the link as sent, the version on offer.
+    expect(JSON.parse(String(init.body))).toEqual({
+      token: PORTAL_TOKEN,
+      version: null,
+    });
     expect(init.credentials).toBe("omit");
     expect(new Headers(init.headers).has("authorization")).toBe(false);
   });
 
-  it("sends an answer under the names the edge function reads", async () => {
+  it("opens the version the customer chose, still by the same link", async () => {
     const { client, received } = serverAnswering(200, { data: portalPayload });
 
-    await client.accept(PORTAL_TOKEN, {
+    await client.view(PORTAL_TOKEN, 1);
+    await client.version(PORTAL_TOKEN, 1).catch(() => null);
+
+    expect(received.map(({ init }) => JSON.parse(String(init.body)))).toEqual([
+      { token: PORTAL_TOKEN, version: 1 },
+      { token: PORTAL_TOKEN, version: 1 },
+    ]);
+  });
+
+  it("sends an answer under the names the edge function reads, naming the version on screen", async () => {
+    const { client, received } = serverAnswering(200, { data: portalPayload });
+
+    await client.accept(PORTAL_TOKEN, 2, {
       name: "Lucía Gómez",
       email: "lucia@acme.example",
     });
-    await client.reject(PORTAL_TOKEN, {
+    await client.reject(PORTAL_TOKEN, 2, {
       reason_code: "price",
       reason: null,
       name: null,
@@ -67,9 +83,15 @@ describe("createQuotePortalClient", () => {
       "comment",
     ]);
     expect(received.map(({ init }) => JSON.parse(String(init.body)))).toEqual([
-      { token: PORTAL_TOKEN, name: "Lucía Gómez", email: "lucia@acme.example" },
       {
         token: PORTAL_TOKEN,
+        version: 2,
+        name: "Lucía Gómez",
+        email: "lucia@acme.example",
+      },
+      {
+        token: PORTAL_TOKEN,
+        version: 2,
         reason_code: "price",
         reason: null,
         name: null,
@@ -96,6 +118,7 @@ describe("createQuotePortalClient", () => {
     );
     expect(JSON.parse(String(received[0].init.body))).toEqual({
       token: PORTAL_TOKEN,
+      version: null,
     });
     await expect(dead.client.version(PORTAL_TOKEN)).rejects.toMatchObject({
       key: "quote_link_invalid",
@@ -108,7 +131,10 @@ describe("createQuotePortalClient", () => {
     });
 
     await expect(
-      client.accept(PORTAL_TOKEN, { name: "Lucía", email: "l@acme.example" }),
+      client.accept(PORTAL_TOKEN, 1, {
+        name: "Lucía",
+        email: "l@acme.example",
+      }),
     ).rejects.toMatchObject({ key: "quote_version_superseded" });
   });
 

@@ -34,12 +34,12 @@ const MACHINE_PAGE = { page: 1, perPage: 200 };
  * What a move is, once the toolbar has read the graph.
  *
  * `issue` and `revise` are not transitions a client may make: both are RPCs
- * that do several things in one transaction — freeze a version and mint a
- * token, or clone a document and revoke its links. They appear in
+ * that do several things in one transaction — freeze a version and hand out the
+ * quotation's link, or clone a document into a new draft. They appear in
  * `quote_transitions` all the same, because the STATUS part of what they do
  * still has to be legal, and that is what makes them visible here.
  */
-type MoveKind = "issue" | "revise" | "transition";
+type MoveKind = "issue" | "revise" | "renegotiate" | "transition";
 
 const kindOf = (edge: QuoteTransition, hasOpenDraft: boolean): MoveKind => {
   if (edge.to_status_key === "sent") return "issue";
@@ -47,9 +47,18 @@ const kindOf = (edge: QuoteTransition, hasOpenDraft: boolean): MoveKind => {
   // draft is already open (`quote_draft_exists`), which is exactly the case
   // where `-> draft` means "send this back for edits" instead of "open a new
   // version of the document the customer has".
-  if (edge.to_status_key === "draft" && !hasOpenDraft) return "revise";
+  if (edge.to_status_key === "draft" && !hasOpenDraft) {
+    // The same RPC, named for what it is after a refusal: the negotiation of
+    // THIS quotation goes on — same number, same link, the refused version
+    // kept as it was answered — rather than a new quotation being started.
+    return edge.from_status_key === "rejected" ? "renegotiate" : "revise";
+  }
   return "transition";
 };
+
+/** `revise_quote()` backs both: they differ in wording, not in effect. */
+const isRevision = (kind: MoveKind | null) =>
+  kind === "revise" || kind === "renegotiate";
 
 /**
  * The moves a quotation offers, read off the status machine rather than written
@@ -133,13 +142,11 @@ export const QuoteActions = () => {
   const { mutate: issue, isPending: isIssuePending } = useMutation({
     mutationFn: (input: IssueQuoteInput) =>
       dataProvider.issueQuoteVersion(quote!.id, {
-        tokenDays: input.tokenDays,
-        tokenLabel: input.tokenLabel,
         reason: input.reason,
         overrideReason: input.overrideReason,
       }),
-    // The token is in this response and nowhere else, so it is put in front of
-    // the user before anything else happens.
+    // The customer link is put in front of the rep straight away: it is the
+    // quotation's permanent one, now showing this version.
     onSuccess: (minted) => {
       setLink(minted);
       onMoved();
@@ -185,7 +192,7 @@ export const QuoteActions = () => {
     }
     // A move that needs a reason asks for it; one that does not is a click.
     // Which is which comes from the row, never from this file.
-    if (kind === "revise" || edge.requires_reason) {
+    if (isRevision(kind) || edge.requires_reason) {
       setPendingMove(edge);
       return;
     }
@@ -242,15 +249,17 @@ export const QuoteActions = () => {
             : labelOf(pendingMove, pendingKind)
         }
         description={translate(
-          pendingKind === "revise"
-            ? "resources.quotes.dialog.revise_description"
-            : "resources.quotes.dialog.transition_description",
+          pendingKind === "renegotiate"
+            ? "resources.quotes.dialog.renegotiate_description"
+            : pendingKind === "revise"
+              ? "resources.quotes.dialog.revise_description"
+              : "resources.quotes.dialog.transition_description",
           { number: quote.quote_number },
         )}
         isPending={isPending}
         onConfirm={(reason) => {
           if (pendingMove == null) return;
-          if (pendingKind === "revise") {
+          if (isRevision(pendingKind)) {
             revise(reason);
             return;
           }
@@ -267,7 +276,6 @@ export const QuoteActions = () => {
         open={isIssuing}
         quoteNumber={quote.quote_number}
         versionNumber={version?.version_number}
-        validUntil={version?.valid_until}
         gate={gate}
         isGatePending={isGatePending}
         canOverride={(identity?.role as CrmRole | undefined) === "admin"}

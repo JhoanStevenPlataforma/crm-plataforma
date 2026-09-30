@@ -6,9 +6,13 @@
 --     and deleted comments, the deal, the team's email, the email a customer
 --     signed a comment with, the customer's address, the token and its hash;
 --   * the thread is the shared comments, oldest first, and stays open while the
---     live version is negotiable;
+--     quote is negotiable, whichever version the customer reads;
 --   * opening the live document records a view and moves `sent` to `viewed`
 --     once; opening a superseded version moves nothing;
+--   * a link is the QUOTE's (2026-09-29): it opens the version on offer, lists
+--     every issued version and never a draft, opens an older one on request,
+--     and an answer names the version on screen, so a superseded one is
+--     refused; a refused quotation reopened for renegotiation keeps its link;
 --   * accepting and declining write the version, the status and both trails in
 --     one transaction, are signed as the input rules say, and a version is
 --     answered once;
@@ -23,7 +27,7 @@
 --
 begin;
 
-select plan(40);
+select plan(47);
 
 create function public.quotes_test_error_of(p_sql text) returns text
     language plpgsql
@@ -77,8 +81,9 @@ values (9801, 'SECRET-DEAL-NAME', 'opportunity', 1000, 9801, 9801, 0);
 insert into public.products (id, sku, name, currency, list_price, internal_notes)
 values (9801, 'PORTAL-1', 'Annual support', 'COP', 150, 'SECRET-PRODUCT-NOTE');
 
--- 9801 is accepted, 9802 declined, 9803 revised (its first version is then
--- opened through a link minted after the fact), 9804's link is revoked, 9805's
+-- 9801 is accepted, 9802 declined and then renegotiated, 9803 revised (its
+-- first version is then opened through the version selector, and through a
+-- per-version link minted after the fact), 9804's link is revoked, 9805's
 -- lapses, 9806's is hammered, and 9807 is never issued.
 insert into public.quotes (id, company_id, contact_id, deal_id, sales_id, currency, valid_until, title, internal_notes) values
   (9801, 9801, 9801, 9801, 9801, 'COP', current_date + 10, 'Renewal 2027', 'SECRET-QUOTE-NOTE'),
@@ -119,8 +124,8 @@ select public.revise_quote(9803, 'Scope change');
 select public.issue_quote_version(9803);
 reset role;
 
--- The only way to hold a LIVE link to a superseded version: `revise_quote()`
--- revoked the old ones, so this one is minted afterwards, as the service role.
+-- A per-version link to version 1, as every link was before links became the
+-- quote's -- minted afterwards, as the service role.
 select set_config('portal_test.superseded',
     public.mint_quote_token(
         (select id from public.quote_versions where quote_id = 9803 and version_number = 1))::text,
@@ -151,7 +156,7 @@ reset role;
 --
 select is(
     public.quotes_test_keys_of(current_setting('portal_test.view')::jsonb),
-    'acceptance,actions,branding,comments,etag,lines,parties,quote,slides,standard_presentation,terms,totals',
+    'acceptance,actions,branding,comments,etag,lines,parties,quote,slides,standard_presentation,terms,totals,versions',
     'the payload has exactly the groups of the document, and the etag of them');
 
 select is(
@@ -389,36 +394,55 @@ select is(
     'a declined version cannot then be accepted: that takes a revision');
 
 --
--- 5. A superseded version.
+-- 5. One link, every version: the selector.
 --
+-- 9803's link was minted with version 1 and handed back again by the issue of
+-- version 2. The customer asks for version 1.
 select set_config('portal_test.superseded_view',
-    public.quote_portal_view(public.quotes_test_hash_of('portal_test.superseded'), null, null)::text,
+    public.quote_portal_view(public.quotes_test_hash_of('portal_test.revised'), null, null, 1)::text,
     true);
 
 reset role;
 
 select is(
-    (select concat_ws('/', v -> 'quote' ->> 'is_superseded', v -> 'actions' ->> 'can_accept',
-                      v -> 'actions' ->> 'can_reject', v -> 'actions' ->> 'can_comment')
+    (select concat_ws('/', v -> 'quote' ->> 'version_number', v -> 'quote' ->> 'is_superseded',
+                      v -> 'actions' ->> 'can_accept', v -> 'actions' ->> 'can_reject',
+                      v -> 'actions' ->> 'can_comment')
        from (select current_setting('portal_test.superseded_view')::jsonb as v) p),
-    'true/false/false/false',
-    'an old version still opens, says it was superseded, and offers no answer and no thread');
+    '1/true/false/false/true',
+    'an older version opens on request, says it was superseded, offers no answer, and the thread stays open');
 
 select is(
     (select q.status_key || '/' || (select count(*) from public.quote_status_changes sc
                                      where sc.quote_id = 9803 and sc.to_status = 'viewed')
        from public.quotes q where q.id = 9803),
     'sent/0',
-    'opening it moves nothing: an old link is not news about the document in play');
+    'opening it moves nothing: an older document is not news about the one in play');
+
+select is(
+    (select public.quotes_test_keys_of(v -> 'versions' -> 0) || ' | '
+            || string_agg(concat_ws(':', x ->> 'number', x ->> 'is_current'), ',' order by n)
+       from (select current_setting('portal_test.superseded_view')::jsonb as v) p,
+            jsonb_array_elements(v -> 'versions') with ordinality as t(x, n)
+      group by v),
+    'is_current,issued_at,number,outcome | 2:true,1:false',
+    'the selector lists every issued version, newest first, and which one is on offer');
 
 set local role service_role;
+
+select is(
+    public.quotes_test_error_of(format(
+        $$select public.quote_portal_accept(%L::bytea, 'Lucia Gomez', 'lucia@portal.test', null, null, 1)$$,
+        public.quotes_test_hash_of('portal_test.revised'))),
+    '23514:quote_version_superseded',
+    'the answer names the version on screen, and a superseded one cannot be accepted');
 
 select is(
     public.quotes_test_error_of(format(
         $$select public.quote_portal_accept(%L::bytea, 'Lucia Gomez', 'lucia@portal.test')$$,
         public.quotes_test_hash_of('portal_test.superseded'))),
     '23514:quote_version_superseded',
-    'a superseded version cannot be accepted');
+    'a page from before the selector answers the version its link was minted for, which is superseded');
 
 reset role;
 
@@ -429,6 +453,67 @@ select is(
        from public.quote_versions v where v.quote_id = 9803 and v.version_number = 1),
     '0/true',
     'and the refusal left nothing behind');
+
+set local role service_role;
+
+-- The customer writes while reading version 1: the thread is the quote's, so
+-- it is filed under the document on offer.
+select public.quote_portal_comment(public.quotes_test_hash_of('portal_test.superseded'),
+    'Why was version 1 cheaper?', 'Lucia Gomez');
+
+select is(
+    (select concat_ws('/', v -> 'quote' ->> 'version_number', v -> 'quote' ->> 'is_superseded')
+       from (select public.quote_portal_view(
+                        public.quotes_test_hash_of('portal_test.superseded'), null, null) as v) p),
+    '2/false',
+    'an older per-version link now opens the version on offer');
+
+reset role;
+
+select is(
+    (select v.version_number::int from public.quote_comments c
+       join public.quote_versions v on v.id = c.version_id
+      where c.quote_id = 9803 and c.body = 'Why was version 1 cheaper?'),
+    2,
+    'a comment written from any version is filed under the one on offer');
+
+-- 9802 was declined. The owner reopens it to renegotiate: a revision of the
+-- same quotation, not a new one.
+set local role authenticated;
+select set_config('request.jwt.claims',
+    '{"sub":"98010000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select public.revise_quote(9802, 'The customer will reconsider at a lower price');
+reset role;
+
+set local role service_role;
+select set_config('portal_test.renegotiating',
+    public.quote_portal_view(public.quotes_test_hash_of('portal_test.reject'), null, null, 2)::text,
+    true);
+reset role;
+
+select is(
+    (select concat_ws('/', v -> 'quote' ->> 'version_number', v -> 'quote' ->> 'status',
+                      jsonb_array_length(v -> 'versions'), v -> 'versions' -> 0 ->> 'outcome')
+       from (select current_setting('portal_test.renegotiating')::jsonb as v) p),
+    '1/draft/1/rejected',
+    'while a new version is drafted the link still opens the declined one, and the draft is neither listed nor opened');
+
+select is(
+    (select concat_ws('/', v -> 'actions' ->> 'can_accept', v -> 'actions' ->> 'can_reject',
+                      v -> 'actions' ->> 'can_comment')
+       from (select current_setting('portal_test.renegotiating')::jsonb as v) p),
+    'false/false/true',
+    'a renegotiation reopens the conversation but offers nothing to answer until the new version is sent');
+
+-- And the other way round: the link minted with 9803's version 1 answers the
+-- version on screen, version 2.
+set local role service_role;
+select is(
+    public.quote_portal_accept(public.quotes_test_hash_of('portal_test.revised'),
+        'Lucia Gomez', 'lucia@portal.test', null, null, 2) -> 'quote' ->> 'status',
+    'accepted',
+    'a link minted with an older version accepts the version on the customer''s screen');
+reset role;
 
 --
 -- 6. Dead links.

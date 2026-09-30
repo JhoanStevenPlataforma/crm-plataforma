@@ -714,6 +714,7 @@ export const englishCrmMessages = {
       transitions: {
         issue: "Send",
         revise: "Revise",
+        renegotiate: "Renegotiate",
         pending_approval: "Request approval",
         approved: "Approve",
         draft: "Send back",
@@ -727,12 +728,14 @@ export const englishCrmMessages = {
         transition_description:
           "Quote %{number}. The reason is recorded with the move and cannot be edited afterwards.",
         revise_description:
-          "Quote %{number}. The issued document stays exactly as the customer saw it; this opens a new version to work on, and the links to the previous one stop working.",
+          "Quote %{number}. The issued document stays exactly as the customer saw it; this opens a new version to work on. The customer keeps the same link, which shows the previous version until you send the new one.",
+        renegotiate_description:
+          "Quote %{number} was declined. Renegotiating keeps the same quotation, number and customer link: the declined version stays on record as it was answered, and a new version opens to work on. The reason is recorded with the move.",
       },
       issue: {
         title: "Send quote %{number}",
         description:
-          "Version %{version} is frozen as it stands and a link is created for the customer. An issued document can never be edited: changing it later means a new version.",
+          "Version %{version} is frozen as it stands. The customer keeps the quotation's link and will see this version when they open it. An issued document can never be edited: changing it later means a new version.",
         gate_checking: "Reading the discount rule…",
         gate_no_rule:
           "This document grants %{percent}% discount. No discount ceiling is in force.",
@@ -750,24 +753,16 @@ export const englishCrmMessages = {
         override_placeholder: "Why is this quote sent past the limit?",
         override_hint:
           "Administrators only. Recorded permanently and only when the ceiling was actually exceeded.",
-        token_days: "Link valid (days)",
-        token_days_invalid: "The link must stay valid for at least 1 day.",
-        token_label: "For whom",
-        token_label_placeholder: "Purchasing, Ms. Lopez…",
-        token_clamped:
-          "A link never outlives the offer: it will be cut off after %{date}.",
         confirm: "Send",
       },
       link: {
-        close_uncopied:
-          "You have not copied the link yet. It is shown only this once: if you close now you will have to generate a new one.",
-        keep_open: "Go back",
-        close_anyway: "Close without copying",
-        title: "Link to version %{version}",
+        title: "Customer link",
         description:
-          "This link is shown once and is stored nowhere: only its fingerprint is kept. Copy it now — afterwards the only way is to create a new one. Opening it yourself counts as the customer's view.",
+          "This is the quotation's link: the same for every version, and it does not expire. The customer will see version %{version} when they open it. You can copy it again at any time from the quote's page.",
         url: "Customer link",
         copy: "Copy the link",
+        open: "Open the link",
+        open_counts: "opening it yourself counts as a customer view",
         expires: "Stops working on %{date}",
         done: "Done",
       },
@@ -781,10 +776,26 @@ export const englishCrmMessages = {
         retry: "Try again",
         live: {
           link_closed:
-            "This link is no longer active: the quotation may have been revised or withdrawn. What you see below is the copy you were reading; ask the person who sent it for a new link.",
+            "This link is no longer active: the quotation may have been withdrawn. What you see below is the copy you were reading; ask the person who sent it for a new link.",
           check_failed:
             "We can't check this quotation for updates right now, so what you see may be out of date.",
           check_now: "Check now",
+        },
+        versions: {
+          title: "Versions of this quotation",
+          choose: "Change version (showing %{version})",
+          current: "Current",
+          superseded: "Replaced",
+          accepted: "Accepted",
+          rejected: "Declined",
+          issued: "Sent on %{date}",
+          older_notice:
+            "You are viewing version %{shown}, which was replaced by version %{current}. It can no longer be answered.",
+          show_current: "View version %{number}",
+          revising:
+            "%{name} is preparing a new version of this quotation. You will find it at this same link.",
+          revising_anonymous:
+            "A new version of this quotation is being prepared. You will find it at this same link.",
         },
         accepted_notice:
           "Thank you. Your acceptance has been recorded, and the quotation below now carries it.",
@@ -995,11 +1006,17 @@ export const englishCrmMessages = {
         load_error: "The comments of this quote could not be loaded",
       },
       links: {
-        title: "Customer links",
-        new: "New link",
-        revision_open:
-          "A revision is open: issue it before sharing a new link.",
-        empty: "No link has been created for this quote yet",
+        title: "Customer link",
+        permanent_hint: "One link for every version: share it once.",
+        customer_sees: "The customer sees version %{version}.",
+        draft_pending:
+          "Version %{version} is being prepared: they will see it once you send it.",
+        none: "This quotation has no customer link yet.",
+        create: "Create customer link",
+        revoke_hint:
+          "Stops this link from working. You can then create a new one.",
+        others: "Other links",
+        permanent: "Customer link (permanent)",
         load_error: "The links of this quote could not be loaded",
         unlabelled: "Link to version %{version}",
         active: "Active",
