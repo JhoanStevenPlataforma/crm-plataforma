@@ -52,8 +52,10 @@ delete from public.team_budgets;
 delete from public.team_members;
 delete from public.teams;
 delete from public.tags;
-delete from auth.users;
+-- sales first: each row points at its auth user, so deleting the users first
+-- fails as soon as the CRM has been initialised through the signup page.
 delete from public.sales;
+delete from auth.users;
 
 --
 -- 1. Users. The `on_auth_user_created` trigger writes the matching
