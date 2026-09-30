@@ -1,0 +1,18 @@
+# CRM-specific settings for the self-hosted Supabase edge functions.
+#
+# deploy.sh copies this file into the Supabase docker project (~/supabase) and
+# adds it to COMPOSE_FILE, so the ${...} values below are read from that
+# project's .env, the one Supabase's setup.sh generated. Nothing secret lives
+# here.
+services:
+  functions:
+    environment:
+      # _shared/authentication.ts builds a client with this key and checks the
+      # issuer of every user token against SB_JWT_ISSUER.
+      SB_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+      SB_JWT_ISSUER: ${API_EXTERNAL_URL}
+      CORS_ALLOWED_ORIGIN: ${SITE_URL}
+      CRM_BASE_URL: ${SITE_URL}
+      # Disabled by the security audit (AUD-001); see mcp/index.ts.
+      MCP_ENABLED: "false"
+      VITE_ATTACHMENTS_BUCKET: attachments
