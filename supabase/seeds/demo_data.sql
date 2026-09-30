@@ -10,14 +10,14 @@
 -- always land on an initialised CRM with six users, and `onboarding.spec.ts`
 -- (the first-user signup flow) tests exactly the opposite state.
 --
--- Every user's password is `Steven16`.
+-- Every user's password is `Plataforma123!`.
 --
---   ana.admin@hermes.test       admin    Ana Duarte
---   marcos.manager@hermes.test  manager  Marcos Ibanez
---   lucia.rep@hermes.test       rep      Lucia Fernandez
---   diego.rep@hermes.test       rep      Diego Salazar
---   sofia.rep@hermes.test       rep      Sofia Moreno
---   javier.rep@hermes.test      rep      Javier Ortiz
+--   admin@plataforma.com        admin    Ana Duarte
+--   gerente@plataforma.com      manager  Marcos Ibanez
+--   comercial1@plataforma.com   rep      Lucia Fernandez
+--   comercial2@plataforma.com   rep      Diego Salazar
+--   comercial3@plataforma.com   rep      Sofia Moreno
+--   comercial4@plataforma.com   rep      Javier Ortiz
 --
 -- The deal set is built around the completed-task rule: some deals have work
 -- finished since they entered their current stage and can be dragged to the
@@ -72,18 +72,18 @@ select
     'authenticated',
     'authenticated',
     u.email,
-    extensions.crypt('Steven16', extensions.gen_salt('bf')),
+    extensions.crypt('Plataforma123!', extensions.gen_salt('bf')),
     now(), now(), now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
     jsonb_build_object('first_name', u.first_name, 'last_name', u.last_name),
     '', '', '', ''
 from (values
-    ('11111111-1111-4111-8111-000000000001'::uuid, 'ana.admin@hermes.test',      'Ana',    'Duarte'),
-    ('11111111-1111-4111-8111-000000000002'::uuid, 'marcos.manager@hermes.test', 'Marcos', 'Ibanez'),
-    ('11111111-1111-4111-8111-000000000003'::uuid, 'lucia.rep@hermes.test',      'Lucia',  'Fernandez'),
-    ('11111111-1111-4111-8111-000000000004'::uuid, 'diego.rep@hermes.test',      'Diego',  'Salazar'),
-    ('11111111-1111-4111-8111-000000000005'::uuid, 'sofia.rep@hermes.test',      'Sofia',  'Moreno'),
-    ('11111111-1111-4111-8111-000000000006'::uuid, 'javier.rep@hermes.test',     'Javier', 'Ortiz')
+    ('11111111-1111-4111-8111-000000000001'::uuid, 'admin@plataforma.com',      'Ana',    'Duarte'),
+    ('11111111-1111-4111-8111-000000000002'::uuid, 'gerente@plataforma.com',    'Marcos', 'Ibanez'),
+    ('11111111-1111-4111-8111-000000000003'::uuid, 'comercial1@plataforma.com', 'Lucia',  'Fernandez'),
+    ('11111111-1111-4111-8111-000000000004'::uuid, 'comercial2@plataforma.com', 'Diego',  'Salazar'),
+    ('11111111-1111-4111-8111-000000000005'::uuid, 'comercial3@plataforma.com', 'Sofia',  'Moreno'),
+    ('11111111-1111-4111-8111-000000000006'::uuid, 'comercial4@plataforma.com', 'Javier', 'Ortiz')
 ) as u(id, email, first_name, last_name);
 
 -- Without an identity row GoTrue has no email provider to authenticate against,
@@ -109,12 +109,12 @@ from auth.users u;
 update public.sales s
    set id = m.id, role = m.role::public.sales_role
   from (values
-    ('ana.admin@hermes.test',      1, 'admin'),
-    ('marcos.manager@hermes.test', 2, 'manager'),
-    ('lucia.rep@hermes.test',      3, 'rep'),
-    ('diego.rep@hermes.test',      4, 'rep'),
-    ('sofia.rep@hermes.test',      5, 'rep'),
-    ('javier.rep@hermes.test',     6, 'rep')
+    ('admin@plataforma.com',      1, 'admin'),
+    ('gerente@plataforma.com',    2, 'manager'),
+    ('comercial1@plataforma.com', 3, 'rep'),
+    ('comercial2@plataforma.com', 4, 'rep'),
+    ('comercial3@plataforma.com', 5, 'rep'),
+    ('comercial4@plataforma.com', 6, 'rep')
   ) as m(email, id, role)
  where s.email = m.email::extensions.citext;
 
