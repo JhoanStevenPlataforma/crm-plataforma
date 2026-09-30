@@ -325,8 +325,36 @@ input[type="time"] {
   position: relative;
 }
 
-.dark ::-webkit-calendar-picker-indicator {
-  filter: invert(1);
+/* Tell the browser which theme it is drawing native controls in. Without it,
+   dark mode still gets the light UA palette: autofilled fields turn white,
+   and date pickers, <select> popups and datalists open light. */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+/* The UA's autofill ground ignores our tokens (and background-color cannot
+   override it), so paint the field's own ground with an inset shadow and
+   force the text colour back to the theme's. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  box-shadow: 0 0 0 1000px var(--field) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+input:-webkit-autofill:focus {
+  box-shadow:
+    0 0 0 1000px var(--surface) inset,
+    0 0 0 3px color-mix(in oklch, var(--ring) 20%, transparent);
+}
+
+::-webkit-calendar-picker-indicator {
   position: absolute;
   right: 0.75rem;
 }
