@@ -59,7 +59,6 @@ import teams from "../teams";
 import { TeamMemberStatsPage } from "../teams/TeamMemberStatsPage";
 import { TeamStatsPage } from "../teams/TeamStatsPage";
 import { TeamsDashboard } from "../teams/TeamsDashboard";
-import { SettingsPageMobile } from "../settings/SettingsPageMobile";
 import { ProfilePage } from "../settings/ProfilePage";
 import { SettingsPage } from "../settings/SettingsPage";
 import {
@@ -86,12 +85,7 @@ import {
 import { i18nProvider as defaulti18nProvider } from "../providers/commons/i18nProvider";
 import { StartPage } from "../login/StartPage.tsx";
 import { useIsMobile } from "@/hooks/use-mobile.ts";
-import { MobileTasksList } from "../tasks/MobileTasksList.tsx";
 import { TaskList } from "../tasks/TaskList.tsx";
-import { ContactListMobile } from "../contacts/ContactList.tsx";
-import { ContactShow } from "../contacts/ContactShow.tsx";
-import { CompanyShow } from "../companies/CompanyShow.tsx";
-import { NoteShowPage } from "../notes/NoteShowPage.tsx";
 
 const defaultStore = localStorageStore(undefined, "CRM");
 
@@ -540,30 +534,17 @@ const MobileAdmin = (
         </CustomRoutes>
         <CustomRoutes>
           <Route
-            path={SettingsPageMobile.path}
-            element={<SettingsPageMobile />}
+            path={SettingsPage.path}
+            element={inMobileFrame(<SettingsPage />)}
           />
           {sharedRoutes(inMobileFrame)}
         </CustomRoutes>
-        <Resource
-          name="contacts"
-          list={ContactListMobile}
-          show={ContactShow}
-          edit={inMobileFrame(<contacts.edit />)}
-          recordRepresentation={contacts.recordRepresentation}
-        >
-          <Route path=":id/notes/:noteId" element={<NoteShowPage />} />
-        </Resource>
-        {/* The show page has a mobile layout of its own; the list did not
-            exist at all, so "Companies" answered with an empty page. */}
-        <Resource
-          name="companies"
-          list={inMobileFrame(<companies.list />)}
-          show={CompanyShow}
-          edit={inMobileFrame(<companies.edit />)}
-          create={inMobileFrame(<companies.create />)}
-        />
-        <Resource name="tasks" list={MobileTasksList} />
+        {/* The phone serves the same screens as the desk, framed for the
+            bottom navigation: a reduced mobile copy of a screen is one that
+            silently falls behind the real one. */}
+        <Resource name="contacts" {...wrapViews(contacts, inMobileFrame)} />
+        <Resource name="companies" {...wrapViews(companies, inMobileFrame)} />
+        <Resource name="tasks" list={inMobileFrame(<TaskList />)} />
         {sharedResources(inMobileFrame)}
       </Admin>
     </PersistQueryClientProvider>

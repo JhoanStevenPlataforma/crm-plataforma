@@ -22,7 +22,7 @@ export const ContactAside = ({ link = "edit" }: { link?: "edit" | "show" }) => {
   if (!record) return null;
 
   return (
-    <div className="hidden sm:block w-92 min-w-92 text-sm">
+    <div className="w-full text-sm lg:w-92 lg:min-w-92">
       <div className="mb-4 -ml-1">
         {link === "edit" ? (
           <EditButton label="resources.contacts.action.edit" />
@@ -69,11 +69,11 @@ export const ContactAside = ({ link = "edit" }: { link?: "edit" | "show" }) => {
 
       {/* Offered on the contact's page as well as its edit form: the audit
       found users on the page looking for merge / vCard / delete and giving up. */}
-      <div className="mt-6 pt-6 border-t hidden sm:flex flex-col gap-2 items-start">
+      <div className="mt-6 pt-6 border-t flex flex-col gap-2 items-start">
         <ExportVCardButton />
         <ContactMergeButton />
       </div>
-      <div className="mt-6 pt-6 border-t hidden sm:flex flex-col gap-2 items-start">
+      <div className="mt-6 pt-6 border-t flex flex-col gap-2 items-start">
         <DeleteButton
           className="h-6 cursor-pointer hover:bg-destructive/10! text-destructive! border-destructive! focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"
           size="sm"

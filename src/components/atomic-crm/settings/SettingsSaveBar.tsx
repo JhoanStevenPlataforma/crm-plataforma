@@ -40,7 +40,8 @@ export const SettingsSaveBar = () => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 border-t bg-background p-4">
+    // Clears the phone's bottom navigation; see `MobileDesktopPage`.
+    <div className="fixed bottom-(--bottom-nav,0px) left-0 right-0 border-t bg-background p-4">
       <div className="max-w-screen-xl mx-auto flex gap-8 px-4">
         <div className="hidden md:block w-48 shrink-0" />
         <div className="flex-1 min-w-0 max-w-2xl flex flex-wrap items-center justify-between gap-2">

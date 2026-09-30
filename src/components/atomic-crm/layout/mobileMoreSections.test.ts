@@ -16,14 +16,17 @@ describe("MOBILE_MORE_SECTIONS", () => {
     }
   });
 
-  it("keeps each module's access gate, except the phone's personal settings", () => {
+  it("keeps each module's access gate, settings included", () => {
     const items = MOBILE_MORE_SECTIONS.flatMap((section) => section.items);
     expect(items.find((item) => item.key === "deals")?.access).toEqual({
       resource: "deals",
       action: "list",
     });
-    expect(items.find((item) => item.key === "preferences")?.access).toBe(
-      undefined,
-    );
+    // `/settings` is the admin configuration on the phone too; the personal
+    // settings (profile, theme, sign-out) live in the sheet's account block.
+    expect(items.find((item) => item.key === "preferences")?.access).toEqual({
+      resource: "configuration",
+      action: "edit",
+    });
   });
 });

@@ -16,82 +16,31 @@ import {
   useTranslate,
 } from "ra-core";
 import {
-  Link,
   Link as RouterLink,
   useLocation,
   useMatch,
   useNavigate,
 } from "react-router-dom";
 
-import { useIsMobile } from "@/hooks/use-mobile";
 import { ActivityLog } from "../activity/ActivityLog";
 import { Avatar } from "../contacts/Avatar";
 import { TagsList } from "../contacts/TagsList";
 import { findDealLabel } from "../deals/dealUtils";
-import { MobileContent } from "../layout/MobileContent";
-import MobileHeader from "../layout/MobileHeader";
-import { MobileBackButton } from "../misc/MobileBackButton";
 import { formatRelativeDate } from "../misc/RelativeDate";
 import { Status } from "../misc/Status";
 import { formatMoney } from "../misc/reporting";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Company, Contact, Deal } from "../types";
-import {
-  AdditionalInfo,
-  AddressInfo,
-  CompanyAside,
-  CompanyInfo,
-  ContextInfo,
-} from "./CompanyAside";
+import { CompanyAside } from "./CompanyAside";
 import { CompanyAvatar } from "./CompanyAvatar";
 import { contactDisplayName } from "../contacts/contactName";
 import { RecordBreadcrumb } from "../misc/RecordBreadcrumb";
 
-export const CompanyShow = () => {
-  const isMobile = useIsMobile();
-
-  return (
-    <ShowBase>
-      {isMobile ? <CompanyShowContentMobile /> : <CompanyShowContent />}
-    </ShowBase>
-  );
-};
-
-const CompanyShowContentMobile = () => {
-  const translate = useTranslate();
-  const { record, isPending } = useShowContext<Company>();
-  if (isPending || !record) return null;
-
-  return (
-    <>
-      <MobileHeader>
-        <MobileBackButton to="/" />
-        <div className="flex flex-1">
-          <Link to="/">
-            <h1 className="text-xl font-semibold">
-              {translate("resources.companies.forcedCaseName")}
-            </h1>
-          </Link>
-        </div>
-      </MobileHeader>
-
-      <MobileContent>
-        <div className="mb-6">
-          <div className="flex items-center mb-4">
-            <CompanyAvatar />
-            <div className="mx-3 flex-1">
-              <h2 className="text-2xl font-bold">{record.name}</h2>
-            </div>
-          </div>
-        </div>
-        <CompanyInfo record={record} />
-        <AddressInfo record={record} />
-        <ContextInfo record={record} />
-        <AdditionalInfo record={record} />
-      </MobileContent>
-    </>
-  );
-};
+export const CompanyShow = () => (
+  <ShowBase>
+    <CompanyShowContent />
+  </ShowBase>
+);
 
 const CompanyShowContent = () => {
   const translate = useTranslate();
@@ -114,9 +63,12 @@ const CompanyShowContent = () => {
   if (isPending || !record) return null;
 
   return (
-    <div className="mt-2 flex pb-2 gap-8">
+    // Details first on a phone, the right-hand column from `lg` up; see
+    // `ContactShow`.
+    <div className="mt-2 flex flex-col gap-6 pb-2 lg:flex-row lg:gap-8">
       <RecordBreadcrumb resource="companies" />
-      <div className="flex-1">
+      <CompanyAside />
+      <div className="min-w-0 flex-1 lg:order-first">
         <Card>
           <CardContent>
             <div className="mb-4 flex items-center">
@@ -211,7 +163,6 @@ const CompanyShowContent = () => {
           </CardContent>
         </Card>
       </div>
-      <CompanyAside />
     </div>
   );
 };

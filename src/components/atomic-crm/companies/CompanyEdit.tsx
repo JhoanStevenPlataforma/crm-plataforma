@@ -22,8 +22,8 @@ export const CompanyEdit = () => (
   >
     <FormPage wide>
       <FormPageHeader mode="edit" />
-      <div className="flex gap-8">
-        <Form className="flex flex-1 flex-col gap-4 pb-2">
+      <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+        <Form className="flex min-w-0 flex-1 flex-col gap-4 pb-2">
           <Card className={FORM_EDGE_CLASS}>
             <CardContent>
               <CompanyInputs />

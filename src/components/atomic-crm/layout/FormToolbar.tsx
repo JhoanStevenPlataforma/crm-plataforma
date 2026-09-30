@@ -14,7 +14,9 @@ import { FormDirtyState, SaveButton } from "@/components/admin/form";
 export const FormToolbar = ({ saveLabel }: { saveLabel?: string }) => (
   <div
     role="toolbar"
-    className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-8 flex flex-row items-center justify-end gap-2 rounded-b-[inherit] border-t border-border/70 bg-card/95 px-6 py-3 backdrop-blur"
+    // Clears the phone's bottom navigation (see `MobileDesktopPage`); zero on
+    // the desktop and inside a dialog, which is portalled outside the frame.
+    className="sticky bottom-(--bottom-nav,0px) z-10 -mx-6 -mb-6 mt-8 flex flex-row items-center justify-end gap-2 rounded-b-[inherit] border-t border-border/70 bg-card/95 px-6 py-3 backdrop-blur"
   >
     <FormDirtyState className="max-sm:hidden" />
     <CancelButton />

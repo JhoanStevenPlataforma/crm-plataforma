@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
+import { MobileAccountSection } from "./MobileAccountSection";
 import { MOBILE_MORE_SECTIONS } from "./mobileMoreSections";
 import { isNavItemActive, type NavItem } from "./navigation";
 
@@ -74,6 +75,7 @@ export const MobileMoreMenu = () => {
               )}
             </div>
           ))}
+          <MobileAccountSection onNavigate={() => setOpen(false)} />
         </nav>
       </SheetContent>
     </Sheet>

@@ -85,7 +85,9 @@ export const ProfilePage = () => {
   };
 
   return (
-    <div className="max-w-lg mx-auto mt-8 space-y-4">
+    // `w-full`: the frame is a flex column, where `mx-auto` alone would shrink
+    // this to its content and let a long line push past a phone screen.
+    <div className="w-full max-w-lg mx-auto mt-8 space-y-4">
       <Form onSubmit={handleOnSubmit} record={data}>
         <ProfileForm isEditMode={isEditMode} setEditMode={setEditMode} />
       </Form>
@@ -353,7 +355,7 @@ const CopyPaste = ({ value }: { value: string }) => {
             variant="ghost"
             className="normal-case justify-between w-full"
           >
-            <span className="overflow-hidden text-ellipsis">{value}</span>
+            <span className="min-w-0 truncate">{value}</span>
             {copied ? (
               <Check className="h-4 w-4 ml-2" />
             ) : (

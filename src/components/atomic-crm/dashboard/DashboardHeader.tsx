@@ -78,7 +78,9 @@ export const DashboardHeader = ({
           variant="outline"
           size="sm"
           aria-label={translate("crm.dashboard.period.label")}
-          className="rounded-lg bg-surface shadow-card"
+          // Five periods do not fit a phone: the row scrolls rather than
+          // clipping "this year" off the screen.
+          className="max-w-full overflow-x-auto rounded-lg bg-surface shadow-card"
         >
           {DASHBOARD_PERIODS.map((item) => (
             <ToggleGroupItem
