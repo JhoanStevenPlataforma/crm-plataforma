@@ -1,3 +1,4 @@
+import { startOfDay } from "date-fns/startOfDay";
 import { subDays } from "date-fns/subDays";
 import { useGetList, useTranslate } from "ra-core";
 import { Link } from "react-router";
@@ -33,7 +34,10 @@ export const UntouchedLeadsTable = ({
 }) => {
   const translate = useTranslate();
   const { leadSources } = useConfigurationContext();
-  const cutoff = subDays(new Date(), STALE_DAYS).toISOString();
+  // Anchored on midnight, never on "now": the cutoff is part of the query key,
+  // and a millisecond timestamp makes every render a new query, so the table
+  // refetched in a loop for as long as the tab stayed open.
+  const cutoff = subDays(startOfDay(new Date()), STALE_DAYS).toISOString();
 
   const filter: Record<string, unknown> = {
     "status@eq": "new",
