@@ -93,8 +93,11 @@ VITE_ATTACHMENTS_BUCKET=attachments
 EOF
 npm ci --no-audit --no-fund
 # vite alone: the type check belongs to development and CI, and tsc on top of
-# the running stack is what would push a small server into swap.
-npx vite build
+# the running stack is what would push a small server into swap. Source maps
+# are off for the same reason (they dominate the build's memory, and would
+# publish the readable source); Node's default heap on a 2 GB machine is too
+# small for this bundle, so it may borrow from swap.
+NODE_OPTIONS=--max-old-space-size=3072 npx vite build --sourcemap false
 sudo rsync -a --delete dist/ "$WEB_ROOT/"
 
 step "Done"
