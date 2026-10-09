@@ -3,13 +3,13 @@ import type { RaRecord } from "ra-core";
 import { EditBase, Form, useGetList, useNotify, useTranslate } from "ra-core";
 import { useCallback, useMemo } from "react";
 import { useFormContext } from "react-hook-form";
+import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toSlug } from "@/lib/toSlug";
 import { cn } from "@/lib/utils";
 import { ArrayInput } from "@/components/admin/array-input";
-import { AutocompleteInput } from "@/components/admin/autocomplete-input";
 import { SimpleFormIterator } from "@/components/admin/simple-form-iterator";
 import { TextInput } from "@/components/admin/text-input";
 
@@ -105,19 +105,6 @@ export const validateItemsInUse = (
   return undefined;
 };
 
-const getCurrencyChoices = () => {
-  const displayNames = new Intl.DisplayNames(
-    typeof navigator !== "undefined"
-      ? (navigator.languages as string[])
-      : ["en"],
-    { type: "currency" },
-  );
-  return Intl.supportedValuesOf("currency").map((code) => ({
-    id: code,
-    name: `${code} – ${displayNames.of(code)}`,
-  }));
-};
-
 const transformFormValues = (data: Record<string, any>) => ({
   config: {
     title: data.title,
@@ -198,7 +185,7 @@ const SECTION_IDS = SECTIONS.map((section) => section.id);
 const SettingsFormFields = () => {
   const translate = useTranslate();
   const activeSection = useActiveSection(SECTION_IDS);
-  const currencyChoices = useMemo(() => getCurrencyChoices(), []);
+  const config = useStoredConfiguration();
   const { watch, setValue } = useFormContext();
 
   const dealStages = watch("dealStages");
@@ -351,13 +338,23 @@ const SettingsFormFields = () => {
             <h3 className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               {translate("crm.settings.deals.currency")}
             </h3>
-            <AutocompleteInput
-              source="currency"
-              label={false}
-              choices={currencyChoices}
-              inputText={(choice) => choice?.id}
-              modal
-            />
+            {/* Read-only: a trigger pins config.currency to the base currency,
+                which only /currencies may change. */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="font-mono text-sm font-semibold">
+                  {config.currency}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {translate("crm.settings.deals.currency_managed")}
+                </p>
+              </div>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/currencies">
+                  {translate("crm.settings.deals.currency_link")}
+                </Link>
+              </Button>
+            </div>
 
             <Separator />
 

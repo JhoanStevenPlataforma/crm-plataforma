@@ -1339,3 +1339,50 @@ create policy "Deal quote stage rules are maintained by admins"
     on public.deal_quote_stage_rules for all to authenticated
     using ((select public.is_admin()))
     with check ((select public.is_admin()));
+
+--
+-- Currencies & exchange rates
+--
+alter table public.currencies enable row level security;
+alter table public.exchange_rate_providers enable row level security;
+alter table public.exchange_rates enable row level security;
+alter table public.exchange_rate_settings enable row level security;
+alter table public.exchange_rate_sync_runs enable row level security;
+alter table public.exchange_rate_audit_logs enable row level security;
+
+-- Everybody quotes, so everybody reads the catalogue and the rates.
+create policy "Currencies are readable by everyone"
+    on public.currencies for select to authenticated using (true);
+create policy "Currencies are written by admins"
+    on public.currencies for insert to authenticated with check ((select public.is_admin()));
+create policy "Currencies are updated by admins"
+    on public.currencies for update to authenticated
+    using ((select public.is_admin())) with check ((select public.is_admin()));
+
+create policy "Rate providers are readable by everyone"
+    on public.exchange_rate_providers for select to authenticated using (true);
+create policy "Rate providers are tuned by admins"
+    on public.exchange_rate_providers for update to authenticated
+    using ((select public.is_admin())) with check ((select public.is_admin()));
+
+create policy "Rates are readable by everyone"
+    on public.exchange_rates for select to authenticated using (true);
+-- A person may only add a MANUAL rate; provider rows come from the sync,
+-- which holds the service role. No update, no delete: the table is history.
+create policy "Manual rates are added by managers and admins"
+    on public.exchange_rates for insert to authenticated
+    with check ((select public.can_manage_all()) and provider_id is null);
+
+create policy "Rate settings are readable by everyone"
+    on public.exchange_rate_settings for select to authenticated using (true);
+create policy "Rate settings are updated by admins"
+    on public.exchange_rate_settings for update to authenticated
+    using ((select public.is_admin())) with check ((select public.is_admin()));
+
+create policy "Sync runs are readable by managers and admins"
+    on public.exchange_rate_sync_runs for select to authenticated
+    using ((select public.can_manage_all()));
+
+create policy "The rate audit log is readable by managers and admins"
+    on public.exchange_rate_audit_logs for select to authenticated
+    using ((select public.can_manage_all()));

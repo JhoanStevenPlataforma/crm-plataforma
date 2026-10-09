@@ -924,3 +924,107 @@ revoke all on function public.quote_portal_events_sync_deal() from public, anon,
 grant execute on function public.sync_deal_from_quote(bigint, text) to service_role;
 grant execute on function public.quotes_sync_deal() to service_role;
 grant execute on function public.quote_portal_events_sync_deal() to service_role;
+
+--
+-- Currencies & exchange rates
+--
+revoke all on table public.currencies from anon, authenticated;
+grant select, insert, update on table public.currencies to authenticated;
+grant all on table public.currencies to service_role;
+
+revoke all on table public.exchange_rate_providers from anon, authenticated;
+grant select, update on table public.exchange_rate_providers to authenticated;
+grant all on table public.exchange_rate_providers to service_role;
+
+revoke all on table public.exchange_rates from anon, authenticated;
+grant select, insert on table public.exchange_rates to authenticated;
+grant all on table public.exchange_rates to service_role;
+
+revoke all on table public.exchange_rate_settings from anon, authenticated;
+grant select, update on table public.exchange_rate_settings to authenticated;
+grant all on table public.exchange_rate_settings to service_role;
+
+revoke all on table public.exchange_rate_sync_runs from anon, authenticated;
+grant select on table public.exchange_rate_sync_runs to authenticated;
+grant all on table public.exchange_rate_sync_runs to service_role;
+
+revoke all on table public.exchange_rate_audit_logs from anon, authenticated;
+grant select on table public.exchange_rate_audit_logs to authenticated;
+grant all on table public.exchange_rate_audit_logs to service_role;
+
+revoke all on table public.current_exchange_rates from anon, authenticated;
+grant select on table public.current_exchange_rates to authenticated;
+grant select on table public.current_exchange_rates to service_role;
+
+-- `create or replace view` keeps the ACL, but restating it costs nothing and
+-- survives somebody turning the replace into a drop.
+revoke all on table public.quotes_summary from anon, authenticated;
+grant select on table public.quotes_summary to authenticated;
+grant select on table public.quotes_summary to service_role;
+
+revoke all on sequence public.exchange_rate_providers_id_seq from anon, authenticated;
+revoke all on sequence public.exchange_rates_id_seq from anon, authenticated;
+revoke all on sequence public.exchange_rate_sync_runs_id_seq from anon, authenticated;
+revoke all on sequence public.exchange_rate_audit_logs_id_seq from anon, authenticated;
+grant usage, select on sequence public.exchange_rates_id_seq to authenticated;
+grant all on sequence public.exchange_rate_providers_id_seq to service_role;
+grant all on sequence public.exchange_rates_id_seq to service_role;
+grant all on sequence public.exchange_rate_sync_runs_id_seq to service_role;
+grant all on sequence public.exchange_rate_audit_logs_id_seq to service_role;
+
+-- Trigger functions and internals: nobody calls them directly.
+revoke all on function public.exchange_rate_providers_guard() from public, anon, authenticated;
+revoke all on function public.currencies_guard() from public, anon, authenticated;
+revoke all on function public.fx_config_audit() from public, anon, authenticated;
+revoke all on function public.exchange_rates_before_insert() from public, anon, authenticated;
+revoke all on function public.exchange_rates_audit() from public, anon, authenticated;
+revoke all on function public.configuration_currency_is_base() from public, anon, authenticated;
+revoke all on function public.quote_lines_fx_convert() from public, anon, authenticated;
+revoke all on function public.notify_fx_sync_failure(bigint) from public, anon, authenticated;
+grant execute on function public.exchange_rate_providers_guard() to service_role;
+grant execute on function public.currencies_guard() to service_role;
+grant execute on function public.fx_config_audit() to service_role;
+grant execute on function public.exchange_rates_before_insert() to service_role;
+grant execute on function public.exchange_rates_audit() to service_role;
+grant execute on function public.configuration_currency_is_base() to service_role;
+grant execute on function public.quote_lines_fx_convert() to service_role;
+grant execute on function public.notify_fx_sync_failure(bigint) to service_role;
+
+-- The sync's own API: the edge function, holding the service role, only.
+revoke all on function public.fx_begin_sync_run(text, text, boolean, bigint) from public, anon, authenticated;
+revoke all on function public.fx_record_rates(bigint, jsonb) from public, anon, authenticated;
+revoke all on function public.fx_finish_sync_run(bigint, boolean, integer, text) from public, anon, authenticated;
+revoke all on function public.fx_reap_sync_runs() from public, anon, authenticated;
+revoke all on function public.get_fx_provider_secret(text) from public, anon, authenticated;
+grant execute on function public.fx_begin_sync_run(text, text, boolean, bigint) to service_role;
+grant execute on function public.fx_record_rates(bigint, jsonb) to service_role;
+grant execute on function public.fx_finish_sync_run(bigint, boolean, integer, text) to service_role;
+grant execute on function public.fx_reap_sync_runs() to service_role;
+grant execute on function public.get_fx_provider_secret(text) to service_role;
+
+-- Read helpers and the user-facing RPCs, which check the role themselves.
+revoke all on function public.fx_base_currency() from public, anon;
+revoke all on function public.fx_settings() from public, anon;
+revoke all on function public.fx_resolve_rate(character, public.fx_rate_kind, date) from public, anon;
+revoke all on function public.fx_rate_is_stale(text, date, date, date) from public, anon;
+-- Security invoker: the line picker's preview reads only what RLS shows it.
+revoke all on function public.fx_line_source_rate(bigint, character, boolean) from public, anon;
+revoke all on function public.fx_round(numeric, character) from public, anon;
+revoke all on function public.set_base_currency(character) from public, anon;
+revoke all on function public.set_fx_provider_secret(text, text) from public, anon;
+revoke all on function public.set_quote_version_rate(bigint, public.quote_rate_kind, numeric, text) from public, anon;
+revoke all on function public.fx_integration_health() from public, anon;
+grant execute on function public.fx_base_currency() to authenticated, service_role;
+grant execute on function public.fx_settings() to authenticated, service_role;
+grant execute on function public.fx_resolve_rate(character, public.fx_rate_kind, date) to authenticated, service_role;
+grant execute on function public.fx_rate_is_stale(text, date, date, date) to authenticated, service_role;
+grant execute on function public.fx_line_source_rate(bigint, character, boolean) to authenticated, service_role;
+grant execute on function public.fx_round(numeric, character) to authenticated, service_role;
+grant execute on function public.set_base_currency(character) to authenticated, service_role;
+grant execute on function public.set_fx_provider_secret(text, text) to authenticated, service_role;
+grant execute on function public.set_quote_version_rate(bigint, public.quote_rate_kind, numeric, text) to authenticated, service_role;
+grant execute on function public.fx_integration_health() to authenticated, service_role;
+revoke all on function public.fx_dispatch_sync() from public, anon, authenticated;
+grant execute on function public.fx_dispatch_sync() to service_role;
+revoke all on function public.purge_exchange_rates() from public, anon, authenticated;
+grant execute on function public.purge_exchange_rates() to service_role;

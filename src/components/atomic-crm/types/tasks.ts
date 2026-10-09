@@ -30,7 +30,9 @@ export type TaskEntityType =
   | "ticket"
   | "invoice"
   | "quote"
-  | "order";
+  | "order"
+  /** A failing exchange-rate provider (multi-currency, admins only). */
+  | "exchange_rate_provider";
 
 /**
  * A task as read from `public.tasks_summary` (§3.4).

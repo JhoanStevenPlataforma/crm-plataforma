@@ -67,6 +67,11 @@ import {
 } from "./quotes";
 import { quoteCommentCallbacks } from "./quoteCommentCallbacks";
 import { createDemoQuoteMethods, decorateQuoteTokens } from "./quoteMethods";
+import {
+  createDemoFxMethods,
+  exchangeRateCallbacks,
+  getCurrentExchangeRates,
+} from "./fx";
 import { taskChecklistCallbacks } from "./taskChecklistCallbacks";
 import { taskCommentCallbacks } from "./taskCommentCallbacks";
 import {
@@ -380,6 +385,14 @@ export const createDataProvider = ({
           data: decorateQuoteTokens(result.data),
         };
       }
+      // `current_exchange_rates` is a view: derived here, like `price_book`.
+      if (resource === "current_exchange_rates") {
+        const { pagination } = params;
+        const all = await getCurrentExchangeRates(baseDataProvider);
+        const { page, perPage } = pagination;
+        const start = (page - 1) * perPage;
+        return { data: all.slice(start, start + perPage), total: all.length };
+      }
       if (resource === "price_book") {
         const { filter = {}, pagination } = params;
         const all = await getPriceBook(baseDataProvider, filter);
@@ -390,6 +403,12 @@ export const createDataProvider = ({
       return baseDataProvider.getList(resource, params);
     },
     async getOne(resource: string, params: any) {
+      if (resource === "current_exchange_rates") {
+        const all = await getCurrentExchangeRates(baseDataProvider);
+        const row = all.find((rate) => rate.id === params.id);
+        if (!row) throw new Error(`No rate for ${params.id}`);
+        return { data: row };
+      }
       if (resource === "quotes") {
         const result = await baseDataProvider.getOne(resource, params);
         const [decorated] = await decorateQuotes(dataProvider, [result.data]);
@@ -494,6 +513,12 @@ export const createDataProvider = ({
      * every write made here already refreshes the page that made it.
      */
     subscribeToQuoteChanges: async () => () => {},
+    /**
+     * Currencies & exchange rates, demo-side: the health report, the sync and
+     * the Vault refuse with `crm.fx.demo_unavailable` -- a tab cannot reach a
+     * provider, and a demo showing healthy providers would be a fabrication.
+     */
+    ...createDemoFxMethods(() => dataProvider),
     /**
      * Nothing to listen to either: a demo notification is written in this tab,
      * and the inbox reads it on its next fetch. Reaching for the Supabase
@@ -1103,6 +1128,7 @@ export const createDataProvider = ({
       // insert, and the line snapshot, amounts and totals (quotes §2.4, D8).
       quoteCallbacks(),
       quoteLineCallbacks(),
+      exchangeRateCallbacks(async () => (await getIdentity())?.id ?? null),
       // ... and for the comment thread's (Phase 8): authorship, depth, the
       // clock, and the three changes a written comment still accepts.
       quoteCommentCallbacks(getIdentity),

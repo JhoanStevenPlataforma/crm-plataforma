@@ -157,6 +157,51 @@ describe("toQuoteDocument", () => {
 
     expect(lines.map((line) => line.name)).toEqual(["First", "Second"]);
   });
+
+  it("prints the rate a foreign-currency version was priced at, with its base equivalent as the server stored it", () => {
+    // Numerics reach the browser as strings from PostgREST.
+    const usd = {
+      ...issued,
+      base_currency: "COP",
+      exchange_rate: "4000.0000000000",
+      rate_kind: "official",
+      rate_provider_key: "trm_co",
+      rate_effective_date: "2026-10-01",
+      total_base: "2570400.00",
+    } as unknown as QuoteVersion;
+
+    const { exchange } = toQuoteDocument({
+      ...sourceFor(usd),
+      rateProviderName: "TRM (Superfinanciera)",
+    });
+
+    expect(exchange).toEqual({
+      base_currency: "COP",
+      rate: 4000,
+      rate_kind: "official",
+      provider_name: "TRM (Superfinanciera)",
+      effective_date: "2026-10-01",
+      total_base: 2570400,
+    });
+  });
+
+  it("prints no rate on a version in the base currency, or on one that has no rate yet", () => {
+    const base = {
+      ...issued,
+      base_currency: "COP",
+      exchange_rate: 1,
+      rate_kind: "base",
+    } as unknown as QuoteVersion;
+    const missing = {
+      ...draft,
+      base_currency: "COP",
+      exchange_rate: null,
+      rate_kind: "official",
+    } as unknown as QuoteVersion;
+
+    expect(toQuoteDocument(sourceFor(base)).exchange).toBeNull();
+    expect(toQuoteDocument(sourceFor(missing)).exchange).toBeNull();
+  });
 });
 
 describe("formatDocumentDate", () => {

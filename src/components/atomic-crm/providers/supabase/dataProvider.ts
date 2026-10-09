@@ -44,6 +44,7 @@ import {
 } from "../commons/taskAttachments";
 import { getIsInitialized } from "./authProvider";
 import { uploadPortalMedia } from "./portalMedia";
+import { createFxMethods, type FxClient } from "./fxMethods";
 import { createQuoteMethods } from "./quoteMethods";
 import { subscribeToQuoteChanges, type Unsubscribe } from "./quoteRealtime";
 import { stripQuoteVirtuals, updateDraftVersionFields } from "./quoteWrites";
@@ -56,6 +57,8 @@ const getBaseDataProvider = () =>
     apiKey: import.meta.env.VITE_SB_PUBLISHABLE_KEY,
     supabaseClient: getSupabaseClient(),
     sortOrder: "asc,desc.nullslast" as any,
+    // A currency is keyed by its ISO code, not by a surrogate id.
+    primaryKeys: new Map([["currencies", ["code"]]]),
   });
 
 /**
@@ -891,6 +894,8 @@ const getDataProviderWithCustomMethods = () => {
      * listed in two places is a method that drifts in one of them.
      */
     ...createQuoteMethods(getSupabaseClient),
+    /** Currencies & exchange rates (docs/proposals/multi-currency-fx.md). */
+    ...createFxMethods(() => getSupabaseClient() as unknown as FxClient),
     /** Supabase Realtime, filtered to one quote (quotes §6.5). */
     subscribeToQuoteChanges: (
       quoteId: Identifier,

@@ -4628,6 +4628,8 @@ create or replace function public.quote_versions_before_insert() returns trigger
     language plpgsql security definer
     set search_path to ''
 as $$
+declare
+    v_rate record;
 begin
     if new.currency is null then
         select q.currency into new.currency
@@ -4637,6 +4639,35 @@ begin
     if new.version_number is null then
         select coalesce(max(v.version_number), 0) + 1 into new.version_number
           from public.quote_versions v where v.quote_id = new.quote_id;
+    end if;
+
+    new.base_currency := coalesce(new.base_currency, public.fx_base_currency());
+
+    -- A version inserted WITH a rate (a revision copying its predecessor's)
+    -- keeps it. Otherwise: rate 1 in the base, else the configured default
+    -- kind. No rate available leaves the draft without one, which is allowed
+    -- until it is issued.
+    if new.rate_kind is null then
+        if new.currency = new.base_currency then
+            new.rate_kind := 'base';
+            new.exchange_rate := 1;
+            new.rate_effective_date := current_date;
+        else
+            select * into v_rate
+              from public.fx_resolve_rate(
+                       new.currency,
+                       (select s.quote_rate_kind_default
+                          from public.exchange_rate_settings s where s.id = 1));
+            if v_rate.rate is not null then
+                new.rate_kind           := v_rate.kind::public.quote_rate_kind;
+                new.exchange_rate       := v_rate.rate;
+                new.exchange_rate_id    := v_rate.exchange_rate_id;
+                new.rate_provider_key   := v_rate.provider_key;
+                new.rate_effective_date := v_rate.effective_date;
+            end if;
+        end if;
+        new.rate_set_at := now();
+        new.rate_set_by := public.current_sale_id();
     end if;
 
     return new;
@@ -4889,15 +4920,17 @@ returns void
     set search_path to ''
 as $$
 begin
-    -- The totals are system-owned columns (see `quote_versions_freeze_guard`);
-    -- this is the function that owns them.
     perform set_config('app.quote_version_system_write', p_version_id::text, true);
 
     update public.quote_versions v
        set subtotal       = coalesce(t.gross, 0),
            discount_total = coalesce(t.disc, 0),
            tax_total      = coalesce(t.tax, 0),
-           total          = coalesce(t.total, 0)
+           total          = coalesce(t.total, 0),
+           subtotal_base       = public.fx_round(coalesce(t.gross, 0) * v.exchange_rate, v.base_currency),
+           discount_total_base = public.fx_round(coalesce(t.disc, 0)  * v.exchange_rate, v.base_currency),
+           tax_total_base      = public.fx_round(coalesce(t.tax, 0)   * v.exchange_rate, v.base_currency),
+           total_base          = public.fx_round(coalesce(t.total, 0) * v.exchange_rate, v.base_currency)
       from (
         select sum(l.line_gross)    as gross,
                sum(l.line_discount) as disc,
@@ -5754,6 +5787,8 @@ declare
     v_override text := nullif(btrim(coalesce(p_override_reason, '')), '');
     v_reason   text := nullif(btrim(coalesce(p_reason, '')), '');
     v_link     jsonb;
+    v_stale    boolean;
+    v_line     record;
 begin
     select * into v_quote from public.quotes where id = p_quote_id for update;
     if not found then
@@ -5794,6 +5829,45 @@ begin
     if v_version.valid_until < current_date then
         raise exception 'the offer in quote % expired on %', p_quote_id, v_version.valid_until
             using errcode = 'check_violation', detail = 'quote_validity_elapsed';
+    end if;
+
+    -- The rate is frozen with the document, so it has to be one worth
+    -- freezing: present, and not stale. A rep whose draft carries last week's
+    -- rate refreshes it (`set_quote_version_rate()`) before sending; an
+    -- official rate that cannot be refreshed because the provider is down is
+    -- exactly the rate that must not be printed as today's.
+    if v_version.exchange_rate is null then
+        raise exception 'quote % has no exchange rate for %', p_quote_id, v_version.currency
+            using errcode = 'check_violation', detail = 'fx_rate_missing';
+    end if;
+    -- One rule (`fx_rate_is_stale()`), the resolver's and the view's, for the
+    -- version's own rate...
+    v_stale := coalesce(
+        (select public.fx_rate_is_stale(v_version.rate_kind::text, r.effective_date, r.valid_until)
+           from public.exchange_rates r where r.id = v_version.exchange_rate_id),
+        public.fx_rate_is_stale(v_version.rate_kind::text, v_version.rate_effective_date, null),
+        false);
+    if v_stale then
+        raise exception 'the exchange rate of quote % is from % and stale', p_quote_id, v_version.rate_effective_date
+            using errcode = 'check_violation', detail = 'fx_rate_stale';
+    end if;
+    -- ...and for every rate a line was converted at, whatever the
+    -- quotation's currency (a COP quotation priced from a USD list has rate
+    -- 1 and USD lines). A rate carried with no recorded observation (copied
+    -- from before they were recorded) cannot be vouched for: refreshed first.
+    select l.source_currency, r.effective_date into v_line
+      from public.quote_lines l
+      left join public.exchange_rates r on r.id = l.source_exchange_rate_id
+     where l.version_id = v_version.id
+       and l.source_exchange_rate is not null
+       and l.source_currency is distinct from v_version.base_currency
+       and coalesce(public.fx_rate_is_stale(r.kind::text, r.effective_date, r.valid_until), true)
+     order by l."position", l.id
+     limit 1;
+    if found then
+        raise exception 'quote % has a line priced at a stale % rate (%)', p_quote_id,
+                v_line.source_currency, coalesce(v_line.effective_date::text, 'unrecorded')
+            using errcode = 'check_violation', detail = 'fx_rate_stale';
     end if;
 
     -- Evaluated inside the row lock taken above, so two concurrent issues
@@ -5943,23 +6017,39 @@ begin
     perform public.apply_quote_status(
         p_quote_id, 'draft', p_reason, 'internal', v_actor, null, null);
 
+    -- The rate travels with the copy: the revision starts from the figures
+    -- the customer last saw, and the rep refreshes the rate on purpose
+    -- (`set_quote_version_rate()`) rather than by accident. A version issued
+    -- before rates existed carries none, and gets the default one instead.
     insert into public.quote_versions
-        (quote_id, currency, version_number, valid_until, terms, discount_percent)
+        (quote_id, currency, version_number, valid_until, terms, discount_percent,
+         base_currency, exchange_rate, rate_kind, exchange_rate_id,
+         rate_provider_key, rate_effective_date, rate_set_at, rate_set_by,
+         rate_reason)
     select v.quote_id, v.currency, v.version_number + 1,
-           v.valid_until, v.terms, v.discount_percent
+           v.valid_until, v.terms, v.discount_percent,
+           v.base_currency, v.exchange_rate, v.rate_kind, v.exchange_rate_id,
+           v.rate_provider_key, v.rate_effective_date, v.rate_set_at,
+           v.rate_set_by, v.rate_reason
       from public.quote_versions v where v.id = v_last.id
     returning * into v_new;
 
+    -- The lines keep the observation they were converted at, through the
+    -- hatch `quote_lines_fx_convert` honours for the new version only.
+    perform set_config('app.fx_line_rate_write', v_new.id::text, true);
     insert into public.quote_lines
         (version_id, quote_id, product_id, sku, name, description, unit,
          quantity, unit_price, discount_percent, tax_rate_id, tax_rate_percent,
-         "position")
+         "position", source_currency, source_unit_price, source_exchange_rate,
+         source_exchange_rate_id)
     select v_new.id, l.quote_id, l.product_id, l.sku, l.name, l.description,
            l.unit, l.quantity, l.unit_price, l.discount_percent, l.tax_rate_id,
-           l.tax_rate_percent, l."position"
+           l.tax_rate_percent, l."position", l.source_currency,
+           l.source_unit_price, l.source_exchange_rate, l.source_exchange_rate_id
       from public.quote_lines l
      where l.version_id = v_last.id
      order by l."position", l.id;
+    perform set_config('app.fx_line_rate_write', '', true);
 
     -- The links are NOT revoked (they were, until links became the quote's).
     -- The customer keeps reading the last issued document while this draft is
@@ -6552,6 +6642,20 @@ as $$
             'discount_total', v.discount_total,
             'tax_total',      v.tax_total,
             'total',          v.total),
+        -- The rate the document was priced at, frozen with it, and the
+        -- equivalent of its total in the base currency. Informative: the
+        -- amounts above are the contract. Null for a document in the base
+        -- currency or issued before rates existed.
+        'exchange', case when v.rate_kind is null or v.rate_kind = 'base' then null
+            else jsonb_build_object(
+                'base_currency',  v.base_currency,
+                'rate',           v.exchange_rate,
+                'rate_kind',      v.rate_kind,
+                'provider_name',  (select p.name from public.exchange_rate_providers p
+                                    where p.key = v.rate_provider_key),
+                'effective_date', v.rate_effective_date,
+                'total_base',     v.total_base)
+            end,
         'terms', v.terms,
         -- The shared thread of the QUOTE, every version's, oldest first (§2.5):
         -- a negotiation outlives the version it started on. Never an internal
@@ -7696,7 +7800,11 @@ begin
                and q.id <> p_quote_id
                and st.counts_as_won);
         if not v_is_fixed then
-            select v.total into v_total
+            -- In the BASE currency (2026-10-01): a deal is counted in the
+            -- company's currency, and a USD quotation's total is not a COP
+            -- amount. A version with no rate (issued before rates existed,
+            -- in another currency) moves no amount rather than a wrong one.
+            select v.total_base into v_total
               from public.quote_versions v
              where v.quote_id = p_quote_id
                and v.issued_at is not null
@@ -7778,5 +7886,1309 @@ begin
         perform public.sync_deal_from_quote(new.quote_id, 'commented');
     end if;
     return null;
+end;
+$$;
+
+--
+-- Currencies & exchange rates (docs/proposals/multi-currency-fx.md)
+--
+
+-- The base currency's code. Stable within a statement.
+create or replace function public.fx_base_currency() returns character(3)
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select c.code from public.currencies c where c.is_base;
+$$;
+
+create or replace function public.fx_settings() returns public.exchange_rate_settings
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select s.* from public.exchange_rate_settings s where s.id = 1;
+$$;
+
+-- Whether a rate is stale on a day: THE rule, for the resolver (and so the
+-- `current_exchange_rates` view), the issue gate on a version's rate and on
+-- every line's, and -- mirrored digit for digit in `fxMath.ts` -- the screens.
+--
+--   official, with a validity the source states (the TRM covers weekends and
+--   Colombian holidays in one row): stale once `valid_until` has passed;
+--   official, with none (the ECB publishes on TARGET days only): stale once
+--   older than `stale_after_days` CALENDAR days. A four-day Easter closure
+--   makes Thursday's fixing stale on Easter Monday on purpose: it is four days
+--   old, and the threshold is the company's to raise;
+--   commercial: stale once its own expiry has passed (none: never);
+--   custom and base: never -- a custom rate is a written, audited agreement,
+--   and the base is 1.
+create or replace function public.fx_rate_is_stale(
+    p_kind           text,
+    p_effective_date date,
+    p_valid_until    date,
+    p_on             date default current_date
+) returns boolean
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select case p_kind
+        when 'official' then
+            coalesce(p_valid_until < p_on,
+                     p_on - p_effective_date
+                         > coalesce((select s.stale_after_days
+                                       from public.exchange_rate_settings s
+                                      where s.id = 1), 3))
+        when 'commercial' then coalesce(p_valid_until < p_on, false)
+        else false
+    end;
+$$;
+
+-- The rate of one currency, of one kind, on one day.
+--
+-- Official: the newest official row whose `effective_date` is on or before the
+-- day, whatever its age -- the last valid rate is kept and REPORTED stale
+-- (`fx_rate_is_stale()`), never hidden and never presented as current. Ties on
+-- a day go to a manual row, then to the provider with the lowest priority.
+--
+-- Commercial: the newest commercial row in force on the day; none, or only
+-- expired ones, falls back to the official rate (and says so in `kind`).
+--
+-- The base currency resolves to 1. No row at all returns no row: the caller
+-- decides whether that is an error. Never a row from after the day.
+create or replace function public.fx_resolve_rate(
+    p_currency character(3),
+    p_kind     public.fx_rate_kind default 'official',
+    p_on       date default current_date
+) returns table (
+    rate             numeric,
+    exchange_rate_id bigint,
+    kind             text,
+    provider_key     text,
+    effective_date   date,
+    valid_until      date,
+    is_stale         boolean
+)
+    language plpgsql stable security invoker
+    set search_path to ''
+as $$
+begin
+    if p_currency = public.fx_base_currency() then
+        return query select 1::numeric, null::bigint, 'base'::text, null::text,
+                            p_on, null::date, false;
+        return;
+    end if;
+
+    if p_kind = 'commercial' then
+        return query
+            select r.rate, r.id, 'commercial'::text, null::text,
+                   r.effective_date, r.valid_until,
+                   public.fx_rate_is_stale('commercial', r.effective_date, r.valid_until, p_on)
+              from public.exchange_rates r
+             where r.currency_code = p_currency
+               and r.kind = 'commercial'
+               and r.effective_date <= p_on
+               and (r.valid_until is null or r.valid_until >= p_on)
+             order by r.effective_date desc, r.id desc
+             limit 1;
+        if found then
+            return;
+        end if;
+    end if;
+
+    return query
+        select r.rate, r.id, 'official'::text, p.key,
+               r.effective_date, r.valid_until,
+               public.fx_rate_is_stale('official', r.effective_date, r.valid_until, p_on)
+          from public.exchange_rates r
+          left join public.exchange_rate_providers p on p.id = r.provider_id
+         where r.currency_code = p_currency
+           and r.kind = 'official'
+           and r.effective_date <= p_on
+         order by r.effective_date desc,
+                  coalesce(p.priority, -1),
+                  r.id desc
+         limit 1;
+end;
+$$;
+
+-- Rounds an amount the way a currency is converted into: to the currency's
+-- decimals, capped at the two every amount column stores.
+create or replace function public.fx_round(p_amount numeric, p_currency character(3))
+returns numeric
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select round(p_amount,
+                 least(coalesce((select c.decimals from public.currencies c
+                                  where c.code = p_currency), 2), 2)::integer);
+$$;
+
+-- BEFORE INSERT/UPDATE on exchange_rate_providers, currencies and
+-- exchange_rate_settings: `updated_at`.
+-- (`public.set_updated_at()` is reused.)
+
+-- BEFORE UPDATE on exchange_rate_providers: the status columns and the secret
+-- reference belong to the sync and credential functions. Compared as values,
+-- because react-admin posts the whole record back.
+create or replace function public.exchange_rate_providers_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.fx_system_write', true), '') <> 'on'
+       and (new.key                   is distinct from old.key
+            or new.requires_credentials  is distinct from old.requires_credentials
+            or new.credentials_secret_id is distinct from old.credentials_secret_id
+            or new.last_attempt_at       is distinct from old.last_attempt_at
+            or new.last_success_at       is distinct from old.last_success_at
+            or new.last_error_at         is distinct from old.last_error_at
+            or new.last_error            is distinct from old.last_error
+            or new.consecutive_failures  is distinct from old.consecutive_failures
+            or new.created_at            is distinct from old.created_at) then
+        raise exception 'only name, description, is_enabled, priority, refresh_interval_minutes and currencies of a rate provider are editable'
+            using errcode = 'check_violation', detail = 'fx_column_protected';
+    end if;
+    return new;
+end;
+$$;
+
+-- BEFORE INSERT/UPDATE on currencies.
+create or replace function public.currencies_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if tg_op = 'INSERT' then
+        -- The base is switched by `set_base_currency()`, never posted.
+        if new.is_base and coalesce(current_setting('app.fx_base_switch', true), '') <> 'on' then
+            raise exception 'the base currency is set through set_base_currency()'
+                using errcode = 'check_violation', detail = 'fx_base_via_function';
+        end if;
+    else
+        if new.code is distinct from old.code then
+            raise exception 'a currency code cannot change'
+                using errcode = 'check_violation', detail = 'fx_currency_code_immutable';
+        end if;
+        if new.is_base is distinct from old.is_base
+           and coalesce(current_setting('app.fx_base_switch', true), '') <> 'on' then
+            raise exception 'the base currency is set through set_base_currency()'
+                using errcode = 'check_violation', detail = 'fx_base_via_function';
+        end if;
+        if new.is_base and not new.is_active then
+            raise exception 'the base currency cannot be deactivated'
+                using errcode = 'check_violation', detail = 'fx_base_must_be_active';
+        end if;
+    end if;
+
+    -- One quotation default: choosing a new one releases the old one, so the
+    -- partial unique index never fires on an ordinary choice.
+    if new.is_quote_default and (tg_op = 'INSERT' or not old.is_quote_default) then
+        update public.currencies c
+           set is_quote_default = false
+         where c.is_quote_default and c.code <> new.code;
+    end if;
+
+    return new;
+end;
+$$;
+
+-- AFTER INSERT/UPDATE on currencies, exchange_rate_providers and
+-- exchange_rate_settings: one audit row per changed field. System columns
+-- (timestamps, sync status) are not configuration and are not logged.
+create or replace function public.fx_config_audit() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_actor  bigint := public.current_sale_id();
+    v_entity text;
+    v_key    text;
+    v_old    jsonb := case when tg_op = 'UPDATE' then to_jsonb(old) else '{}'::jsonb end;
+    v_new    jsonb := to_jsonb(new);
+    v_skip   text[] := array['created_at', 'updated_at', 'last_attempt_at', 'last_success_at',
+                             'last_error_at', 'last_error', 'consecutive_failures',
+                             'credentials_secret_id', 'id'];
+    v_field  text;
+begin
+    v_entity := case tg_table_name
+                    when 'currencies' then 'currency'
+                    when 'exchange_rate_providers' then 'provider'
+                    else 'settings' end;
+    v_key := case tg_table_name
+                 when 'currencies' then (v_new ->> 'code')
+                 when 'exchange_rate_providers' then (v_new ->> 'key')
+                 else 'settings' end;
+
+    for v_field in select jsonb_object_keys(v_new) loop
+        continue when v_field = any (v_skip);
+        if tg_op = 'INSERT' or (v_old -> v_field) is distinct from (v_new -> v_field) then
+            insert into public.exchange_rate_audit_logs
+                (sales_id, entity, entity_key, action, field, old_value, new_value)
+            values (v_actor, v_entity, v_key,
+                    case when tg_op = 'INSERT' then 'created' else 'updated' end,
+                    v_field, v_old -> v_field, v_new -> v_field);
+        end if;
+    end loop;
+
+    return null;
+end;
+$$;
+
+-- BEFORE INSERT on exchange_rates: what the server decides.
+create or replace function public.exchange_rates_before_insert() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    -- Every rate is in today's base; a rate posted against another base would
+    -- be read with the wrong unit by every conversion.
+    new.base_currency_code := public.fx_base_currency();
+    new.fetched_at := now();
+    new.created_at := now();
+
+    if new.provider_id is null then
+        -- A person's rate is signed by the session, never by the request.
+        new.created_by := public.current_sale_id();
+        new.source_payload := null;
+        new.derived_via := null;
+    end if;
+
+    return new;
+end;
+$$;
+
+-- AFTER INSERT on exchange_rates: a manual rate is a manual act and is logged
+-- as one. Provider rows are logged by their sync run instead.
+create or replace function public.exchange_rates_audit() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if new.provider_id is null then
+        insert into public.exchange_rate_audit_logs
+            (sales_id, entity, entity_key, action, new_value, note)
+        values (new.created_by, 'rate', new.currency_code::text,
+                'rate.' || new.kind::text || '.created',
+                jsonb_build_object('id', new.id, 'rate', new.rate,
+                                   'effective_date', new.effective_date,
+                                   'valid_until', new.valid_until,
+                                   'supersedes_id', new.supersedes_id),
+                new.note);
+    end if;
+    return null;
+end;
+$$;
+
+-- BEFORE INSERT/UPDATE on configuration: the deals' display currency IS the
+-- base currency. The settings form posts the whole configuration back, so a
+-- stale value is normalised rather than refused.
+create or replace function public.configuration_currency_is_base() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_base character(3) := public.fx_base_currency();
+begin
+    if v_base is not null then
+        new.config := jsonb_set(coalesce(new.config, '{}'::jsonb), '{currency}',
+                                to_jsonb(v_base::text));
+    end if;
+    return new;
+end;
+$$;
+
+-- The base currency, switched. Refused once any rate or any quotation in
+-- another currency exists: every stored rate is relative to the base, and a
+-- switch would silently change the meaning of all of them.
+create or replace function public.set_base_currency(p_code character(3))
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_base character(3) := public.fx_base_currency();
+begin
+    if not (select public.is_admin()) then
+        raise exception 'only an administrator can change the base currency'
+            using errcode = 'insufficient_privilege', detail = 'fx_forbidden';
+    end if;
+
+    if p_code = v_base then
+        return;
+    end if;
+
+    if not exists (select 1 from public.currencies c where c.code = p_code and c.is_active) then
+        raise exception 'currency % is not an active currency', p_code
+            using errcode = 'check_violation', detail = 'fx_currency_inactive';
+    end if;
+
+    if exists (select 1 from public.exchange_rates)
+       or exists (select 1 from public.quotes q where q.currency <> v_base) then
+        raise exception 'the base currency is locked: rates or quotations in other currencies exist'
+            using errcode = 'check_violation', detail = 'fx_base_locked';
+    end if;
+
+    perform set_config('app.fx_base_switch', 'on', true);
+    update public.currencies set is_base = false where is_base;
+    update public.currencies set is_base = true where code = p_code;
+    perform set_config('app.fx_base_switch', '', true);
+
+    -- The trigger rewrites the currency.
+    update public.configuration set config = config where id = 1;
+end;
+$$;
+
+--
+-- Sync runs (called by the `exchange-rates-sync` edge function, service role)
+--
+
+-- Claims a run of one provider. Returns `{run_id, provider_id, currencies}`,
+-- or `{skipped: <reason>}` when the provider is disabled, not due, or already
+-- running. "Due" is the cache: a provider fetched successfully less than
+-- `refresh_interval_minutes` ago is not called again. After a failure it is
+-- retried sooner, on a doubling backoff from 15 minutes capped at the interval.
+create or replace function public.fx_begin_sync_run(
+    p_provider_key  text,
+    p_triggered_by  text default 'cron',
+    p_force         boolean default false,
+    p_sales_id      bigint default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_provider public.exchange_rate_providers;
+    v_backoff  interval;
+    v_run_id   bigint;
+begin
+    select * into v_provider from public.exchange_rate_providers p
+     where p.key = p_provider_key
+     for update;
+    if not found then
+        raise exception 'unknown rate provider %', p_provider_key
+            using errcode = 'no_data_found', detail = 'fx_provider_unknown';
+    end if;
+
+    if not v_provider.is_enabled then
+        return jsonb_build_object('skipped', 'disabled');
+    end if;
+
+    if not p_force then
+        if v_provider.last_success_at is not null
+           and now() - v_provider.last_success_at
+               < make_interval(mins => v_provider.refresh_interval_minutes) then
+            return jsonb_build_object('skipped', 'not_due');
+        end if;
+
+        if v_provider.consecutive_failures > 0 and v_provider.last_attempt_at is not null then
+            v_backoff := least(
+                make_interval(mins => v_provider.refresh_interval_minutes),
+                make_interval(mins => 15 * power(2, least(v_provider.consecutive_failures - 1, 10))::integer));
+            if now() - v_provider.last_attempt_at < v_backoff then
+                return jsonb_build_object('skipped', 'backoff');
+            end if;
+        end if;
+    end if;
+
+    begin
+        insert into public.exchange_rate_sync_runs
+            (provider_id, triggered_by, triggered_by_sales_id)
+        values (v_provider.id, p_triggered_by, p_sales_id)
+        returning id into v_run_id;
+    exception when unique_violation then
+        return jsonb_build_object('skipped', 'already_running');
+    end;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    update public.exchange_rate_providers set last_attempt_at = now() where id = v_provider.id;
+    perform set_config('app.fx_system_write', '', true);
+
+    return jsonb_build_object(
+        'run_id',      v_run_id,
+        'provider_id', v_provider.id,
+        'currencies',  to_jsonb(v_provider.currencies),
+        'base',        public.fx_base_currency());
+end;
+$$;
+
+-- Stores what a provider returned. Each item says "1 `currency` = `rate`
+-- `quote_currency`", exactly as the source quoted it; this function turns it
+-- into the base convention, so the arithmetic is in one place and pgTAP pins it:
+--
+--   * quote_currency is the base  -> the currency's rate, as is (the TRM);
+--   * currency is the base        -> the quote currency's rate is 1 / rate;
+--   * neither                     -> crossed through whichever side already has
+--     an official rate IN FORCE on that very day (`derived_via`). Never through
+--     a pivot of another day: a cross of two different days is a rate that
+--     never existed.
+--
+-- Invalid items are counted and described, never stored.
+create or replace function public.fx_record_rates(p_run_id bigint, p_items jsonb)
+returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_run       public.exchange_rate_sync_runs;
+    v_base      character(3) := public.fx_base_currency();
+    v_item      jsonb;
+    v_ccy       text;
+    v_qccy      text;
+    v_value     numeric;
+    v_eff       date;
+    v_until     date;
+    v_target    character(3);
+    v_rate      numeric;
+    v_pivot     numeric;
+    v_via       character(3);
+    v_received  integer := 0;
+    v_inserted  integer := 0;
+    v_rejected  jsonb := '[]'::jsonb;
+    v_rows      integer;
+begin
+    select * into v_run from public.exchange_rate_sync_runs r where r.id = p_run_id;
+    if not found or v_run.status <> 'running' then
+        raise exception 'sync run % is not running', p_run_id
+            using errcode = 'check_violation', detail = 'fx_run_not_running';
+    end if;
+
+    -- Items are processed in date order with the direct ones first, so a cross
+    -- rate finds the pivot this same batch brought in.
+    for v_item in
+        select e.value
+          from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) e
+         order by e.value ->> 'effective_date',
+                  ((e.value ->> 'quote_currency') = v_base
+                   or (e.value ->> 'currency') = v_base) desc
+    loop
+        v_received := v_received + 1;
+        v_ccy  := upper(btrim(v_item ->> 'currency'));
+        v_qccy := upper(btrim(v_item ->> 'quote_currency'));
+        v_via  := null;
+
+        begin
+            v_value := (v_item ->> 'rate')::numeric;
+            v_eff   := (v_item ->> 'effective_date')::date;
+            v_until := nullif(v_item ->> 'valid_until', '')::date;
+        exception when others then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'unparseable');
+            continue;
+        end;
+
+        if v_value is null or v_value <= 0 then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'rate_not_positive');
+            continue;
+        end if;
+        if v_eff is null or v_eff > current_date + 4 then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'effective_date_invalid');
+            continue;
+        end if;
+        if v_until is not null and v_until < v_eff then
+            v_until := null;
+        end if;
+        if v_ccy = v_qccy
+           or not exists (select 1 from public.currencies c where c.code = v_ccy)
+           or not exists (select 1 from public.currencies c where c.code = v_qccy) then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'currency_unknown');
+            continue;
+        end if;
+
+        if v_qccy = v_base then
+            v_target := v_ccy;
+            v_rate   := v_value;
+        elsif v_ccy = v_base then
+            v_target := v_qccy;
+            v_rate   := 1 / v_value;
+        else
+            -- Pivot on the currency side: 1 C = value Q, and C is known in base.
+            select r.rate into v_pivot
+              from public.exchange_rates r
+             where r.currency_code = v_ccy and r.kind = 'official'
+               and r.effective_date <= v_eff
+               and coalesce(r.valid_until, r.effective_date) >= v_eff
+             order by r.effective_date desc, r.id desc
+             limit 1;
+            if v_pivot is not null then
+                v_target := v_qccy;
+                v_rate   := v_pivot / v_value;
+                v_via    := v_ccy;
+            else
+                select r.rate into v_pivot
+                  from public.exchange_rates r
+                 where r.currency_code = v_qccy and r.kind = 'official'
+                   and r.effective_date <= v_eff
+                   and coalesce(r.valid_until, r.effective_date) >= v_eff
+                 order by r.effective_date desc, r.id desc
+                 limit 1;
+                if v_pivot is null then
+                    v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'pivot_missing');
+                    continue;
+                end if;
+                v_target := v_ccy;
+                v_rate   := v_pivot * v_value;
+                v_via    := v_qccy;
+            end if;
+        end if;
+
+        v_rate := round(v_rate, 10);
+        if v_rate <= 0 then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'rate_not_positive');
+            continue;
+        end if;
+
+        insert into public.exchange_rates
+            (currency_code, base_currency_code, rate, kind, provider_id,
+             effective_date, valid_until, derived_via, source_payload)
+        values (v_target, v_base, v_rate, 'official', v_run.provider_id,
+                v_eff, v_until, v_via, v_item -> 'raw')
+        on conflict (currency_code, base_currency_code, provider_id, effective_date)
+            where provider_id is not null
+            do nothing;
+        get diagnostics v_rows = row_count;
+        v_inserted := v_inserted + v_rows;
+    end loop;
+
+    update public.exchange_rate_sync_runs r
+       set rates_received = r.rates_received + v_received,
+           rates_inserted = r.rates_inserted + v_inserted,
+           rates_rejected = r.rates_rejected + jsonb_array_length(v_rejected),
+           details = case when jsonb_array_length(v_rejected) > 0
+                          then coalesce(r.details, '{}'::jsonb)
+                               || jsonb_build_object('rejected', v_rejected)
+                          else r.details end
+     where r.id = p_run_id;
+
+    return jsonb_build_object('received', v_received,
+                              'inserted', v_inserted,
+                              'rejected', v_rejected);
+end;
+$$;
+
+-- Closes a run and moves the provider's status. A failure leaves every stored
+-- rate alone: the last valid one keeps being served, reported stale once it
+-- ages past the threshold. Reaching `failure_alert_threshold` consecutive
+-- failures tells every active admin, once per provider and day.
+create or replace function public.fx_finish_sync_run(
+    p_run_id   bigint,
+    p_ok       boolean,
+    p_attempts integer default 1,
+    p_error    text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_run      public.exchange_rate_sync_runs;
+    v_provider public.exchange_rate_providers;
+    v_notified integer := 0;
+begin
+    update public.exchange_rate_sync_runs r
+       set status      = case when p_ok then 'succeeded' else 'failed' end,
+           finished_at = now(),
+           attempts    = greatest(coalesce(p_attempts, 1), 0),
+           error       = case when p_ok then null else left(coalesce(p_error, 'unknown error'), 2000) end
+     where r.id = p_run_id and r.status = 'running'
+    returning * into v_run;
+    if not found then
+        raise exception 'sync run % is not running', p_run_id
+            using errcode = 'check_violation', detail = 'fx_run_not_running';
+    end if;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    if p_ok then
+        update public.exchange_rate_providers p
+           set last_success_at = now(), consecutive_failures = 0
+         where p.id = v_run.provider_id
+        returning * into v_provider;
+    else
+        update public.exchange_rate_providers p
+           set last_error_at = now(),
+               last_error = v_run.error,
+               consecutive_failures = p.consecutive_failures + 1
+         where p.id = v_run.provider_id
+        returning * into v_provider;
+    end if;
+    perform set_config('app.fx_system_write', '', true);
+
+    if not p_ok
+       and v_provider.consecutive_failures
+           >= (select s.failure_alert_threshold from public.exchange_rate_settings s where s.id = 1) then
+        v_notified := public.notify_fx_sync_failure(v_provider.id);
+    end if;
+
+    return jsonb_build_object('run_id', p_run_id, 'status', v_run.status,
+                              'consecutive_failures', v_provider.consecutive_failures,
+                              'notified', v_notified);
+end;
+$$;
+
+-- In-app notification to every active admin. Idempotent per provider and day
+-- through the outbox's `dedupe_key`; an explicit mute of the in-app channel is
+-- honoured and leaves a `skipped` row, as everywhere else.
+create or replace function public.notify_fx_sync_failure(p_provider_id bigint)
+returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_provider public.exchange_rate_providers;
+    v_admin    bigint;
+    v_prefs    public.notification_preferences;
+    v_muted    boolean;
+    v_written  integer := 0;
+begin
+    select * into v_provider from public.exchange_rate_providers p where p.id = p_provider_id;
+    if not found then
+        return 0;
+    end if;
+
+    for v_admin in
+        select s.id from public.sales s
+         where s.role = 'admin' and s.disabled is not true
+    loop
+        v_prefs := public.notification_prefs_for(v_admin);
+        v_muted := 'in_app'::public.reminder_channel = any (v_prefs.muted_channels);
+
+        insert into public.task_notifications (
+            task_id, entity_type, entity_id, recipient_id, channel, scheduled_for,
+            title, body, message_key, message_params, dedupe_key,
+            status, sent_at, delivered_at, error)
+        values (
+            null, 'exchange_rate_provider', v_provider.id, v_admin, 'in_app', now(),
+            format('Exchange rates: %s is failing', v_provider.name),
+            format('%s consecutive failed updates. Last error: %s',
+                   v_provider.consecutive_failures, coalesce(v_provider.last_error, '-')),
+            'crm.notifications.fx.sync_failed',
+            jsonb_build_object('provider', v_provider.name,
+                               'failures', v_provider.consecutive_failures,
+                               'error', coalesce(v_provider.last_error, '')),
+            format('fx:%s:%s:%s:in_app', v_provider.key, current_date, v_admin),
+            case when v_muted then 'skipped' else 'delivered' end,
+            case when v_muted then null else now() end,
+            case when v_muted then null else now() end,
+            case when v_muted then 'channel in_app muted by recipient' end)
+        on conflict (dedupe_key) do nothing;
+
+        if found then
+            v_written := v_written + 1;
+        end if;
+    end loop;
+
+    return v_written;
+end;
+$$;
+
+-- Runs left `running` by a function that died (timeout, deploy) would hold the
+-- provider's lock forever. Scheduled every 15 minutes.
+create or replace function public.fx_reap_sync_runs() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_run   bigint;
+    v_count integer := 0;
+begin
+    for v_run in
+        select r.id from public.exchange_rate_sync_runs r
+         where r.status = 'running'
+           and r.started_at < now() - interval '10 minutes'
+    loop
+        perform public.fx_finish_sync_run(v_run, false, 0, 'run abandoned: no result after 10 minutes');
+        v_count := v_count + 1;
+    end loop;
+    return v_count;
+end;
+$$;
+
+--
+-- Credentials (Supabase Vault). The secret never reaches a table a client can
+-- read: the provider row holds the Vault id only.
+--
+create or replace function public.set_fx_provider_secret(p_provider_key text, p_secret text)
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_provider public.exchange_rate_providers;
+    v_secret   text := nullif(btrim(coalesce(p_secret, '')), '');
+    v_id       uuid;
+begin
+    if not (select public.is_admin()) then
+        raise exception 'only an administrator can set provider credentials'
+            using errcode = 'insufficient_privilege', detail = 'fx_forbidden';
+    end if;
+
+    select * into v_provider from public.exchange_rate_providers p
+     where p.key = p_provider_key for update;
+    if not found then
+        raise exception 'unknown rate provider %', p_provider_key
+            using errcode = 'no_data_found', detail = 'fx_provider_unknown';
+    end if;
+
+    v_id := v_provider.credentials_secret_id;
+
+    if v_secret is null then
+        if v_id is not null then
+            delete from vault.secrets s where s.id = v_id;
+        end if;
+        v_id := null;
+    elsif v_id is null then
+        v_id := vault.create_secret(v_secret, 'fx_provider_' || v_provider.key,
+                                    'Credentials of exchange rate provider ' || v_provider.key);
+    else
+        perform vault.update_secret(v_id, v_secret);
+    end if;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    update public.exchange_rate_providers set credentials_secret_id = v_id where id = v_provider.id;
+    perform set_config('app.fx_system_write', '', true);
+
+    -- Logged as a fact, never with the value.
+    insert into public.exchange_rate_audit_logs (sales_id, entity, entity_key, action)
+    values (public.current_sale_id(), 'provider', v_provider.key,
+            case when v_secret is null then 'credentials.cleared' else 'credentials.set' end);
+end;
+$$;
+
+create or replace function public.get_fx_provider_secret(p_provider_key text)
+returns text
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select d.decrypted_secret
+      from public.exchange_rate_providers p
+      join vault.decrypted_secrets d on d.id = p.credentials_secret_id
+     where p.key = p_provider_key;
+$$;
+
+--
+-- Quotations
+--
+
+-- The rate a line priced in another currency converts at, and WHICH
+-- observation that is. One implementation, called by `quote_lines_fx_convert`,
+-- by `set_quote_version_rate()` and, read-only, by the line picker's preview,
+-- so what the rep is shown is what will be stored.
+--
+--   * the version's base resolves to 1;
+--   * one observation per source currency per version: a line reuses the one
+--     another line of the same currency already carries (`p_reuse => false` is
+--     how a re-pricing asks for a fresh one);
+--   * otherwise the newest observation ON OR BEFORE the version's rate day --
+--     the day its official rate was observed, or the day a commercial, custom
+--     or base rate was set -- so a cross conversion never pairs one day's EUR
+--     with another day's USD. Never a later one: with none, no row, and the
+--     caller refuses (`fx_rate_missing`);
+--   * `is_stale` is `fx_rate_is_stale()` today, the issue gate's question. A
+--     rate carried with no recorded observation cannot be vouched for.
+--
+-- Security invoker: a preview reads only a version RLS lets the caller read.
+create or replace function public.fx_line_source_rate(
+    p_version_id      bigint,
+    p_source_currency character(3),
+    p_reuse           boolean default true
+) returns table (
+    rate             numeric,
+    exchange_rate_id bigint,
+    kind             text,
+    effective_date   date,
+    valid_until      date,
+    is_stale         boolean
+)
+    language plpgsql stable security invoker
+    set search_path to ''
+as $$
+declare
+    v_version public.quote_versions;
+    v_kind    public.fx_rate_kind;
+    v_on      date;
+begin
+    select * into v_version from public.quote_versions v where v.id = p_version_id;
+    if not found or p_source_currency is null
+       or p_source_currency = v_version.currency then
+        return;
+    end if;
+
+    if p_source_currency = v_version.base_currency then
+        return query select 1::numeric, null::bigint, 'base'::text,
+                            null::date, null::date, false;
+        return;
+    end if;
+
+    if p_reuse then
+        return query
+            select l.source_exchange_rate, l.source_exchange_rate_id,
+                   r.kind::text, r.effective_date, r.valid_until,
+                   coalesce(public.fx_rate_is_stale(r.kind::text, r.effective_date, r.valid_until), true)
+              from public.quote_lines l
+              left join public.exchange_rates r on r.id = l.source_exchange_rate_id
+             where l.version_id = p_version_id
+               and l.source_currency = p_source_currency
+               and l.source_exchange_rate is not null
+             order by l.id
+             limit 1;
+        if found then
+            return;
+        end if;
+    end if;
+
+    if v_version.rate_kind = 'official' then
+        v_kind := 'official';
+        v_on := v_version.rate_effective_date;
+    elsif v_version.rate_kind = 'commercial' then
+        v_kind := 'commercial';
+        v_on := v_version.rate_set_at::date;
+    else
+        v_kind := (select s.quote_rate_kind_default
+                     from public.exchange_rate_settings s where s.id = 1);
+        v_on := v_version.rate_set_at::date;
+    end if;
+
+    return query
+        select r.rate, r.exchange_rate_id, r.kind, r.effective_date, r.valid_until,
+               public.fx_rate_is_stale(r.kind, r.effective_date, r.valid_until)
+          from public.fx_resolve_rate(p_source_currency, v_kind,
+                                      coalesce(v_on, current_date)) r;
+end;
+$$;
+
+-- BEFORE INSERT/UPDATE on quote_lines: a converted price, and the rate it is
+-- converted at, are the server's.
+--
+--     unit_price = round(source_unit_price * source_rate / version_rate,
+--                        least(decimals of the quote currency, 2))
+--
+-- `source_exchange_rate` / `source_exchange_rate_id` are never taken from the
+-- client: an inserted line gets them from `fx_line_source_rate()`, and an
+-- updated one keeps the observation it has while its source currency stays.
+-- Only `set_quote_version_rate()` and `revise_quote()` write them, through the
+-- `app.fx_line_rate_write` hatch scoped to one version. A price typed by hand
+-- arrives with no source and is the negotiated figure (§13.2).
+create or replace function public.quote_lines_fx_convert() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_version public.quote_versions;
+    v_source  record;
+    v_trusted boolean;
+begin
+    if new.source_currency is null then
+        new.source_unit_price := null;
+        new.source_exchange_rate := null;
+        new.source_exchange_rate_id := null;
+        return new;
+    end if;
+
+    select * into v_version from public.quote_versions v where v.id = new.version_id;
+
+    if new.source_currency = v_version.currency then
+        new.source_exchange_rate := null;
+        new.source_exchange_rate_id := null;
+        new.unit_price := new.source_unit_price;
+        return new;
+    end if;
+
+    if v_version.exchange_rate is null then
+        raise exception 'quote version % has no exchange rate for %',
+                new.version_id, v_version.currency
+            using errcode = 'check_violation', detail = 'fx_rate_missing';
+    end if;
+
+    v_trusted := current_setting('app.fx_line_rate_write', true) = new.version_id::text;
+
+    if v_trusted and new.source_exchange_rate is not null then
+        null;
+    elsif tg_op = 'UPDATE'
+          and new.source_currency is not distinct from old.source_currency
+          and old.source_exchange_rate is not null then
+        new.source_exchange_rate := old.source_exchange_rate;
+        new.source_exchange_rate_id := old.source_exchange_rate_id;
+    else
+        select * into v_source
+          from public.fx_line_source_rate(new.version_id, new.source_currency);
+        if v_source.rate is null then
+            raise exception 'no exchange rate for % on or before the rate day of quote version %',
+                    new.source_currency, new.version_id
+                using errcode = 'check_violation', detail = 'fx_rate_missing';
+        end if;
+        new.source_exchange_rate := v_source.rate;
+        new.source_exchange_rate_id := v_source.exchange_rate_id;
+    end if;
+
+    new.unit_price := public.fx_round(
+        new.source_unit_price * new.source_exchange_rate / v_version.exchange_rate,
+        v_version.currency);
+
+    return new;
+end;
+$$;
+
+-- The rate of a DRAFT version, chosen. Official and commercial resolve the
+-- rate in force today; custom takes the figure given, with a written reason,
+-- from a manager or admin -- or from a rep within the configured tolerance of
+-- the official rate; base (a quotation in the base currency) stays at 1.
+-- Every converted line is re-priced at one fresh observation per source
+-- currency -- for a base quotation that is its whole "update to today's
+-- rate" -- and the totals follow. Logged in the module's audit trail.
+create or replace function public.set_quote_version_rate(
+    p_version_id bigint,
+    p_kind       public.quote_rate_kind,
+    p_rate       numeric default null,
+    p_reason     text default null
+) returns public.quote_versions
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_actor    bigint := public.current_sale_id();
+    v_role     public.sales_role := public.current_sales_role();
+    v_version  public.quote_versions;
+    v_quote    public.quotes;
+    v_kind     public.quote_rate_kind;
+    v_rate     numeric;
+    v_rate_id  bigint;
+    v_provider text;
+    v_eff      date;
+    v_official numeric;
+    v_tol      numeric;
+    v_reason   text := nullif(btrim(coalesce(p_reason, '')), '');
+    v_new      public.quote_versions;
+    v_src      record;
+    v_line     record;
+begin
+    select * into v_version from public.quote_versions v where v.id = p_version_id for update;
+    if not found then
+        raise exception 'quote version % not found', p_version_id
+            using errcode = 'no_data_found';
+    end if;
+
+    select * into v_quote from public.quotes q where q.id = v_version.quote_id for update;
+
+    if not (select public.can_manage_all())
+       and v_quote.sales_id is distinct from v_actor then
+        raise exception 'no permission to change the rate of quote %', v_quote.id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    if v_version.issued_at is not null then
+        raise exception 'quote version % is issued and immutable', p_version_id
+            using errcode = 'check_violation', detail = 'quote_version_frozen';
+    end if;
+    if v_quote.status_key is distinct from 'draft' then
+        raise exception 'the rate is editable only while the quote is a draft (it is %)', v_quote.status_key
+            using errcode = 'check_violation', detail = 'quote_not_draft';
+    end if;
+
+    if v_version.currency = v_version.base_currency then
+        if p_kind <> 'base' then
+            raise exception 'a quotation in the base currency has no exchange rate'
+                using errcode = 'check_violation', detail = 'fx_rate_kind_invalid';
+        end if;
+        -- Rate 1, and "update to today's rate" re-prices the lines a
+        -- list in another currency priced (below).
+    elsif p_kind = 'base' then
+        raise exception 'quote % is not in the base currency', v_quote.id
+            using errcode = 'check_violation', detail = 'fx_rate_kind_invalid';
+    end if;
+
+    if p_kind in ('official', 'commercial') then
+        select r.kind::public.quote_rate_kind, r.rate, r.exchange_rate_id,
+               r.provider_key, r.effective_date
+          into v_kind, v_rate, v_rate_id, v_provider, v_eff
+          from public.fx_resolve_rate(v_version.currency, p_kind::text::public.fx_rate_kind) r;
+        if v_rate is null then
+            raise exception 'no exchange rate is available for %', v_version.currency
+                using errcode = 'check_violation', detail = 'fx_rate_missing';
+        end if;
+    elsif p_kind = 'custom' then
+        if p_rate is null or p_rate <= 0 then
+            raise exception 'a custom rate must be a positive number'
+                using errcode = 'check_violation', detail = 'fx_rate_invalid';
+        end if;
+        if v_reason is null then
+            raise exception 'a custom rate needs a written reason'
+                using errcode = 'check_violation', detail = 'fx_reason_required';
+        end if;
+        if v_role is distinct from 'admin' and v_role is distinct from 'manager' then
+            v_tol := (select s.rep_custom_rate_tolerance_percent
+                        from public.exchange_rate_settings s where s.id = 1);
+            if coalesce(v_tol, 0) = 0 then
+                raise exception 'custom exchange rates are reserved to managers and administrators'
+                    using errcode = 'insufficient_privilege', detail = 'fx_custom_rate_forbidden';
+            end if;
+            select r.rate into v_official
+              from public.fx_resolve_rate(v_version.currency, 'official') r;
+            if v_official is null
+               or abs(p_rate / v_official - 1) * 100 > v_tol then
+                raise exception 'the custom rate is more than % percent away from the official rate', v_tol
+                    using errcode = 'check_violation', detail = 'fx_custom_rate_out_of_tolerance',
+                          hint = jsonb_build_object('official', v_official, 'tolerance', v_tol)::text;
+            end if;
+        end if;
+    end if;
+
+    if p_kind = 'custom' then
+        v_kind     := 'custom';
+        v_rate     := round(p_rate, 10);
+        v_rate_id  := null;
+        v_provider := null;
+        v_eff      := current_date;
+    end if;
+
+    if p_kind = 'base' then
+        v_kind     := 'base';
+        v_rate     := 1;
+        v_rate_id  := null;
+        v_provider := null;
+        v_eff      := current_date;
+    end if;
+
+    perform set_config('app.quote_version_system_write', p_version_id::text, true);
+    update public.quote_versions v
+       set rate_kind           = v_kind,
+           exchange_rate       = v_rate,
+           exchange_rate_id    = v_rate_id,
+           rate_provider_key   = v_provider,
+           rate_effective_date = v_eff,
+           rate_reason         = case when p_kind = 'custom' then v_reason end,
+           rate_set_at         = now(),
+           rate_set_by         = v_actor
+     where v.id = p_version_id
+    returning * into v_new;
+    perform set_config('app.quote_version_system_write', '', true);
+
+    -- Re-price every converted line: ONE fresh observation per source
+    -- currency, on the new rate's day (`fx_line_source_rate()`, the
+    -- resolution the trigger and the preview use), written through the
+    -- hatch `quote_lines_fx_convert` honours for this version only.
+    for v_src in
+        select distinct l.source_currency
+          from public.quote_lines l
+         where l.version_id = p_version_id
+           and l.source_currency is not null
+           and l.source_currency <> v_new.currency
+    loop
+        select * into v_line
+          from public.fx_line_source_rate(p_version_id, v_src.source_currency, false);
+        if v_line.rate is null then
+            raise exception 'no exchange rate is available for %', v_src.source_currency
+                using errcode = 'check_violation', detail = 'fx_rate_missing';
+        end if;
+        perform set_config('app.fx_line_rate_write', p_version_id::text, true);
+        update public.quote_lines l
+           set source_exchange_rate    = v_line.rate,
+               source_exchange_rate_id = v_line.exchange_rate_id
+         where l.version_id = p_version_id
+           and l.source_currency = v_src.source_currency;
+        perform set_config('app.fx_line_rate_write', '', true);
+    end loop;
+
+    perform public.refresh_quote_version_totals(p_version_id);
+
+    insert into public.exchange_rate_audit_logs
+        (sales_id, entity, entity_key, action, old_value, new_value, note)
+    values (v_actor, 'quote_version', p_version_id::text, 'rate.set',
+            jsonb_build_object('kind', v_version.rate_kind, 'rate', v_version.exchange_rate,
+                               'effective_date', v_version.rate_effective_date),
+            jsonb_build_object('kind', v_new.rate_kind, 'rate', v_new.exchange_rate,
+                               'effective_date', v_new.rate_effective_date),
+            v_reason);
+
+    select * into v_new from public.quote_versions v where v.id = p_version_id;
+    return v_new;
+end;
+$$;
+
+--
+-- What the integration looks like right now, for the health panel. One
+-- function so the status rule has one definition, pinned by pgTAP. SECURITY
+-- DEFINER because it reads `cron.job` and the Vault catalogue, neither of
+-- which an API role can read; it returns presence and status, never a value.
+--
+create or replace function public.fx_integration_health() returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_settings  public.exchange_rate_settings;
+    v_auto      jsonb;
+    v_job_active   boolean;
+    v_job_schedule text;
+    v_secrets   boolean := false;
+    v_providers jsonb;
+    v_oldest    jsonb;
+begin
+    if not (select public.can_manage_all()) then
+        raise exception 'the integration health is reserved to managers and administrators'
+            using errcode = 'insufficient_privilege', detail = 'fx_forbidden';
+    end if;
+
+    select * into v_settings from public.exchange_rate_settings s where s.id = 1;
+
+    begin
+        select j.active, j.schedule into v_job_active, v_job_schedule
+          from cron.job j where j.jobname = 'fx-rates-sync';
+    exception when others then
+        v_job_active := null;
+        v_job_schedule := null;
+    end;
+
+    begin
+        select count(*) = 2 into v_secrets
+          from vault.secrets s where s.name in ('fx_sync_url', 'fx_sync_service_key');
+    exception when others then
+        v_secrets := false;
+    end;
+
+    v_auto := jsonb_build_object(
+        'job_exists',         v_job_schedule is not null,
+        'job_active',         coalesce(v_job_active, false),
+        'schedule',           v_job_schedule,
+        'secrets_configured', v_secrets,
+        'active',             coalesce(v_job_active, false) and v_secrets);
+
+    select coalesce(jsonb_agg(to_jsonb(x) order by x.priority, x.key), '[]'::jsonb)
+      into v_providers
+      from (
+        select p.key, p.name, p.is_enabled, p.priority, p.refresh_interval_minutes,
+               p.currencies, p.requires_credentials,
+               p.credentials_secret_id is not null as has_credentials,
+               p.last_attempt_at, p.last_success_at, p.last_error_at, p.last_error,
+               p.consecutive_failures,
+               (select r.rates_inserted from public.exchange_rate_sync_runs r
+                 where r.provider_id = p.id and r.status <> 'running'
+                 order by r.started_at desc limit 1) as rates_imported_last_run,
+               (select coalesce(sum(r.rates_inserted), 0) from public.exchange_rate_sync_runs r
+                 where r.provider_id = p.id and r.started_at > now() - interval '30 days')
+                   as rates_imported_30d,
+               (select count(*) from public.exchange_rate_sync_runs r
+                 where r.provider_id = p.id and r.status = 'failed'
+                   and r.started_at > now() - interval '30 days') as errors_30d,
+               (select min(e.effective_date) from public.exchange_rates e
+                 where e.provider_id = p.id) as history_from,
+               exists (select 1 from public.exchange_rate_sync_runs r
+                        where r.provider_id = p.id and r.status = 'running') as is_running,
+               case
+                   when not p.is_enabled then 'disabled'
+                   when p.consecutive_failures >= v_settings.failure_alert_threshold
+                     or p.last_success_at is null
+                     or p.last_success_at < now() - make_interval(days => greatest(v_settings.stale_after_days, 1))
+                       then 'down'
+                   when p.consecutive_failures > 0
+                     or p.last_success_at < now() - make_interval(mins => 2 * p.refresh_interval_minutes)
+                       then 'degraded'
+                   else 'operational'
+               end as status
+          from public.exchange_rate_providers p
+      ) x;
+
+    -- The oldest rate anything is still priced with: the rate in force for
+    -- each active currency, and the rate of every open DRAFT. An issued
+    -- version is frozen on purpose and is not "in use" in this sense.
+    select jsonb_build_object('effective_date', u.effective_date,
+                              'currency',       u.currency,
+                              'kind',           u.kind,
+                              'source',         u.source,
+                              'quote_id',       u.quote_id,
+                              'is_stale',       current_date - u.effective_date > v_settings.stale_after_days)
+      into v_oldest
+      from (
+        select r.effective_date, c.code::text as currency, r.kind, 'current_rate'::text as source,
+               null::bigint as quote_id
+          from public.currencies c
+         cross join lateral public.fx_resolve_rate(c.code, 'official') r
+         where c.is_active and not c.is_base
+        union all
+        select v.rate_effective_date, v.currency::text, v.rate_kind::text, 'draft_quote'::text, v.quote_id
+          from public.quote_versions v
+         where v.issued_at is null
+           and v.rate_kind in ('official', 'commercial', 'custom')
+      ) u
+     where u.effective_date is not null
+     order by u.effective_date, u.currency
+     limit 1;
+
+    return jsonb_build_object(
+        'checked_at', now(),
+        'base_currency', public.fx_base_currency(),
+        'stale_after_days', v_settings.stale_after_days,
+        'auto_sync', v_auto,
+        'providers', v_providers,
+        'history', (select jsonb_build_object('available', count(*) > 0,
+                                              'rates', count(*),
+                                              'from', min(e.effective_date),
+                                              'to', max(e.effective_date))
+                      from public.exchange_rates e),
+        'oldest_rate_in_use', v_oldest,
+        'active_currencies', (select count(*) from public.currencies c where c.is_active),
+        'currencies_without_rate', (
+            select coalesce(jsonb_agg(c.code order by c.code), '[]'::jsonb)
+              from public.currencies c
+             where c.is_active and not c.is_base
+               and not exists (select 1 from public.exchange_rates e
+                                where e.currency_code = c.code)));
+end;
+$$;
+
+-- The scheduled tick (`fx-rates-sync`, 20261001130000): posts to the
+-- `exchange-rates-sync` edge function with the URL and key held in Vault; a
+-- no-op until both exist.
+create or replace function public.fx_dispatch_sync() returns bigint
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_url text;
+    v_key text;
+begin
+    select d.decrypted_secret into v_url
+      from vault.decrypted_secrets d where d.name = 'fx_sync_url';
+    select d.decrypted_secret into v_key
+      from vault.decrypted_secrets d where d.name = 'fx_sync_service_key';
+
+    if v_url is null or v_key is null then
+        return null;
+    end if;
+
+    -- pg_net is asynchronous: this queues the request and returns its id. The
+    -- outcome is recorded by the function itself, in `exchange_rate_sync_runs`.
+    return net.http_post(
+        url                  := v_url,
+        body                 := jsonb_build_object('trigger', 'cron'),
+        headers              := jsonb_build_object(
+                                    'Content-Type', 'application/json',
+                                    'Authorization', 'Bearer ' || v_key),
+        timeout_milliseconds := 60000);
+end;
+$$;
+
+-- The retention path of the rate history (`20261001140000_fx_purge`):
+-- service_role only, through the `app.quote_purge` hatch.
+create or replace function public.purge_exchange_rates() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_count integer;
+begin
+    perform set_config('app.quote_purge', 'on', true);
+
+    delete from public.exchange_rate_sync_runs where id is not null;
+    delete from public.exchange_rate_audit_logs where id is not null;
+    -- Corrections point at the rows they supersede: those go first.
+    delete from public.exchange_rates where supersedes_id is not null;
+    delete from public.exchange_rates where id is not null;
+    get diagnostics v_count = row_count;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    update public.exchange_rate_providers
+       set last_attempt_at = null, last_success_at = null, last_error_at = null,
+           last_error = null, consecutive_failures = 0
+     where id is not null;
+    perform set_config('app.fx_system_write', '', true);
+
+    perform set_config('app.quote_purge', '', true);
+    return v_count;
 end;
 $$;

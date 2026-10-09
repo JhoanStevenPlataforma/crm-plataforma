@@ -124,7 +124,11 @@ test.describe("the pipeline follows its quotations", () => {
     ).toBeVisible();
 
     await page.goto(`/#/deals/${deal.id}/show`);
-    await expect(page.getByText("3,000").first()).toBeVisible();
+    // The deal is counted in the base currency: 3,000 EUR at the seeded
+    // 5,000 COP per EUR is 15,000,000 COP (shown compact), while the
+    // quotation itself keeps its euros.
+    await expect(page.getByText("$15M").first()).toBeVisible();
+    await expect(page.getByText("€3,000.00").first()).toBeVisible();
     for (const step of [
       "Moved automatically: the quotation was sent",
       "Moved automatically: the customer wrote back",

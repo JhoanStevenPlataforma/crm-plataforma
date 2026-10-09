@@ -92,14 +92,21 @@ select is(
         'current_sale_id()',
         'current_sales_role()',
         'deal_stage_gate(p_deal_id bigint, p_to_stage text)',
+        -- Currencies & exchange rates (2026-10-01): each checks the role itself.
+        'fx_integration_health()',
         'is_admin()',
         'issue_quote_version(p_quote_id bigint, p_token_days integer, p_token_label text, p_override_reason text, p_reason text)',
         'mark_quote_comments_read(p_quote_id bigint)',
         'move_deal_stage(p_deal_id bigint, p_to_stage text, p_reason text, p_index integer, p_attachments jsonb, p_override_reason text)',
         'notification_prefs_for(p_sales_id bigint)',
         'quote_discount_gate(p_quote_id bigint)',
+        -- Permanent customer link (2026-09-30): checks can_see_quote() itself.
+        'quote_share_link(p_quote_id bigint, p_create boolean)',
         'revise_quote(p_quote_id bigint, p_reason text)',
         'revoke_quote_token(p_token_id bigint)',
+        'set_base_currency(p_code character)',
+        'set_fx_provider_secret(p_provider_key text, p_secret text)',
+        'set_quote_version_rate(p_version_id bigint, p_kind quote_rate_kind, p_rate numeric, p_reason text)',
         'task_has_open_blockers(p_task_id bigint)',
         'transition_quote(p_quote_id bigint, p_to_status text, p_reason text, p_attachments jsonb)',
         'transition_task(p_task_id bigint, p_to_status text, p_reason text, p_metadata jsonb)'

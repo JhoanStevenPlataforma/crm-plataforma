@@ -2,6 +2,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   Building2,
+  Coins,
   Contact,
   FileBarChart,
   FileSignature,
@@ -284,6 +285,17 @@ export const NAV_SECTIONS: NavSection[] = [
         match: "/tax_rates/*",
         icon: Percent,
         access: { resource: "tax_rates", action: "edit" },
+      },
+      // Financial settings: currencies and exchange rates. Everyone reads the
+      // rates a quotation will use; what each role may change is per tab.
+      {
+        key: "currencies",
+        labelKey: "crm.fx.navigation",
+        to: "/currencies",
+        match: "/currencies",
+        matchEnd: true,
+        icon: Coins,
+        access: { resource: "current_exchange_rates", action: "list" },
       },
       // The slides a customer reads before every quotation. Admins edit them.
       {

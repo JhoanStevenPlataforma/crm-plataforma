@@ -190,4 +190,54 @@ describe("canAccess", () => {
 
     expect(allowed).toEqual(["admin"]);
   });
+
+  describe("currencies and exchange rates", () => {
+    const roles: CrmRole[] = ["admin", "manager", "rep"];
+    const allowed = (action: string, resource: string) =>
+      roles.filter((role) => canAccess(role, { action, resource }));
+
+    test("everyone reads the currencies and the current rates, which every quote uses", () => {
+      for (const resource of [
+        "currencies",
+        "current_exchange_rates",
+        "exchange_rates",
+      ]) {
+        expect(allowed("list", resource)).toEqual(roles);
+      }
+    });
+
+    test("only admins configure currencies, providers and settings", () => {
+      for (const resource of [
+        "currencies",
+        "exchange_rate_providers",
+        "exchange_rate_settings",
+      ]) {
+        expect(allowed("edit", resource)).toEqual(["admin"]);
+      }
+      expect(allowed("create", "currencies")).toEqual(["admin"]);
+    });
+
+    test("managers and admins add manual rates; nobody edits or deletes one", () => {
+      expect(allowed("create", "exchange_rates")).toEqual(["admin", "manager"]);
+      expect(allowed("edit", "exchange_rates")).toEqual([]);
+      expect(allowed("delete", "exchange_rates")).toEqual([]);
+    });
+
+    test("nobody deletes a currency or creates a provider: those are deactivated or seeded", () => {
+      expect(allowed("delete", "currencies")).toEqual([]);
+      expect(allowed("create", "exchange_rate_providers")).toEqual([]);
+    });
+
+    test("the sync runs, the audit log and the health panel are not a rep's", () => {
+      expect(allowed("list", "exchange_rate_sync_runs")).toEqual([
+        "admin",
+        "manager",
+      ]);
+      expect(allowed("list", "exchange_rate_audit_logs")).toEqual([
+        "admin",
+        "manager",
+      ]);
+      expect(allowed("list", "fx_health")).toEqual(["admin", "manager"]);
+    });
+  });
 });

@@ -156,7 +156,7 @@ reset role;
 --
 select is(
     public.quotes_test_keys_of(current_setting('portal_test.view')::jsonb),
-    'acceptance,actions,branding,comments,etag,lines,parties,quote,slides,standard_presentation,terms,totals,versions',
+    'acceptance,actions,branding,comments,etag,exchange,lines,parties,quote,slides,standard_presentation,terms,totals,versions',
     'the payload has exactly the groups of the document, and the etag of them');
 
 select is(

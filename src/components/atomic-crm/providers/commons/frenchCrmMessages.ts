@@ -667,7 +667,8 @@ export const frenchCrmMessages = {
         any_status: "Tous les statuts",
       },
       helpers: {
-        price_list_id: "Fixe la devise du devis et les prix proposés",
+        price_list_id:
+          "Les prix proposés. Une liste dans une autre devise est convertie au taux de change du devis",
         valid_until:
           "Passée cette date, l’offre et tout lien vers elle sont caducs",
         terms: "Imprimées sur le document, sous les lignes",
@@ -1073,6 +1074,17 @@ export const frenchCrmMessages = {
           "Ce mouvement revient au client ou au système, pas à vous.",
         quote_approval_requires_manager:
           "Seul un manager peut approuver un devis — approuver le sien reviendrait à fixer sa propre limite.",
+        fx_rate_missing:
+          "Il n'y a pas encore de taux de change pour cette devise. Demandez à un manager d'en saisir un.",
+        fx_rate_stale:
+          "Le taux de change est périmé. Passez au taux du jour avant d'envoyer.",
+        fx_custom_rate_forbidden:
+          "Les taux de change personnalisés sont définis par les managers et les administrateurs.",
+        fx_custom_rate_out_of_tolerance:
+          "Ce taux s'écarte du taux officiel plus que vous n'y êtes autorisé.",
+        fx_reason_required: "Un taux personnalisé exige un motif écrit.",
+        fx_rate_invalid: "Le taux doit être un nombre positif.",
+        fx_rate_kind_invalid: "Ce type de taux ne s'applique pas à ce devis.",
       },
     },
     tax_rates: {
@@ -1593,6 +1605,275 @@ export const frenchCrmMessages = {
           "La diapositive n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.",
       },
     },
+    fx: {
+      title: "Devises et taux de change",
+      description:
+        "Les devises de l'entreprise, la provenance de leurs taux et le taux auquel chaque devis est valorisé.",
+      navigation: "Devises et taux",
+      demo_unavailable:
+        "Indisponible en mode démo : un onglet de navigateur ne peut pas interroger les fournisseurs de taux.",
+      tabs: {
+        overview: "Vue d'ensemble",
+        currencies: "Devises",
+        rates: "Taux",
+        providers: "Fournisseurs",
+        history: "Historique",
+        settings: "Paramètres",
+        health: "Santé des intégrations",
+      },
+      overview: {
+        base_currency: "Devise de référence",
+        base_help:
+          "Tous les taux y sont exprimés, et les affaires y sont comptées.",
+        last_update: "Dernière mise à jour des taux",
+        never: "Jamais",
+        active_provider: "Fournisseur actif",
+        none: "Aucun",
+        connection: "Connexion",
+        active_currencies: "Devises actives",
+        stale_warning:
+          "%{count} taux ont plus de %{days} jour(s). Ils restent affichés, avec leur date, mais un devis ne peut pas être émis à un taux officiel périmé.",
+        see_health: "Voir la santé des intégrations",
+      },
+      kinds: {
+        base: "Référence",
+        official: "Officiel",
+        commercial: "Commercial",
+        custom: "Personnalisé",
+      },
+      status: {
+        operational: "Opérationnel",
+        degraded: "Dégradé",
+        down: "En panne",
+        disabled: "Désactivé",
+        current: "À jour",
+        stale: "Périmé",
+        no_rate: "Aucun taux",
+        active: "Active",
+        inactive: "Inactive",
+        running: "En cours",
+        succeeded: "Réussie",
+        failed: "Échouée",
+      },
+      currencies: {
+        new: "Nouvelle devise",
+        edit: "Modifier la devise",
+        code: "Code ISO 4217",
+        code_help:
+          "Trois lettres majuscules, p. ex. USD. Il ne pourra plus changer.",
+        name: "Nom",
+        symbol: "Symbole",
+        decimals: "Décimales",
+        decimals_help:
+          "Comment les montants dans cette devise sont affichés et convertis (stockés avec 2 au plus).",
+        is_active: "Active",
+        is_quote_default: "Par défaut pour les nouveaux devis",
+        is_base: "Devise de référence",
+        make_base: "Définir comme devise de référence",
+        make_base_confirm:
+          "Faire de %{code} la devise de référence ? Tous les taux y sont exprimés : ce n'est possible que tant qu'aucun taux ni aucun devis dans une autre devise n'existe.",
+        empty: "Aucune devise pour l'instant.",
+        saved: "Devise enregistrée",
+      },
+      rates: {
+        currency: "Devise",
+        official: "Taux officiel",
+        commercial: "Taux commercial",
+        difference: "Écart",
+        source: "Source",
+        effective: "En vigueur depuis",
+        updated: "Récupéré",
+        state: "État",
+        actions: "Actions",
+        manual: "Manuel",
+        per_unit: "1 %{currency} = %{rate} %{base}",
+        set_commercial: "Définir le taux commercial",
+        enter_official: "Saisir le taux officiel",
+        empty: "Aucune devise étrangère n'est active.",
+        age: "il y a %{days} jour(s)",
+        valid_until: "jusqu'au %{date}",
+      },
+      manual: {
+        title_commercial: "Taux commercial pour %{currency}",
+        title_official: "Taux officiel pour %{currency}",
+        help_commercial:
+          "Le taux propre à l'entreprise. Il n'écrase pas le taux officiel : les deux sont conservés, et les nouveaux devis partent du taux commercial tant qu'il est en vigueur.",
+        help_official:
+          "À utiliser quand le fournisseur est injoignable. Il est enregistré comme une saisie manuelle, signée par vous, à côté des taux du fournisseur.",
+        rate: "Taux (%{base} pour 1 %{currency})",
+        effective_date: "En vigueur à partir du",
+        valid_until: "En vigueur jusqu'au (facultatif)",
+        note: "Motif",
+        note_placeholder: "Pourquoi ce taux, et d'où il vient",
+        reference: "Référence officielle : %{rate} (%{date})",
+        deviation: "%{percent} % d'écart avec le taux officiel",
+        saved: "Taux enregistré",
+        error: "Le taux n'a pas pu être enregistré",
+      },
+      providers: {
+        name: "Fournisseur",
+        enabled: "Activé",
+        priority: "Priorité",
+        priority_help:
+          "Le plus petit s'exécute en premier. Un fournisseur qui croise ses taux via un autre doit s'exécuter après lui.",
+        frequency: "Mettre à jour toutes les (minutes)",
+        currencies: "Devises demandées",
+        credentials: "Identifiants",
+        credentials_none: "Non requis",
+        credentials_set: "Enregistrés",
+        credentials_missing: "Manquants",
+        set_credentials: "Définir les identifiants",
+        credentials_title: "Identifiants de %{provider}",
+        credentials_help:
+          "Stockés chiffrés dans le coffre du serveur. Ils ne sont plus jamais affichés, ici ni ailleurs ; saisissez-les à nouveau pour les remplacer, ou laissez vide pour les supprimer.",
+        credentials_saved: "Identifiants enregistrés",
+        edit: "Configurer",
+        saved: "Fournisseur enregistré",
+        sync_now: "Synchroniser maintenant",
+        sync_all: "Tout synchroniser maintenant",
+      },
+      history: {
+        currency: "Devise",
+        from: "Du",
+        to: "Au",
+        provider: "Source",
+        kind: "Type",
+        all: "Tous",
+        manual: "Saisie manuelle",
+        rate: "Taux",
+        effective: "En vigueur depuis",
+        fetched: "Récupéré",
+        author: "Saisi par",
+        note: "Note",
+        derived: "via %{currency}",
+        chart_title: "Évolution de %{currency}",
+        chart_pick: "Choisissez une devise pour voir son évolution.",
+        empty: "Aucun taux ne correspond à ces filtres.",
+        chart: "Graphique",
+        table: "Tableau",
+      },
+      settings: {
+        default_kind: "Les nouveaux devis partent du",
+        default_kind_help:
+          "Le taux commercial se replie sur le taux officiel quand l'entreprise n'en a défini aucun.",
+        stale_after: "Un taux est périmé après (jours)",
+        stale_after_help:
+          "Les taux officiels plus anciens restent affichés, avec leur date, mais ne permettent pas d'émettre un devis.",
+        tolerance: "Tolérance des commerciaux pour les taux personnalisés (%)",
+        tolerance_help:
+          "De combien un commercial peut s'écarter du taux officiel. 0 réserve les taux personnalisés aux managers et administrateurs.",
+        alert_after: "Alerter les administrateurs après (échecs consécutifs)",
+        saved: "Paramètres enregistrés",
+      },
+      health: {
+        title: "Santé des intégrations",
+        description:
+          "Ce qu'ont fait les fournisseurs de taux, lu dans la base de données : ouvrir cette page ne les interroge jamais.",
+        last_attempt: "Dernière tentative de connexion",
+        last_success: "Dernière mise à jour réussie",
+        imported_last: "Taux importés (dernière exécution)",
+        imported_30d: "Taux importés (30 jours)",
+        errors: "Erreurs",
+        errors_value: "%{errors} en 30 jours · %{consecutive} d'affilée",
+        history_from: "Historique disponible depuis",
+        last_error: "Dernière erreur",
+        auto_sync: "Synchronisation automatique",
+        auto_active: "Active · %{schedule}",
+        auto_inactive: "Inactive",
+        auto_missing_job: "La tâche planifiée est absente.",
+        auto_missing_secrets:
+          "L'URL et la clé de la fonction ne sont pas stockées dans Vault (fx_sync_url, fx_sync_service_key).",
+        history: "Historique des taux",
+        history_value: "%{count} taux, du %{from} au %{to}",
+        history_none: "Aucun taux enregistré pour l'instant",
+        oldest: "Taux le plus ancien en usage",
+        oldest_value: "Taux %{kind} %{currency} du %{date}",
+        oldest_draft: "sur un devis en brouillon",
+        oldest_none: "Aucun",
+        without_rate: "Devises actives sans taux",
+        runs: "Exécutions récentes",
+        run_started: "Début",
+        run_duration: "Durée",
+        run_provider: "Fournisseur",
+        run_trigger: "Origine",
+        run_attempts: "Tentatives",
+        run_rates: "Taux",
+        run_error: "Erreur",
+        no_runs: "Aucune exécution enregistrée pour l'instant.",
+        never: "Jamais",
+        triggers: {
+          cron: "Planifiée",
+          manual: "Manuelle",
+          backfill: "Reprise d'historique",
+        },
+        sync_result:
+          "%{succeeded} fournisseur(s) mis à jour, %{failed} en échec, %{skipped} ignoré(s)",
+        sync_error: "Les taux n'ont pas pu être mis à jour",
+      },
+      quote: {
+        title: "Taux de change",
+        none_needed: "Coté dans la devise de référence : aucune conversion.",
+        missing:
+          "Aucun taux de change n'est disponible pour %{currency}. Demandez à un manager d'en saisir un avant d'ajouter des prix convertis ou d'envoyer le devis.",
+        rate_line: "1 %{currency} = %{rate} %{base}",
+        kind_source: "%{kind} · %{source}",
+        effective: "En vigueur depuis le %{date}",
+        stale:
+          "Ce taux date du %{date} et est périmé : mettez-le à jour avant d'envoyer le devis.",
+        official_now: "Officiel aujourd'hui : %{rate} (%{date})",
+        commercial_now: "Commercial aujourd'hui : %{rate}",
+        use_official: "Utiliser l'officiel",
+        use_commercial: "Utiliser le commercial",
+        refresh: "Passer au taux du jour",
+        custom: "Taux personnalisé",
+        custom_title: "Taux de change personnalisé",
+        custom_help:
+          "Utilisé pour ce devis seulement, avec votre motif enregistré. Les taux officiel et commercial ne changent pas.",
+        custom_rate: "Taux (%{base} pour 1 %{currency})",
+        custom_reason: "Motif",
+        custom_tolerance:
+          "En tant que commercial, vous pouvez vous écarter d'au plus %{percent} % du taux officiel.",
+        custom_forbidden:
+          "Les taux personnalisés sont définis par les managers et les administrateurs.",
+        frozen: "Figé avec la version lors de son émission.",
+        equivalent: "Équivalent en %{base}",
+        equivalent_note:
+          "À titre indicatif : les montants du devis sont en %{currency}.",
+        converted_from: "%{amount} selon la liste de prix",
+        saved: "Taux de change mis à jour",
+        currency: "Devise du devis",
+        currency_help:
+          "La liste de prix peut être dans une autre devise : ses prix sont convertis au taux du devis.",
+        source_title: "Prix de liste convertis",
+        source_unrecorded: "Converti avant l'enregistrement du taux",
+        source_stale:
+          "Une ligne a été convertie à un taux qui n'est plus en vigueur : mettez-le à jour au taux du jour avant l'envoi.",
+        source_refresh: "Mettre à jour les prix de liste au taux du jour",
+      },
+      document: {
+        rate_applied: "Taux de change appliqué",
+        rate_value: "1 %{currency} = %{rate} %{base}",
+        rate_reference: "%{source}, en vigueur le %{date}",
+        equivalent: "Équivalent en %{base} : %{amount}",
+        contractual:
+          "Les montants contractuels de ce devis sont ceux exprimés en %{currency} ; l'équivalent est donné à titre indicatif.",
+      },
+      errors: {
+        generic: "La modification n'a pas pu être enregistrée",
+        fx_forbidden: "Votre rôle ne permet pas de faire cela.",
+        fx_base_locked:
+          "La devise de référence est verrouillée : des taux ou des devis dans d'autres devises en dépendent déjà.",
+        fx_base_via_function:
+          "Utilisez « Définir comme devise de référence » pour la changer.",
+        fx_base_must_be_active:
+          "La devise de référence ne peut pas être désactivée.",
+        fx_currency_code_immutable: "Le code d'une devise ne peut pas changer.",
+        fx_currency_inactive: "Cette devise n'est pas active.",
+        fx_column_protected:
+          "Seuls les paramètres du fournisseur peuvent être modifiés ici.",
+        fx_provider_unknown: "Ce fournisseur n'existe pas.",
+      },
+    },
     notifications: {
       title: "Notifications",
       empty: "Vous êtes à jour",
@@ -1628,6 +1909,12 @@ export const frenchCrmMessages = {
         expired: {
           title: "%{number} a expiré",
           body: "L'offre a expiré sans réponse.",
+        },
+      },
+      fx: {
+        sync_failed: {
+          title: "Taux de change : %{provider} est en échec",
+          body: "%{failures} mises à jour échouées d'affilée. Dernière erreur : %{error}",
         },
       },
       channels: {
@@ -2444,6 +2731,9 @@ export const frenchCrmMessages = {
       deals: {
         categories: "Catégories",
         currency: "Devise",
+        currency_managed:
+          "La devise de base, gérée dans Devises et taux de change. Les montants des affaires et les tableaux de bord y sont exprimés.",
+        currency_link: "Gérer les devises",
         pipeline_help:
           "Sélectionnez les étapes d'affaire à considérer comme des affaires dans le pipeline.",
         pipeline_statuses: "Statuts des pipelines",

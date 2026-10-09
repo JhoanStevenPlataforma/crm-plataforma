@@ -7,14 +7,16 @@
 --     version totals follow the lines, rounded per line and then summed -- a
 --     total computed any other way contradicts its own visible breakdown;
 --   * the illegal rows are unrepresentable rather than merely discouraged: a
---     line pairing one quote's version with another quote, a version or price
---     list in the wrong currency, a second draft, a forged customer comment;
+--     line pairing one quote's version with another quote, a version in the
+--     wrong currency, a currency the catalogue does not know, a second draft,
+--     a forged customer comment. (Since 2026-10-01 a quote MAY be priced from a
+--     list in another currency: the version's exchange rate converts it.);
 --   * a quote is born a draft with version 1 ready to edit, whatever the insert
 --     said.
 --
 begin;
 
-select plan(31);
+select plan(32);
 
 -- Runs a statement and reports how it failed, as `sqlstate[:detail]`, or
 -- 'no error'. `detail` carries the stable key the module's functions raise
@@ -45,6 +47,9 @@ values (9711, 'Acme Andina', 9711, '{}'::jsonb);
 
 insert into public.price_lists (id, code, name, currency)
 values (9711, 'TST-9711-COP', 'Lista COP de prueba', 'COP');
+-- The default-per-currency checks below use a currency of their own.
+insert into public.currencies (code, name, decimals) values ('CLP', 'Chilean peso', 0)
+on conflict (code) do nothing;
 
 --
 -- 1. What was installed.
@@ -198,12 +203,19 @@ select matches(
     '^23503',
     'a version cannot carry a currency its quote does not');
 
-select matches(
+select is(
     public.quotes_test_error_of(
         $$insert into public.quotes (company_id, sales_id, currency, price_list_id)
           values (9711, 9711, 'USD', 9711)$$),
+    'no error',
+    'a quote may be priced from a list in another currency (multi-currency)');
+
+select matches(
+    public.quotes_test_error_of(
+        $$insert into public.quotes (company_id, sales_id, currency)
+          values (9711, 9711, 'XTS')$$),
     '^23503',
-    'a quote cannot be priced from a list in another currency');
+    'a quote in a currency the catalogue does not know is unrepresentable');
 
 select matches(
     public.quotes_test_error_of(

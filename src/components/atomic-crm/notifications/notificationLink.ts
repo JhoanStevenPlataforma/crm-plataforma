@@ -37,6 +37,12 @@ export const notificationLink = (
   const { entity_type: entityType, entity_id: entityId } = notification;
   if (!entityType || entityId == null) return null;
 
+  // A failing rate provider is not a record with a page of its own: the place
+  // to act on it is the integration health tab.
+  if (entityType === "exchange_rate_provider") {
+    return "/currencies?tab=health";
+  }
+
   const resource = ROUTED_ENTITIES[entityType];
   if (!resource) return null;
 

@@ -54,6 +54,24 @@ export const QUOTE_ERROR = {
   actorNotAllowed: "quote_transition_actor_not_allowed",
   /** A rep tried to approve their own quote. */
   approvalRequiresManager: "quote_approval_requires_manager",
+  /**
+   * Multi-currency (docs/proposals/multi-currency-fx.md): raised by
+   * `set_quote_version_rate()` and `issue_quote_version()`.
+   */
+  /** No rate exists for the quotation's (or a price list's) currency. */
+  fxRateMissing: "fx_rate_missing",
+  /** The rate is older than the configured threshold, or expired. */
+  fxRateStale: "fx_rate_stale",
+  /** A custom rate needs a manager, or a configured tolerance for reps. */
+  fxCustomRateForbidden: "fx_custom_rate_forbidden",
+  /** Further from the official rate than the rep's tolerance. */
+  fxCustomRateOutOfTolerance: "fx_custom_rate_out_of_tolerance",
+  /** A custom rate needs a written reason. */
+  fxReasonRequired: "fx_reason_required",
+  /** A custom rate must be a positive number. */
+  fxRateInvalid: "fx_rate_invalid",
+  /** The base kind for a foreign quotation, or another kind for a base one. */
+  fxRateKindInvalid: "fx_rate_kind_invalid",
 } as const;
 
 export type QuoteErrorKey = (typeof QUOTE_ERROR)[keyof typeof QUOTE_ERROR];

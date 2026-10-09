@@ -994,7 +994,14 @@ select
     -- the version; it is the code that groups a pipeline by loss reason, and
     -- PostgREST asks this view for `select=*` on every list page.
     cv.rejected_at,
-    cv.rejected_reason_code
+    cv.rejected_reason_code,
+
+    -- Multi-currency (2026-10-01): the current version's total in the base
+    -- currency and the rate it was reached with.
+    cv.total_base,
+    cv.base_currency,
+    cv.exchange_rate,
+    cv.rate_kind
 from public.quotes q
     left join public.companies c on c.id = q.company_id
     left join public.deals d on d.id = q.deal_id
@@ -1003,7 +1010,8 @@ from public.quotes q
     left join lateral (
         select v.id, v.version_number, v.issued_at, v.subtotal, v.discount_total,
                v.tax_total, v.total, v.accepted_at, v.party_snapshot,
-               v.rejected_at, v.rejected_reason_code
+               v.rejected_at, v.rejected_reason_code,
+               v.total_base, v.base_currency, v.exchange_rate, v.rate_kind
           from public.quote_versions v
          where v.quote_id = q.id
          order by v.version_number desc
@@ -1051,3 +1059,43 @@ from public.price_lists pl
 where p.is_active
   and pl.is_active
   and (pli.id is not null or pl.currency = p.currency);
+
+--
+-- Currencies & exchange rates
+--
+-- The ONE place a "current rate" is read from by the screens. Never a bare
+-- figure: each rate comes with its date, its source and whether it is stale.
+create or replace view public.current_exchange_rates with (security_invoker = on) as
+select
+    c.code             as id,
+    c.code             as currency_code,
+    c.name,
+    c.symbol,
+    c.decimals,
+    c.is_active,
+    c.is_quote_default,
+    (select b.code from public.currencies b where b.is_base) as base_currency_code,
+    o.rate             as official_rate,
+    o.exchange_rate_id as official_rate_id,
+    o.provider_key     as official_provider_key,
+    (select p.name from public.exchange_rate_providers p where p.key = o.provider_key)
+                       as official_provider_name,
+    o.effective_date   as official_effective_date,
+    o.valid_until      as official_valid_until,
+    (select e.fetched_at from public.exchange_rates e where e.id = o.exchange_rate_id)
+                       as official_fetched_at,
+    current_date - o.effective_date as official_age_days,
+    o.is_stale         as official_is_stale,
+    cm.rate            as commercial_rate,
+    cm.exchange_rate_id as commercial_rate_id,
+    cm.effective_date  as commercial_effective_date,
+    cm.valid_until     as commercial_valid_until,
+    case when cm.rate is not null and o.rate is not null
+         then round((cm.rate / o.rate - 1) * 100, 4) end as commercial_diff_percent
+from public.currencies c
+    left join lateral public.fx_resolve_rate(c.code, 'official') o on true
+    left join lateral (
+        select r.* from public.fx_resolve_rate(c.code, 'commercial') r
+         where r.kind = 'commercial'
+    ) cm on true
+where not c.is_base;

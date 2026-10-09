@@ -19,9 +19,11 @@
 import type { Identifier } from "ra-core";
 
 import type {
+  LineSourceRate,
   Quote,
   QuoteDiscountGate,
   QuoteLink,
+  QuoteRateKind,
   QuoteStatusKey,
   QuoteVersion,
 } from "../../types";
@@ -102,6 +104,26 @@ export type QuoteMethods = {
   reviseQuote(quoteId: Identifier, reason: string): Promise<QuoteVersion>;
   revokeQuoteToken(tokenId: Identifier): Promise<void>;
   markQuoteCommentsRead(quoteId: Identifier): Promise<number>;
+  /**
+   * The exchange rate of a DRAFT version (docs/proposals/multi-currency-fx.md):
+   * the official or commercial rate in force today, or a custom figure with a
+   * written reason. Every converted line is re-priced by the server.
+   */
+  setQuoteVersionRate(
+    versionId: Identifier,
+    kind: QuoteRateKind,
+    options?: { rate?: number | null; reason?: string | null },
+  ): Promise<QuoteVersion>;
+  /**
+   * The rate a line priced in `sourceCurrency` will be converted at in this
+   * version, and which observation it is (`fx_line_source_rate()`, the very
+   * function the server stores the line with), or null when there is none
+   * and the line would be refused. Read-only; RLS decides what it can see.
+   */
+  getLineSourceRate(
+    versionId: Identifier,
+    sourceCurrency: string,
+  ): Promise<LineSourceRate | null>;
 };
 
 export const createQuoteMethods = (
@@ -237,5 +259,31 @@ export const createQuoteMethods = (
         { p_quote_id: quoteId },
         "Failed to mark the comments as read",
       ),
+
+    /**
+     * Who may set a custom rate, and how far from the official one, is the
+     * server's decision (`set_quote_version_rate()`); this only carries the
+     * refusal back with its key.
+     */
+    setQuoteVersionRate: (versionId, kind, options = {}) =>
+      call<QuoteVersion>(
+        "set_quote_version_rate",
+        {
+          p_version_id: versionId,
+          p_kind: kind,
+          p_rate: options.rate ?? null,
+          p_reason: options.reason ?? null,
+        },
+        "Failed to set the exchange rate",
+      ),
+
+    getLineSourceRate: async (versionId, sourceCurrency) => {
+      const rows = await call<LineSourceRate[] | null>(
+        "fx_line_source_rate",
+        { p_version_id: versionId, p_source_currency: sourceCurrency },
+        "Failed to read the line's exchange rate",
+      );
+      return rows?.[0] ?? null;
+    },
   };
 };

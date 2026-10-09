@@ -48,6 +48,31 @@ const QUOTE_READONLY_RESOURCES = new Set([
   "quote_access_tokens_summary",
 ]);
 
+/** Currencies & exchange rates: what nobody may do, admins included. */
+const FX_IMMUTABLE = new Set([
+  "currencies:delete",
+  "exchange_rates:edit",
+  "exchange_rates:delete",
+  "exchange_rate_providers:create",
+  "exchange_rate_providers:delete",
+  "exchange_rate_settings:create",
+  "exchange_rate_settings:delete",
+]);
+
+/** Projections and logs: read-only; the logs are not a rep's to read. */
+const FX_READONLY_RESOURCES = new Set([
+  "current_exchange_rates",
+  "exchange_rate_sync_runs",
+  "exchange_rate_audit_logs",
+]);
+
+/** Configured by admins alone. */
+const FX_ADMIN_RESOURCES = new Set([
+  "currencies",
+  "exchange_rate_providers",
+  "exchange_rate_settings",
+]);
+
 /**
  * UI-level access control.
  *
@@ -94,8 +119,40 @@ export const canAccess = <
     return params.action === "list" || params.action === "show";
   }
 
+  // Currencies & exchange rates (docs/proposals/multi-currency-fx.md). These
+  // come before the admin shortcut because nobody may do them: a rate is
+  // history (a correction is a new row), a currency is deactivated rather than
+  // deleted, and the providers and the settings singleton are seeded by
+  // migrations.
+  if (FX_IMMUTABLE.has(`${params.resource}:${params.action}`)) {
+    return false;
+  }
+  if (FX_READONLY_RESOURCES.has(params.resource)) {
+    return (
+      (params.action === "list" || params.action === "show") &&
+      (params.resource === "current_exchange_rates" || role !== "rep")
+    );
+  }
+
   if (role === "admin") {
     return true;
+  }
+
+  // Everyone quotes, so everyone reads the catalogue and the rates; only an
+  // admin configures it. Manual (commercial) rates are a manager's call.
+  if (FX_ADMIN_RESOURCES.has(params.resource)) {
+    return params.action === "list" || params.action === "show";
+  }
+  if (params.resource === "exchange_rates") {
+    return (
+      params.action === "list" ||
+      params.action === "show" ||
+      (params.action === "create" && role === "manager")
+    );
+  }
+  // The integration health panel: managers read it, admins act on it.
+  if (params.resource === "fx_health") {
+    return role === "manager" && params.action === "list";
   }
 
   if (QUOTE_TUNABLE_RESOURCES.has(params.resource)) {

@@ -250,6 +250,50 @@ runs only in `layout/Layout.tsx`** — so any `noLayout` route renders with
 `defaultConfiguration`, whose currency is `USD`, and must get branding and
 currency from its server payload instead.
 
+#### Currencies & Exchange Rates (a quotation in any currency, priced from a list in another)
+
+**`docs/proposals/multi-currency-fx.md` is the reference** (migrations
+`20261001115000` to `20261001140000`, screens in `currencies/` at
+`/currencies`, the `exchange-rates-sync` edge function). A quotation's currency
+is independent of its price list's; converted line prices, the version's rate
+and its base-currency totals are computed by the server and frozen at issue.
+
+Rules that are easy to break from the outside:
+
+- **`rate` = units of the BASE currency per ONE unit of the currency** (base
+  COP: USD 4000 means 1 USD = 4000 COP). Converting X to Y is
+  `amount * rate_X / rate_Y`. Every table, function, provider and `fxMath.ts`
+  uses this one convention; a source quoting the other way is inverted at the
+  provider boundary.
+- **`current_exchange_rates` is the only "current rate"**, for the UI and the
+  server alike, and it never says "current" without `effective_date` and
+  `is_stale`. A stale rate is kept and reported, never hidden.
+  `fx_resolve_rate()` is its SQL counterpart. Opening a quotation never calls an
+  external API.
+- **`fxMath.ts` must agree with the SQL digit for digit**, the same discipline
+  as `quoteMath.ts`: converted price `fx_round(source * source_rate /
+  version_rate, quote currency)`, then the line arithmetic unchanged, then each
+  base total `fx_round(total * rate, base)` per TOTAL, never per line.
+- **`deals.amount` is the quotation's `total_base`**, and
+  `configuration.config.currency` is pinned to the base currency by a trigger
+  (Settings shows it read-only). The base cannot change once rates or foreign
+  quotations exist (`fx_base_locked`).
+- **`exchange_rates` is append-only**: a correction is a new row
+  (`supersedes_id`), and `purge_exchange_rates()` is the only way past it (the
+  e2e reset). Credentials live in Supabase Vault, never in a table a client
+  reads.
+- **One staleness rule, `fx_rate_is_stale()`** (mirrored by `rateIsStale` in
+  `fxMath.ts`): the resolver, the view, the issue gate and the panel all use
+  it. Never write a second "is this rate old" test.
+- **The rate a quotation LINE converts at is the server's**: one observation
+  per source currency per version (`quote_lines.source_exchange_rate_id`),
+  resolved on the version's rate day by `fx_line_source_rate()` -- which the
+  line picker's preview also calls -- and checked at issue. A client never
+  posts it; only `set_quote_version_rate()` and `revise_quote()` write it.
+- Refusals are recognised by `error.details`: the quotation-path keys are in
+  `QUOTE_ERROR` (`quoteRpc.ts`), the administration keys in `FX_ERROR`
+  (`fxRpc.ts`).
+
 #### Customer Portal Slides (what a customer sees before a quotation)
 
 **`docs/proposals/quote-portal-presentation.md` §7 is the reference** (the

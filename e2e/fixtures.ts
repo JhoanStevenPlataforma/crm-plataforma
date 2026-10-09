@@ -58,6 +58,18 @@ async function resetDb() {
     throw new Error(`Failed to purge quotes: ${purgeQuotesError.message}`);
   }
 
+  // The exchange-rate history is append-only too, and its author columns pin
+  // `sales` rows: `purge_exchange_rates()` is its retention path. It runs
+  // after `purge_quotes()`, whose versions reference the rates.
+  const { error: purgeRatesError } = await adminSupabase.rpc(
+    "purge_exchange_rates",
+  );
+  if (purgeRatesError) {
+    throw new Error(
+      `Failed to purge exchange rates: ${purgeRatesError.message}`,
+    );
+  }
+
   // And the catalogue, for a third time the same reason: `products` carries
   // append-only `product_events`, so a service-role DELETE hits the guard
   // through the cascade — and `products.sales_id` then pins every user who
@@ -73,6 +85,19 @@ async function resetDb() {
   if (purgeCatalogueError) {
     throw new Error(
       `Failed to purge catalogue: ${purgeCatalogueError.message}`,
+    );
+  }
+
+  // The currency catalogue back to what the migration seeds: a spec that
+  // registers a currency would otherwise collide with itself on the next run.
+  // After `purge_catalogue()`, so no product or list references one.
+  const { error: currenciesError } = await adminSupabase
+    .from("currencies")
+    .delete()
+    .not("code", "in", "(COP,USD,EUR,MXN)");
+  if (currenciesError) {
+    throw new Error(
+      `Failed to reset the currencies: ${currenciesError.message}`,
     );
   }
 
@@ -100,6 +125,70 @@ async function resetDb() {
   await Promise.all(
     data.users.map((user) => adminSupabase.auth.admin.deleteUser(user.id)),
   );
+
+  await seedExchangeRates();
+}
+
+/**
+ * Today's rates, as the providers would store them, so a spec can quote in
+ * USD or EUR: USD at 4,000 COP (the TRM), EUR at 5,000 (the ECB's 0.8 per USD,
+ * crossed through that TRM). Written through the sync functions themselves --
+ * `fx_begin_sync_run` / `fx_record_rates` / `fx_finish_sync_run` -- so the
+ * rows are exactly what a real sync leaves, conversion included.
+ */
+export const E2E_RATES = { USD: 4000, EUR: 5000 } as const;
+
+async function seedExchangeRates() {
+  const today = new Date().toISOString().slice(0, 10);
+  const runs: Array<[string, Record<string, unknown>[]]> = [
+    [
+      "trm_co",
+      [
+        {
+          currency: "USD",
+          quote_currency: "COP",
+          rate: String(E2E_RATES.USD),
+          effective_date: today,
+          valid_until: today,
+        },
+      ],
+    ],
+    [
+      "ecb_frankfurter",
+      [
+        {
+          currency: "USD",
+          quote_currency: "EUR",
+          rate: String(E2E_RATES.USD / E2E_RATES.EUR),
+          effective_date: today,
+        },
+      ],
+    ],
+  ];
+  for (const [provider, items] of runs) {
+    const { data: claim, error: claimError } = await adminSupabase.rpc(
+      "fx_begin_sync_run",
+      { p_provider_key: provider, p_triggered_by: "manual", p_force: true },
+    );
+    if (claimError || !claim?.run_id) {
+      throw new Error(
+        `Failed to start a rate run for ${provider}: ${claimError?.message ?? JSON.stringify(claim)}`,
+      );
+    }
+    const { error: recordError } = await adminSupabase.rpc("fx_record_rates", {
+      p_run_id: claim.run_id,
+      p_items: items,
+    });
+    const { error: finishError } = await adminSupabase.rpc(
+      "fx_finish_sync_run",
+      { p_run_id: claim.run_id, p_ok: !recordError, p_attempts: 1 },
+    );
+    if (recordError || finishError) {
+      throw new Error(
+        `Failed to seed rates for ${provider}: ${(recordError ?? finishError)?.message}`,
+      );
+    }
+  }
 }
 
 async function createUser({

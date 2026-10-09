@@ -9,6 +9,7 @@
  * resolving them through `product_id`, which is provenance only.
  */
 
+import type { QuoteRateKind } from "./currencies";
 import type { Identifier } from "ra-core";
 
 /** `public.quote_statuses.key`, as seeded by the Phase 2 migration. */
@@ -113,6 +114,11 @@ export type QuoteSummary = Quote & {
   /** The current version's answer, when it was a refusal (§6.4). */
   rejected_at?: string | null;
   rejected_reason_code?: QuoteRejectionReason | null;
+  /** The current version's total in the base currency, and its rate. */
+  total_base?: number | null;
+  base_currency?: string | null;
+  exchange_rate?: number | null;
+  rate_kind?: QuoteRateKind | null;
 };
 
 /**
@@ -154,6 +160,24 @@ export type QuoteVersion = {
   rejected_at?: string | null;
   rejected_reason?: string | null;
   rejected_reason_code?: QuoteRejectionReason | null;
+  /**
+   * The rate the version is priced at, frozen with it at issue. Server-owned:
+   * changed only through `set_quote_version_rate()` on a draft.
+   */
+  base_currency?: string | null;
+  exchange_rate?: number | null;
+  rate_kind?: QuoteRateKind | null;
+  exchange_rate_id?: Identifier | null;
+  rate_provider_key?: string | null;
+  rate_effective_date?: string | null;
+  rate_set_at?: string | null;
+  rate_set_by?: Identifier | null;
+  rate_reason?: string | null;
+  /** The four totals in the base currency; null while there is no rate. */
+  subtotal_base?: number | null;
+  discount_total_base?: number | null;
+  tax_total_base?: number | null;
+  total_base?: number | null;
   created_at?: string;
 };
 
@@ -203,6 +227,20 @@ export type QuoteLine = {
   tax_rate_id?: Identifier | null;
   tax_rate_percent: number;
   position: number;
+  /**
+   * Where a converted price came from: the list's figure and currency. When
+   * set, the server computes `unit_price` from them (`quote_lines_fx_convert`);
+   * a price typed by hand clears them.
+   */
+  source_currency?: string | null;
+  source_unit_price?: number | null;
+  /** Resolved by the server, whatever a client sends. */
+  source_exchange_rate?: number | null;
+  /**
+   * WHICH observation (`exchange_rates.id`) that rate is: one per source
+   * currency per version, checked at issue. Null for the base currency.
+   */
+  source_exchange_rate_id?: Identifier | null;
   line_gross?: number;
   line_discount?: number;
   line_tax?: number;

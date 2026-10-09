@@ -657,7 +657,8 @@ export const englishCrmMessages = {
         any_status: "Any status",
       },
       helpers: {
-        price_list_id: "Sets the currency of the quote and the prices offered",
+        price_list_id:
+          "The prices offered. A list in another currency is converted at the quotation's exchange rate",
         valid_until: "After this date the offer, and any link to it, is dead",
         terms: "Printed on the document, below the lines",
         internal_notes: "For the sales team only. Never shown to a customer.",
@@ -1054,6 +1055,18 @@ export const englishCrmMessages = {
           "That move belongs to the customer or to the system, not to you.",
         quote_approval_requires_manager:
           "Only a manager can approve a quote — approving your own would be setting your own limit.",
+        fx_rate_missing:
+          "There is no exchange rate for this currency yet. Ask a manager to enter one.",
+        fx_rate_stale:
+          "The exchange rate is stale. Update it to today's rate before sending.",
+        fx_custom_rate_forbidden:
+          "Custom exchange rates are set by managers and administrators.",
+        fx_custom_rate_out_of_tolerance:
+          "That rate is further from the official one than you are allowed to go.",
+        fx_reason_required: "A custom rate needs a written reason.",
+        fx_rate_invalid: "The rate must be a positive number.",
+        fx_rate_kind_invalid:
+          "That kind of rate does not apply to this quotation.",
       },
     },
     tax_rates: {
@@ -1573,6 +1586,272 @@ export const englishCrmMessages = {
           "The slide could not be saved. Check your connection and try again.",
       },
     },
+    fx: {
+      title: "Currencies and exchange rates",
+      description:
+        "The company's currencies, where their rates come from, and the rate every quotation is priced at.",
+      navigation: "Currencies and rates",
+      demo_unavailable:
+        "Not available in demo mode: a browser tab cannot reach the rate providers.",
+      tabs: {
+        overview: "Overview",
+        currencies: "Currencies",
+        rates: "Rates",
+        providers: "Providers",
+        history: "History",
+        settings: "Settings",
+        health: "Integration health",
+      },
+      overview: {
+        base_currency: "Base currency",
+        base_help:
+          "Every rate is expressed in it, and deals are counted in it.",
+        last_update: "Last rate update",
+        never: "Never",
+        active_provider: "Active provider",
+        none: "None",
+        connection: "Connection",
+        active_currencies: "Active currencies",
+        stale_warning:
+          "%{count} currency rate(s) are older than %{days} day(s). They are still shown, with their date, but a quotation cannot be issued at a stale official rate.",
+        see_health: "See integration health",
+      },
+      kinds: {
+        base: "Base",
+        official: "Official",
+        commercial: "Commercial",
+        custom: "Custom",
+      },
+      status: {
+        operational: "Operational",
+        degraded: "Degraded",
+        down: "Down",
+        disabled: "Disabled",
+        current: "Current",
+        stale: "Stale",
+        no_rate: "No rate",
+        active: "Active",
+        inactive: "Inactive",
+        running: "Running",
+        succeeded: "Succeeded",
+        failed: "Failed",
+      },
+      currencies: {
+        new: "New currency",
+        edit: "Edit currency",
+        code: "ISO 4217 code",
+        code_help: "Three capital letters, e.g. USD. It cannot change later.",
+        name: "Name",
+        symbol: "Symbol",
+        decimals: "Decimals",
+        decimals_help:
+          "How amounts in this currency are shown and converted (stored with at most 2).",
+        is_active: "Active",
+        is_quote_default: "Default for new quotations",
+        is_base: "Base currency",
+        make_base: "Make base currency",
+        make_base_confirm:
+          "Make %{code} the base currency? Every rate is expressed in the base, so this is only possible while no rate and no quotation in another currency exists.",
+        empty: "No currencies yet.",
+        saved: "Currency saved",
+      },
+      rates: {
+        currency: "Currency",
+        official: "Official rate",
+        commercial: "Commercial rate",
+        difference: "Difference",
+        source: "Source",
+        effective: "In force since",
+        updated: "Fetched",
+        state: "State",
+        actions: "Actions",
+        manual: "Manual",
+        per_unit: "1 %{currency} = %{rate} %{base}",
+        set_commercial: "Set commercial rate",
+        enter_official: "Enter official rate",
+        empty: "No foreign currency is active.",
+        age: "%{days} day(s) old",
+        valid_until: "until %{date}",
+      },
+      manual: {
+        title_commercial: "Commercial rate for %{currency}",
+        title_official: "Official rate for %{currency}",
+        help_commercial:
+          "The company's own rate. It does not overwrite the official one: both are kept, and new quotations start from the commercial rate while it is in force.",
+        help_official:
+          "Use it when the provider cannot be reached. It is stored as a manual entry, signed by you, beside the provider's rates.",
+        rate: "Rate (%{base} per 1 %{currency})",
+        effective_date: "In force from",
+        valid_until: "In force until (optional)",
+        note: "Reason",
+        note_placeholder: "Why this rate, and where it comes from",
+        reference: "Official reference: %{rate} (%{date})",
+        deviation: "%{percent}% from the official rate",
+        saved: "Rate saved",
+        error: "The rate could not be saved",
+      },
+      providers: {
+        name: "Provider",
+        enabled: "Enabled",
+        priority: "Priority",
+        priority_help:
+          "Lower runs first. A provider that crosses rates through another must run after it.",
+        frequency: "Update every (minutes)",
+        currencies: "Currencies requested",
+        credentials: "Credentials",
+        credentials_none: "Not needed",
+        credentials_set: "Stored",
+        credentials_missing: "Missing",
+        set_credentials: "Set credentials",
+        credentials_title: "Credentials for %{provider}",
+        credentials_help:
+          "Stored encrypted in the server's vault. They are never shown again, here or anywhere else; type them anew to replace them, or leave empty to remove them.",
+        credentials_saved: "Credentials saved",
+        edit: "Configure",
+        saved: "Provider saved",
+        sync_now: "Sync now",
+        sync_all: "Sync all now",
+      },
+      history: {
+        currency: "Currency",
+        from: "From",
+        to: "To",
+        provider: "Source",
+        kind: "Type",
+        all: "All",
+        manual: "Manual entry",
+        rate: "Rate",
+        effective: "In force since",
+        fetched: "Fetched",
+        author: "Entered by",
+        note: "Note",
+        derived: "via %{currency}",
+        chart_title: "Evolution of %{currency}",
+        chart_pick: "Choose a currency to see its evolution.",
+        empty: "No rate matches these filters.",
+        chart: "Chart",
+        table: "Table",
+      },
+      settings: {
+        default_kind: "New quotations start from",
+        default_kind_help:
+          "The commercial rate falls back to the official one when the company has set none.",
+        stale_after: "A rate is stale after (days)",
+        stale_after_help:
+          "Older official rates are still shown, with their date, but cannot be used to issue a quotation.",
+        tolerance: "Rep tolerance for custom rates (%)",
+        tolerance_help:
+          "How far from the official rate a sales rep may set a custom rate. 0 reserves custom rates to managers and administrators.",
+        alert_after: "Alert administrators after (consecutive failures)",
+        saved: "Settings saved",
+      },
+      health: {
+        title: "Integration health",
+        description:
+          "What the rate providers did, read from the database: opening this page never calls them.",
+        last_attempt: "Last connection attempt",
+        last_success: "Last successful update",
+        imported_last: "Rates imported (last run)",
+        imported_30d: "Rates imported (30 days)",
+        errors: "Errors",
+        errors_value: "%{errors} in 30 days · %{consecutive} in a row",
+        history_from: "History available from",
+        last_error: "Last error",
+        auto_sync: "Automatic sync",
+        auto_active: "Active · %{schedule}",
+        auto_inactive: "Inactive",
+        auto_missing_job: "The scheduled job is missing.",
+        auto_missing_secrets:
+          "The function's URL and key are not stored in Vault (fx_sync_url, fx_sync_service_key).",
+        history: "Rate history",
+        history_value: "%{count} rates, %{from} to %{to}",
+        history_none: "No rate stored yet",
+        oldest: "Oldest rate in use",
+        oldest_value: "%{currency} %{kind} rate from %{date}",
+        oldest_draft: "on a draft quotation",
+        oldest_none: "None",
+        without_rate: "Active currencies with no rate",
+        runs: "Recent runs",
+        run_started: "Started",
+        run_duration: "Duration",
+        run_provider: "Provider",
+        run_trigger: "Trigger",
+        run_attempts: "Attempts",
+        run_rates: "Rates",
+        run_error: "Error",
+        no_runs: "No run recorded yet.",
+        never: "Never",
+        triggers: {
+          cron: "Scheduled",
+          manual: "Manual",
+          backfill: "Backfill",
+        },
+        sync_result:
+          "%{succeeded} provider(s) updated, %{failed} failed, %{skipped} skipped",
+        sync_error: "The rates could not be updated",
+      },
+      quote: {
+        title: "Exchange rate",
+        none_needed: "Quoted in the base currency: no conversion.",
+        missing:
+          "No exchange rate is available for %{currency}. Ask a manager to enter one before adding converted prices or sending the quotation.",
+        rate_line: "1 %{currency} = %{rate} %{base}",
+        kind_source: "%{kind} · %{source}",
+        effective: "In force since %{date}",
+        stale:
+          "This rate is from %{date} and is stale: refresh it before sending the quotation.",
+        official_now: "Official today: %{rate} (%{date})",
+        commercial_now: "Commercial today: %{rate}",
+        use_official: "Use official",
+        use_commercial: "Use commercial",
+        refresh: "Update to today's rate",
+        custom: "Custom rate",
+        custom_title: "Custom exchange rate",
+        custom_help:
+          "Used for this quotation only, with your reason on record. The official and commercial rates are not changed.",
+        custom_rate: "Rate (%{base} per 1 %{currency})",
+        custom_reason: "Reason",
+        custom_tolerance:
+          "As a sales rep you may move at most %{percent}% from the official rate.",
+        custom_forbidden:
+          "Custom rates are set by managers and administrators.",
+        frozen: "Frozen with the version when it was issued.",
+        equivalent: "Equivalent in %{base}",
+        equivalent_note:
+          "For reference only: the quotation's amounts are in %{currency}.",
+        converted_from: "%{amount} from the price list",
+        saved: "Exchange rate updated",
+        currency: "Quotation currency",
+        currency_help:
+          "The price list may be in another currency: its prices are converted at the quotation's rate.",
+        source_title: "List prices converted",
+        source_unrecorded: "Converted before the rate was recorded",
+        source_stale:
+          "A line was converted at a rate that is no longer in force: update it to today's rate before sending.",
+        source_refresh: "Update list prices to today's rate",
+      },
+      document: {
+        rate_applied: "Exchange rate applied",
+        rate_value: "1 %{currency} = %{rate} %{base}",
+        rate_reference: "%{source}, in force on %{date}",
+        equivalent: "Equivalent in %{base}: %{amount}",
+        contractual:
+          "The contractual amounts of this quotation are those expressed in %{currency}; the equivalent is for reference only.",
+      },
+      errors: {
+        generic: "The change could not be saved",
+        fx_forbidden: "Your role cannot do this.",
+        fx_base_locked:
+          "The base currency is locked: rates or quotations in other currencies already depend on it.",
+        fx_base_via_function: 'Use "Make base currency" to change the base.',
+        fx_base_must_be_active: "The base currency cannot be deactivated.",
+        fx_currency_code_immutable: "A currency's code cannot change.",
+        fx_currency_inactive: "That currency is not active.",
+        fx_column_protected:
+          "Only the provider's settings can be changed here.",
+        fx_provider_unknown: "That provider does not exist.",
+      },
+    },
     notifications: {
       title: "Notifications",
       empty: "You are all caught up",
@@ -1608,6 +1887,12 @@ export const englishCrmMessages = {
         expired: {
           title: "%{number} has expired",
           body: "The offer lapsed without an answer.",
+        },
+      },
+      fx: {
+        sync_failed: {
+          title: "Exchange rates: %{provider} is failing",
+          body: "%{failures} failed updates in a row. Last error: %{error}",
         },
       },
       channels: {
@@ -2403,6 +2688,9 @@ export const englishCrmMessages = {
       deals: {
         categories: "Categories",
         currency: "Currency",
+        currency_managed:
+          "The base currency, managed in Currencies and exchange rates. Deal amounts and dashboards are expressed in it.",
+        currency_link: "Manage currencies",
         pipeline_help:
           "Select which deal stages should count as pipeline deals.",
         pipeline_statuses: "Pipeline Statuses",

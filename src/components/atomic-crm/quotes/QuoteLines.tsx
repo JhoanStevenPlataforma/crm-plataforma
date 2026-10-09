@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { convertPrice, toBase } from "../currencies/fxMath";
+import { useCurrencies } from "../currencies/useFx";
 import { formatMoneyExact } from "../misc/reporting";
 import type { PriceBookEntry, QuoteLine, QuoteSummary } from "../types";
 import { QuoteTotals } from "./QuoteTotals";
@@ -29,6 +31,7 @@ import {
   lineAmounts,
   quoteAmounts,
 } from "./quoteMath";
+import { useLineSourceRate } from "./useLineSourceRate";
 import { useQuoteDraft } from "./useQuoteDraft";
 
 /** Catalogue scale, not CRM scale (quotes §11). */
@@ -99,6 +102,17 @@ export const QuoteLines = () => {
     { enabled: quote?.price_list_id != null },
   );
 
+  const { base, decimalsOf } = useCurrencies();
+
+  const selected = (priceBook ?? []).find((row) => row.id === entryId);
+  const { data: sourceRate } = useLineSourceRate(
+    version?.id,
+    selected && quote && selected.currency !== quote.currency
+      ? selected.currency
+      : null,
+    `${lines.length}:${version?.exchange_rate}:${version?.rate_set_at}`,
+  );
+
   const [create, { isPending: isCreating }] = useCreate();
   const [update, { isPending: isUpdating }] = useUpdate();
   const [remove, { isPending: isRemoving }] = useDelete();
@@ -150,9 +164,16 @@ export const QuoteLines = () => {
       return;
     }
 
+    // A price typed by hand is the negotiated figure: it no longer follows
+    // the list, so the source the server would convert from is dropped.
+    const data =
+      field === "unit_price" && line.source_currency != null
+        ? { unit_price: parsed, source_currency: null, source_unit_price: null }
+        : { [field]: parsed };
+
     update(
       "quote_lines",
-      { id: line.id, data: { [field]: parsed }, previousData: line },
+      { id: line.id, data, previousData: line },
       {
         onSuccess: () => {
           clearEdit(line, field);
@@ -160,6 +181,23 @@ export const QuoteLines = () => {
         },
         onError,
       },
+    );
+  };
+
+  /**
+   * What the converted price will be, for the picker: the rate the server
+   * will store the line at (`useLineSourceRate`), converted exactly as
+   * `quote_lines_fx_convert` does. Null when there is none (the server
+   * refuses then).
+   */
+  const previewPrice = (entry: PriceBookEntry): number | null => {
+    if (entry.currency === quote.currency) return entry.unit_price;
+    if (sourceRate == null || version?.exchange_rate == null) return null;
+    return convertPrice(
+      entry.unit_price,
+      sourceRate.rate,
+      Number(version.exchange_rate),
+      decimalsOf(quote.currency),
     );
   };
 
@@ -175,7 +213,16 @@ export const QuoteLines = () => {
           version_id: version.id,
           product_id: entry.product_id,
           quantity: parsed,
-          unit_price: entry.unit_price,
+          // A list in another currency: the server converts the list price
+          // at the version's rate (`quote_lines_fx_convert`) and ignores the
+          // preview sent here.
+          unit_price: previewPrice(entry) ?? entry.unit_price,
+          ...(entry.currency !== quote.currency
+            ? {
+                source_currency: entry.currency,
+                source_unit_price: entry.unit_price,
+              }
+            : {}),
           // The price book resolved the per-list override; the server turns the
           // rate into the percentage the line freezes.
           tax_rate_id: entry.tax_rate_id ?? null,
@@ -213,8 +260,8 @@ export const QuoteLines = () => {
   }));
 
   const drafts = displayed.map(({ draft }) => draft);
+  const amounts = quoteAmounts(drafts);
   const currency = quote.currency;
-  const selected = (priceBook ?? []).find((row) => row.id === entryId);
   const canAdd =
     isEditable &&
     !isUnknown &&
@@ -317,6 +364,19 @@ export const QuoteLines = () => {
                     ) : (
                       formatMoneyExact(draft.unit_price, currency)
                     )}
+                    {line.source_currency != null &&
+                    line.source_unit_price != null ? (
+                      <div className="text-xs text-muted-foreground">
+                        {translate("crm.fx.quote.converted_from", {
+                          amount: formatMoneyExact(
+                            Number(line.source_unit_price),
+                            line.source_currency,
+                            undefined,
+                            Math.min(decimalsOf(line.source_currency), 2),
+                          ),
+                        })}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="py-1 text-right tabular-nums">
                     {isEditable ? (
@@ -372,9 +432,22 @@ export const QuoteLines = () => {
       )}
 
       <QuoteTotals
-        amounts={quoteAmounts(drafts)}
+        amounts={amounts}
         currency={currency}
         effectiveDiscount={effectiveDiscountPercent(drafts)}
+        equivalent={
+          base && currency !== base.code && version?.exchange_rate != null
+            ? {
+                currency: base.code,
+                amount: toBase(
+                  amounts.total,
+                  Number(version.exchange_rate),
+                  base.decimals,
+                ),
+                decimals: Math.min(base.decimals, 2),
+              }
+            : null
+        }
       />
 
       {!isEditable ? (
@@ -414,6 +487,19 @@ export const QuoteLines = () => {
             aria-label={translate("resources.quotes.lines.quantity")}
             className="sm:w-28"
           />
+          {selected && selected.currency !== quote.currency ? (
+            <span className="self-center text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+              {selected.currency}{" "}
+              {formatMoneyExact(
+                selected.unit_price,
+                selected.currency,
+                undefined,
+                Math.min(decimalsOf(selected.currency), 2),
+              )}{" "}
+              → {quote.currency}{" "}
+              {formatMoneyExact(previewPrice(selected), quote.currency)}
+            </span>
+          ) : null}
           <Button type="button" size="sm" onClick={addLine} disabled={!canAdd}>
             {translate("resources.quotes.lines.add")}
           </Button>

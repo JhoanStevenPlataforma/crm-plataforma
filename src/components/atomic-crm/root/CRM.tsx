@@ -52,6 +52,7 @@ import quotes from "../quotes";
 import { QuotePortalPage } from "../quotes/portal/QuotePortalPage";
 import { QuotePrintPage } from "../quotes/QuotePrintPage";
 import { PortalSlidesPage } from "../portal/PortalSlidesPage";
+import { CurrenciesPage } from "../currencies/CurrenciesPage";
 import { StandardPresentationPreview } from "../portal/StandardPresentationPreview";
 import sales from "../sales";
 import taxRates from "../taxRates";
@@ -361,6 +362,13 @@ const sharedRoutes = (wrap: Wrap) => [
     path={PortalSlidesPage.path}
     element={wrap(<PortalSlidesPage />)}
   />,
+  // Financial settings: currencies and exchange rates
+  // (docs/proposals/multi-currency-fx.md).
+  <Route
+    key="currencies"
+    path={CurrenciesPage.path}
+    element={wrap(<CurrenciesPage />)}
+  />,
   <Route key="import" path={ImportPage.path} element={wrap(<ImportPage />)} />,
   // The analytics module. Four sibling routes rather than a nested layout:
   // `CustomRoutes` renders its children inside one `Routes`, and each page
@@ -480,6 +488,14 @@ const sharedResources = (wrap: Wrap) => [
     name="quote_access_tokens_summary"
   />,
   <Resource key="price_book" name="price_book" />,
+  // Currencies & exchange rates. Their one screen is `/currencies`; these are
+  // registered so the screen's reads and writes have a resource to go through.
+  <Resource key="currencies" name="currencies" recordRepresentation="code" />,
+  <Resource key="current_exchange_rates" name="current_exchange_rates" />,
+  <Resource key="exchange_rates" name="exchange_rates" />,
+  <Resource key="exchange_rate_providers" name="exchange_rate_providers" />,
+  <Resource key="exchange_rate_settings" name="exchange_rate_settings" />,
+  <Resource key="exchange_rate_sync_runs" name="exchange_rate_sync_runs" />,
   <Resource key="portal_templates" name="portal_templates" />,
   <Resource key="portal_slides" name="portal_slides" />,
 ];

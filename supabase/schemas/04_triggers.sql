@@ -522,3 +522,64 @@ create or replace trigger quotes_sync_deal
 create or replace trigger quote_portal_events_sync_deal
     after insert on public.quote_portal_events
     for each row execute function public.quote_portal_events_sync_deal();
+
+--
+-- Currencies & exchange rates
+--
+create or replace trigger currencies_guard
+    before insert or update on public.currencies
+    for each row execute function public.currencies_guard();
+
+create or replace trigger currencies_set_updated_at
+    before update on public.currencies
+    for each row execute function public.set_updated_at();
+
+create or replace trigger currencies_audit
+    after insert or update on public.currencies
+    for each row execute function public.fx_config_audit();
+
+create or replace trigger exchange_rate_providers_guard
+    before update on public.exchange_rate_providers
+    for each row execute function public.exchange_rate_providers_guard();
+
+create or replace trigger exchange_rate_providers_set_updated_at
+    before update on public.exchange_rate_providers
+    for each row execute function public.set_updated_at();
+
+create or replace trigger exchange_rate_providers_audit
+    after update on public.exchange_rate_providers
+    for each row execute function public.fx_config_audit();
+
+create or replace trigger exchange_rate_settings_set_updated_at
+    before update on public.exchange_rate_settings
+    for each row execute function public.set_updated_at();
+
+create or replace trigger exchange_rate_settings_audit
+    after update on public.exchange_rate_settings
+    for each row execute function public.fx_config_audit();
+
+create or replace trigger exchange_rates_before_insert
+    before insert on public.exchange_rates
+    for each row execute function public.exchange_rates_before_insert();
+
+create or replace trigger exchange_rates_audit
+    after insert on public.exchange_rates
+    for each row execute function public.exchange_rates_audit();
+
+create or replace trigger exchange_rates_immutable
+    before update or delete on public.exchange_rates
+    for each row execute function public.reject_quote_history_mutation();
+
+create or replace trigger exchange_rate_audit_logs_immutable
+    before update or delete on public.exchange_rate_audit_logs
+    for each row execute function public.reject_quote_history_mutation();
+
+create or replace trigger configuration_currency_is_base
+    before insert or update on public.configuration
+    for each row execute function public.configuration_currency_is_base();
+
+-- Named to fire after `quote_lines_freeze_guard` (triggers of one kind fire in
+-- name order): a frozen line is refused before anything is computed for it.
+create or replace trigger quote_lines_fx_convert
+    before insert or update on public.quote_lines
+    for each row execute function public.quote_lines_fx_convert();

@@ -1,3 +1,8 @@
+import {
+  DEMO_CURRENCIES,
+  DEMO_EXCHANGE_RATE_PROVIDERS,
+  DEMO_EXCHANGE_RATE_SETTINGS,
+} from "./currencies";
 import { DEMO_DEAL_QUOTE_STAGE_RULES } from "../dealQuoteSync";
 import { DEMO_PORTAL_SLIDES, DEMO_PORTAL_TEMPLATES } from "./portalTemplates";
 import { defaultTaskTypes } from "../../../root/defaultConfiguration";
@@ -134,10 +139,18 @@ export default (): Db => {
   // cannot upload media, so new slides take text boxes only here.
   db.portal_templates = DEMO_PORTAL_TEMPLATES;
   db.portal_slides = DEMO_PORTAL_SLIDES;
+  db.currencies = DEMO_CURRENCIES;
+  db.exchange_rate_providers = DEMO_EXCHANGE_RATE_PROVIDERS;
+  db.exchange_rate_settings = DEMO_EXCHANGE_RATE_SETTINGS;
+  db.exchange_rates = [];
+  db.exchange_rate_sync_runs = [];
+  db.exchange_rate_audit_logs = [];
   db.configuration = [
     {
       id: 1,
-      config: {} as Db["configuration"][number]["config"],
+      // The deals' display currency is the base currency, as the database's
+      // `configuration_currency_is_base` trigger keeps it.
+      config: { currency: "COP" } as Db["configuration"][number]["config"],
     },
   ];
   finalize(db);

@@ -667,7 +667,7 @@ export const spanishCrmMessages = {
       },
       helpers: {
         price_list_id:
-          "Define la moneda de la cotización y los precios que se ofrecen",
+          "Los precios que se ofrecen. Una lista en otra moneda se convierte con la tasa de cambio de la cotización",
         valid_until:
           "Pasada esta fecha la oferta, y cualquier enlace a ella, queda sin efecto",
         terms: "Se imprimen en el documento, debajo de las líneas",
@@ -1071,6 +1071,18 @@ export const spanishCrmMessages = {
           "Ese movimiento le corresponde al cliente o al sistema, no a ti.",
         quote_approval_requires_manager:
           "Solo un gerente puede aprobar una cotización — aprobar la propia sería fijarse el límite uno mismo.",
+        fx_rate_missing:
+          "Todavía no hay tasa de cambio para esta moneda. Pide a un gerente que ingrese una.",
+        fx_rate_stale:
+          "La tasa de cambio está desactualizada. Actualízala a la de hoy antes de enviar.",
+        fx_custom_rate_forbidden:
+          "Las tasas de cambio personalizadas las definen gerentes y administradores.",
+        fx_custom_rate_out_of_tolerance:
+          "Esa tasa se aleja de la oficial más de lo que tienes permitido.",
+        fx_reason_required:
+          "Una tasa personalizada necesita un motivo escrito.",
+        fx_rate_invalid: "La tasa debe ser un número positivo.",
+        fx_rate_kind_invalid: "Ese tipo de tasa no aplica a esta cotización.",
       },
     },
     tax_rates: {
@@ -1592,6 +1604,276 @@ export const spanishCrmMessages = {
           "No se pudo guardar la diapositiva. Revisa tu conexión e inténtalo de nuevo.",
       },
     },
+    fx: {
+      title: "Monedas y tasas de cambio",
+      description:
+        "Las monedas de la empresa, de dónde vienen sus tasas y la tasa con la que se valora cada cotización.",
+      navigation: "Monedas y tasas",
+      demo_unavailable:
+        "No disponible en modo demo: una pestaña del navegador no puede consultar a los proveedores de tasas.",
+      tabs: {
+        overview: "Panel",
+        currencies: "Monedas",
+        rates: "Tasas",
+        providers: "Proveedores",
+        history: "Historial",
+        settings: "Ajustes",
+        health: "Salud de integraciones",
+      },
+      overview: {
+        base_currency: "Moneda principal",
+        base_help:
+          "Todas las tasas se expresan en ella, y los negocios se cuentan en ella.",
+        last_update: "Última actualización de tasas",
+        never: "Nunca",
+        active_provider: "Proveedor activo",
+        none: "Ninguno",
+        connection: "Conexión",
+        active_currencies: "Monedas activas",
+        stale_warning:
+          "%{count} tasa(s) tienen más de %{days} día(s). Se siguen mostrando, con su fecha, pero no se puede emitir una cotización con una tasa oficial desactualizada.",
+        see_health: "Ver salud de integraciones",
+      },
+      kinds: {
+        base: "Base",
+        official: "Oficial",
+        commercial: "Comercial",
+        custom: "Personalizada",
+      },
+      status: {
+        operational: "Operativo",
+        degraded: "Degradado",
+        down: "Caído",
+        disabled: "Deshabilitado",
+        current: "Vigente",
+        stale: "Desactualizada",
+        no_rate: "Sin tasa",
+        active: "Activa",
+        inactive: "Inactiva",
+        running: "En curso",
+        succeeded: "Exitosa",
+        failed: "Fallida",
+      },
+      currencies: {
+        new: "Nueva moneda",
+        edit: "Editar moneda",
+        code: "Código ISO 4217",
+        code_help:
+          "Tres letras mayúsculas, p. ej. USD. No se puede cambiar después.",
+        name: "Nombre",
+        symbol: "Símbolo",
+        decimals: "Decimales",
+        decimals_help:
+          "Cómo se muestran y convierten los importes en esta moneda (se guardan con 2 como máximo).",
+        is_active: "Activa",
+        is_quote_default: "Predeterminada para nuevas cotizaciones",
+        is_base: "Moneda principal",
+        make_base: "Convertir en moneda principal",
+        make_base_confirm:
+          "¿Convertir %{code} en la moneda principal? Todas las tasas se expresan en ella, así que solo es posible mientras no exista ninguna tasa ni cotización en otra moneda.",
+        empty: "Aún no hay monedas.",
+        saved: "Moneda guardada",
+      },
+      rates: {
+        currency: "Moneda",
+        official: "Tasa oficial",
+        commercial: "Tasa comercial",
+        difference: "Diferencia",
+        source: "Fuente",
+        effective: "Vigente desde",
+        updated: "Consultada",
+        state: "Estado",
+        actions: "Acciones",
+        manual: "Manual",
+        per_unit: "1 %{currency} = %{rate} %{base}",
+        set_commercial: "Definir tasa comercial",
+        enter_official: "Ingresar tasa oficial",
+        empty: "No hay monedas extranjeras activas.",
+        age: "hace %{days} día(s)",
+        valid_until: "hasta %{date}",
+      },
+      manual: {
+        title_commercial: "Tasa comercial para %{currency}",
+        title_official: "Tasa oficial para %{currency}",
+        help_commercial:
+          "La tasa propia de la empresa. No sobrescribe la oficial: se conservan ambas, y las nuevas cotizaciones parten de la comercial mientras esté vigente.",
+        help_official:
+          "Úsala cuando no se pueda consultar al proveedor. Se guarda como un ingreso manual, firmado por ti, junto a las tasas del proveedor.",
+        rate: "Tasa (%{base} por 1 %{currency})",
+        effective_date: "Vigente desde",
+        valid_until: "Vigente hasta (opcional)",
+        note: "Motivo",
+        note_placeholder: "Por qué esta tasa y de dónde sale",
+        reference: "Referencia oficial: %{rate} (%{date})",
+        deviation: "%{percent}% respecto a la tasa oficial",
+        saved: "Tasa guardada",
+        error: "No se pudo guardar la tasa",
+      },
+      providers: {
+        name: "Proveedor",
+        enabled: "Habilitado",
+        priority: "Prioridad",
+        priority_help:
+          "El número menor se ejecuta primero. Un proveedor que cruza tasas a través de otro debe ejecutarse después de él.",
+        frequency: "Actualizar cada (minutos)",
+        currencies: "Monedas consultadas",
+        credentials: "Credenciales",
+        credentials_none: "No requiere",
+        credentials_set: "Guardadas",
+        credentials_missing: "Faltan",
+        set_credentials: "Definir credenciales",
+        credentials_title: "Credenciales de %{provider}",
+        credentials_help:
+          "Se guardan cifradas en el almacén del servidor. Nunca se vuelven a mostrar, ni aquí ni en ningún otro lugar; escríbelas de nuevo para reemplazarlas o déjalas vacías para eliminarlas.",
+        credentials_saved: "Credenciales guardadas",
+        edit: "Configurar",
+        saved: "Proveedor guardado",
+        sync_now: "Sincronizar ahora",
+        sync_all: "Sincronizar todo ahora",
+      },
+      history: {
+        currency: "Moneda",
+        from: "Desde",
+        to: "Hasta",
+        provider: "Fuente",
+        kind: "Tipo",
+        all: "Todos",
+        manual: "Ingreso manual",
+        rate: "Tasa",
+        effective: "Vigente desde",
+        fetched: "Consultada",
+        author: "Ingresada por",
+        note: "Nota",
+        derived: "vía %{currency}",
+        chart_title: "Evolución de %{currency}",
+        chart_pick: "Elige una moneda para ver su evolución.",
+        empty: "Ninguna tasa coincide con estos filtros.",
+        chart: "Gráfico",
+        table: "Tabla",
+      },
+      settings: {
+        default_kind: "Las nuevas cotizaciones parten de",
+        default_kind_help:
+          "La tasa comercial recurre a la oficial cuando la empresa no ha definido ninguna.",
+        stale_after: "Una tasa se considera desactualizada a los (días)",
+        stale_after_help:
+          "Las tasas oficiales más antiguas se siguen mostrando, con su fecha, pero no sirven para emitir una cotización.",
+        tolerance:
+          "Tolerancia de los comerciales para tasas personalizadas (%)",
+        tolerance_help:
+          "Cuánto puede alejarse un comercial de la tasa oficial al definir una tasa personalizada. 0 las reserva a gerentes y administradores.",
+        alert_after: "Avisar a los administradores tras (fallos consecutivos)",
+        saved: "Ajustes guardados",
+      },
+      health: {
+        title: "Salud de integraciones",
+        description:
+          "Lo que hicieron los proveedores de tasas, leído de la base de datos: abrir esta página nunca los consulta.",
+        last_attempt: "Último intento de conexión",
+        last_success: "Última actualización exitosa",
+        imported_last: "Tasas importadas (última ejecución)",
+        imported_30d: "Tasas importadas (30 días)",
+        errors: "Errores",
+        errors_value: "%{errors} en 30 días · %{consecutive} seguidos",
+        history_from: "Histórico disponible desde",
+        last_error: "Último error",
+        auto_sync: "Sincronización automática",
+        auto_active: "Activa · %{schedule}",
+        auto_inactive: "Inactiva",
+        auto_missing_job: "Falta la tarea programada.",
+        auto_missing_secrets:
+          "La URL y la clave de la función no están guardadas en Vault (fx_sync_url, fx_sync_service_key).",
+        history: "Historial de tasas",
+        history_value: "%{count} tasas, del %{from} al %{to}",
+        history_none: "Aún no hay tasas guardadas",
+        oldest: "Tasa más antigua en uso",
+        oldest_value: "Tasa %{kind} de %{currency} del %{date}",
+        oldest_draft: "en una cotización en borrador",
+        oldest_none: "Ninguna",
+        without_rate: "Monedas activas sin tasa",
+        runs: "Ejecuciones recientes",
+        run_started: "Inicio",
+        run_duration: "Duración",
+        run_provider: "Proveedor",
+        run_trigger: "Origen",
+        run_attempts: "Intentos",
+        run_rates: "Tasas",
+        run_error: "Error",
+        no_runs: "Aún no hay ejecuciones registradas.",
+        never: "Nunca",
+        triggers: {
+          cron: "Programada",
+          manual: "Manual",
+          backfill: "Carga histórica",
+        },
+        sync_result:
+          "%{succeeded} proveedor(es) actualizados, %{failed} con error, %{skipped} omitidos",
+        sync_error: "No se pudieron actualizar las tasas",
+      },
+      quote: {
+        title: "Tasa de cambio",
+        none_needed: "Cotizada en la moneda principal: no hay conversión.",
+        missing:
+          "No hay tasa de cambio para %{currency}. Pide a un gerente que ingrese una antes de agregar precios convertidos o enviar la cotización.",
+        rate_line: "1 %{currency} = %{rate} %{base}",
+        kind_source: "%{kind} · %{source}",
+        effective: "Vigente desde %{date}",
+        stale:
+          "Esta tasa es del %{date} y está desactualizada: actualízala antes de enviar la cotización.",
+        official_now: "Oficial hoy: %{rate} (%{date})",
+        commercial_now: "Comercial hoy: %{rate}",
+        use_official: "Usar oficial",
+        use_commercial: "Usar comercial",
+        refresh: "Actualizar a la tasa de hoy",
+        custom: "Tasa personalizada",
+        custom_title: "Tasa de cambio personalizada",
+        custom_help:
+          "Se usa solo en esta cotización, con tu motivo registrado. Las tasas oficial y comercial no cambian.",
+        custom_rate: "Tasa (%{base} por 1 %{currency})",
+        custom_reason: "Motivo",
+        custom_tolerance:
+          "Como comercial puedes alejarte como máximo un %{percent}% de la tasa oficial.",
+        custom_forbidden:
+          "Las tasas personalizadas las definen gerentes y administradores.",
+        frozen: "Congelada con la versión al emitirse.",
+        equivalent: "Equivalente en %{base}",
+        equivalent_note:
+          "Solo como referencia: los importes de la cotización están en %{currency}.",
+        converted_from: "%{amount} según la lista de precios",
+        saved: "Tasa de cambio actualizada",
+        currency: "Moneda de la cotización",
+        currency_help:
+          "La lista de precios puede estar en otra moneda: sus precios se convierten con la tasa de la cotización.",
+        source_title: "Precios de lista convertidos",
+        source_unrecorded: "Convertida antes de que se registrara la tasa",
+        source_stale:
+          "Una línea se convirtió con una tasa que ya no está vigente: actualízala a la tasa de hoy antes de enviar.",
+        source_refresh: "Actualizar precios de lista a la tasa de hoy",
+      },
+      document: {
+        rate_applied: "Tasa de cambio aplicada",
+        rate_value: "1 %{currency} = %{rate} %{base}",
+        rate_reference: "%{source}, vigente el %{date}",
+        equivalent: "Equivalente en %{base}: %{amount}",
+        contractual:
+          "Los valores contractuales de esta cotización son los expresados en %{currency}; el equivalente es solo informativo.",
+      },
+      errors: {
+        generic: "No se pudo guardar el cambio",
+        fx_forbidden: "Tu rol no permite hacer esto.",
+        fx_base_locked:
+          "La moneda principal está bloqueada: ya dependen de ella tasas o cotizaciones en otras monedas.",
+        fx_base_via_function:
+          'Usa "Convertir en moneda principal" para cambiarla.',
+        fx_base_must_be_active: "La moneda principal no se puede desactivar.",
+        fx_currency_code_immutable:
+          "El código de una moneda no se puede cambiar.",
+        fx_currency_inactive: "Esa moneda no está activa.",
+        fx_column_protected:
+          "Aquí solo se pueden cambiar los ajustes del proveedor.",
+        fx_provider_unknown: "Ese proveedor no existe.",
+      },
+    },
     notifications: {
       title: "Notificaciones",
       empty: "Estás al día",
@@ -1627,6 +1909,12 @@ export const spanishCrmMessages = {
         expired: {
           title: "%{number} ha vencido",
           body: "La oferta caducó sin respuesta.",
+        },
+      },
+      fx: {
+        sync_failed: {
+          title: "Tasas de cambio: %{provider} está fallando",
+          body: "%{failures} actualizaciones fallidas seguidas. Último error: %{error}",
         },
       },
       channels: {
@@ -2427,6 +2715,9 @@ export const spanishCrmMessages = {
       deals: {
         categories: "Categorías",
         currency: "Moneda",
+        currency_managed:
+          "La moneda base, que se administra en Monedas y tasas de cambio. Los montos de los negocios y los tableros se expresan en ella.",
+        currency_link: "Administrar monedas",
         pipeline_help:
           "Selecciona qué etapas de oportunidad cuentan como pipeline.",
         pipeline_statuses: "Estados del pipeline",
