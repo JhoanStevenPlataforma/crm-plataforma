@@ -18,6 +18,8 @@ const ROUTES = [
   "/analytics",
   "/teams-dashboard",
   "/profile",
+  "/help",
+  "/help_tutorials",
 ];
 
 describe("mobile routes", () => {

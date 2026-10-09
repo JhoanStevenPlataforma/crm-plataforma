@@ -1028,3 +1028,20 @@ revoke all on function public.fx_dispatch_sync() from public, anon, authenticate
 grant execute on function public.fx_dispatch_sync() to service_role;
 revoke all on function public.purge_exchange_rates() from public, anon, authenticated;
 grant execute on function public.purge_exchange_rates() to service_role;
+
+--
+-- Help centre. No `anon` grant: the manual is for people signed in.
+--
+revoke all on table public.help_categories from anon, authenticated;
+grant select, insert, update, delete on table public.help_categories to authenticated;
+grant all on table public.help_categories to service_role;
+revoke all on sequence public.help_categories_id_seq from anon, authenticated;
+grant usage on sequence public.help_categories_id_seq to authenticated;
+grant all on sequence public.help_categories_id_seq to service_role;
+
+revoke all on table public.help_tutorials from anon, authenticated;
+grant select, insert, update, delete on table public.help_tutorials to authenticated;
+grant all on table public.help_tutorials to service_role;
+revoke all on sequence public.help_tutorials_id_seq from anon, authenticated;
+grant usage on sequence public.help_tutorials_id_seq to authenticated;
+grant all on sequence public.help_tutorials_id_seq to service_role;

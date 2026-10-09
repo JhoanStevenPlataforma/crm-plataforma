@@ -1069,6 +1069,69 @@ export const englishCrmMessages = {
           "That kind of rate does not apply to this quotation.",
       },
     },
+    help_categories: {
+      name: "Category |||| Categories",
+      forcedCaseName: "Category",
+      fields: {
+        title: "Title",
+        slug: "Link name",
+        description: "Description",
+        icon: "Icon",
+        rank: "Order",
+      },
+      action: {
+        new: "New category",
+      },
+      errors: {
+        conflict: "Another category already uses this link name",
+        in_use:
+          "This category still holds tutorials. Move or delete them first.",
+      },
+    },
+    help_tutorials: {
+      name: "Tutorial |||| Tutorials",
+      forcedCaseName: "Tutorial",
+      field_categories: {
+        content: "Content",
+        media: "Recording",
+        publishing: "Publishing",
+      },
+      fields: {
+        title: "Title",
+        category_id: "Category",
+        slug: "Link name",
+        description: "Description",
+        steps: "Steps",
+        video_path: "Recording",
+        poster_path: "Poster",
+        captions_path: "Captions",
+        duration_seconds: "Duration (seconds)",
+        rank: "Order",
+        is_published: "Published",
+        updated_at: "Updated",
+      },
+      action: {
+        new: "New tutorial",
+      },
+      helpers: {
+        slug: "Lowercase words joined by dashes. It is the tutorial's address, so keep it when you replace the recording.",
+        steps:
+          "One step per line. Shown as a numbered list under the recording.",
+        video_path:
+          "MP4 (H.264) or WebM, up to 50 MB. Uploading a new file replaces the recording; the old one is kept in storage.",
+        poster_path:
+          "The picture shown before playing: WebP, JPG or PNG, 16:9.",
+        captions_path: "Optional. A WebVTT (.vtt) file.",
+        duration_seconds: "Filled in from the recording when you upload it.",
+        is_published:
+          "A draft is visible to admins only. A tutorial needs a recording to be published.",
+      },
+      errors: {
+        conflict: "Another tutorial already uses this link name",
+        publish_without_video:
+          "Attach a recording before publishing this tutorial",
+      },
+    },
     tax_rates: {
       field_categories: {
         tax: "Tax",
@@ -1979,6 +2042,10 @@ export const englishCrmMessages = {
       welcome_title: "Welcome to Atomic CRM",
     },
     form_section: {
+      help_content: "What the tutorial teaches and where it is filed",
+      help_media: "The files the reader plays",
+      help_publishing: "Where it appears and who sees it",
+      help_category: "A heading tutorials are filed under",
       product: "What it is and how it is sold",
       pricing: "List price, currency and tax",
       product_internal: "Notes for the team, and whether it is offered",
@@ -2760,6 +2827,42 @@ export const englishCrmMessages = {
           "Leads that arrived in the last 12 months; not affected by the list filters below",
       },
     },
+    help: {
+      title: "Manual",
+      description: "Learn to use the CRM with quick tutorials.",
+      manage: "Manage",
+      view_manual: "View manual",
+      search: "Search tutorials",
+      categories: "Categories",
+      all_categories: "All",
+      no_results: "No tutorial matches your search.",
+      empty: "There are no tutorials yet.",
+      empty_admin:
+        "There are no tutorials yet. Use Manage to add the first one.",
+      draft: "Draft",
+      watch: "Watch tutorial",
+      no_video: "This tutorial has no recording yet.",
+      captions: "Captions",
+      steps: "In this tutorial",
+      updated_on: "Updated on %{date}",
+      more_in_category: "More tutorials in this category",
+      not_found: "This tutorial does not exist or is not published yet.",
+      back: "Back to the manual",
+      media: {
+        upload: "Upload file",
+        replace: "Replace file",
+        attached: "File attached",
+        remove: "Remove the file",
+      },
+      errors: {
+        load_failed: "The manual could not be loaded.",
+        upload_type: "This type of file cannot be used here.",
+        upload_too_large: "This file is too large.",
+        upload_failed: "The file could not be uploaded.",
+        demo_upload: "The demo has no storage: files cannot be uploaded here.",
+        slug: "Use lowercase letters, numbers and dashes only",
+      },
+    },
     navigation: {
       label: "CRM navigation",
       more_pages: "More pages",
@@ -2779,6 +2882,7 @@ export const englishCrmMessages = {
         activities: "Activities",
         analytics: "Analytics",
         settings: "Settings",
+        help: "Help",
       },
     },
     profile: {

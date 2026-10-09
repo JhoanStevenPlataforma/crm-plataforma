@@ -1087,6 +1087,70 @@ export const frenchCrmMessages = {
         fx_rate_kind_invalid: "Ce type de taux ne s'applique pas à ce devis.",
       },
     },
+    help_categories: {
+      name: "Catégorie |||| Catégories",
+      forcedCaseName: "Catégorie",
+      fields: {
+        title: "Titre",
+        slug: "Nom du lien",
+        description: "Description",
+        icon: "Icône",
+        rank: "Ordre",
+      },
+      action: {
+        new: "Nouvelle catégorie",
+      },
+      errors: {
+        conflict: "Une autre catégorie utilise déjà ce nom de lien",
+        in_use:
+          "Cette catégorie contient encore des tutoriels. Déplacez-les ou supprimez-les d'abord.",
+      },
+    },
+    help_tutorials: {
+      name: "Tutoriel |||| Tutoriels",
+      forcedCaseName: "Tutoriel",
+      field_categories: {
+        content: "Contenu",
+        media: "Enregistrement",
+        publishing: "Publication",
+      },
+      fields: {
+        title: "Titre",
+        category_id: "Catégorie",
+        slug: "Nom du lien",
+        description: "Description",
+        steps: "Étapes",
+        video_path: "Enregistrement",
+        poster_path: "Vignette",
+        captions_path: "Sous-titres",
+        duration_seconds: "Durée (secondes)",
+        rank: "Ordre",
+        is_published: "Publié",
+        updated_at: "Mis à jour",
+      },
+      action: {
+        new: "Nouveau tutoriel",
+      },
+      helpers: {
+        slug: "Des mots en minuscules reliés par des tirets. C'est l'adresse du tutoriel : conservez-la quand vous remplacez l'enregistrement.",
+        steps:
+          "Une étape par ligne. Affichées en liste numérotée sous l'enregistrement.",
+        video_path:
+          "MP4 (H.264) ou WebM, jusqu'à 50 Mo. Un nouveau fichier remplace l'enregistrement ; l'ancien est conservé dans le stockage.",
+        poster_path:
+          "L'image affichée avant la lecture : WebP, JPG ou PNG, 16:9.",
+        captions_path: "Facultatif. Un fichier WebVTT (.vtt).",
+        duration_seconds:
+          "Renseignée à partir de l'enregistrement lors de l'envoi.",
+        is_published:
+          "Un brouillon n'est visible que des administrateurs. Un tutoriel a besoin d'un enregistrement pour être publié.",
+      },
+      errors: {
+        conflict: "Un autre tutoriel utilise déjà ce nom de lien",
+        publish_without_video:
+          "Joignez un enregistrement avant de publier ce tutoriel",
+      },
+    },
     tax_rates: {
       field_categories: {
         tax: "Taxe",
@@ -2002,6 +2066,10 @@ export const frenchCrmMessages = {
       welcome_title: "Bienvenue sur Atomic CRM",
     },
     form_section: {
+      help_content: "Ce que le tutoriel enseigne et où il est classé",
+      help_media: "Les fichiers lus par le lecteur",
+      help_publishing: "Où il apparaît et qui le voit",
+      help_category: "Un titre sous lequel les tutoriels sont classés",
       product: "Ce que c'est et comment il se vend",
       pricing: "Prix catalogue, devise et taxe",
       product_internal: "Notes pour l'équipe, et s'il est proposé",
@@ -2803,6 +2871,43 @@ export const frenchCrmMessages = {
           "Leads arrivés au cours des 12 derniers mois ; indépendant des filtres de la liste",
       },
     },
+    help: {
+      title: "Manuel",
+      description: "Apprenez à utiliser le CRM grâce à de courts tutoriels.",
+      manage: "Gérer",
+      view_manual: "Voir le manuel",
+      search: "Rechercher un tutoriel",
+      categories: "Catégories",
+      all_categories: "Toutes",
+      no_results: "Aucun tutoriel ne correspond à votre recherche.",
+      empty: "Il n'y a pas encore de tutoriels.",
+      empty_admin:
+        "Il n'y a pas encore de tutoriels. Utilisez Gérer pour ajouter le premier.",
+      draft: "Brouillon",
+      watch: "Voir le tutoriel",
+      no_video: "Ce tutoriel n'a pas encore d'enregistrement.",
+      captions: "Sous-titres",
+      steps: "Dans ce tutoriel",
+      updated_on: "Mis à jour le %{date}",
+      more_in_category: "Autres tutoriels de cette catégorie",
+      not_found: "Ce tutoriel n'existe pas ou n'est pas encore publié.",
+      back: "Retour au manuel",
+      media: {
+        upload: "Envoyer un fichier",
+        replace: "Remplacer le fichier",
+        attached: "Fichier joint",
+        remove: "Retirer le fichier",
+      },
+      errors: {
+        load_failed: "Le manuel n'a pas pu être chargé.",
+        upload_type: "Ce type de fichier ne peut pas être utilisé ici.",
+        upload_too_large: "Ce fichier est trop volumineux.",
+        upload_failed: "Le fichier n'a pas pu être envoyé.",
+        demo_upload:
+          "La démo n'a pas de stockage : aucun fichier ne peut être envoyé ici.",
+        slug: "Utilisez uniquement des minuscules, des chiffres et des tirets",
+      },
+    },
     navigation: {
       label: "Navigation CRM",
       more_pages: "Plus de pages",
@@ -2822,6 +2927,7 @@ export const frenchCrmMessages = {
         activities: "Activités",
         analytics: "Analyse",
         settings: "Configuration",
+        help: "Aide",
       },
     },
     profile: {

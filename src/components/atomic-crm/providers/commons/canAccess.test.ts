@@ -122,6 +122,24 @@ describe("canAccess", () => {
     });
   });
 
+  describe("help centre", () => {
+    const roles: CrmRole[] = ["admin", "manager", "rep"];
+    const allowed = (action: string, resource: string) =>
+      roles.filter((role) => canAccess(role, { action, resource }));
+
+    test.each(["help_categories", "help_tutorials"])(
+      "everyone reads %s and only admins write it",
+      (resource) => {
+        for (const action of ["list", "show"]) {
+          expect(allowed(action, resource)).toEqual(roles);
+        }
+        for (const action of ["create", "edit", "delete"]) {
+          expect(allowed(action, resource)).toEqual(["admin"]);
+        }
+      },
+    );
+  });
+
   describe("quotations", () => {
     const roles: CrmRole[] = ["admin", "manager", "rep"];
     const allowed = (action: string, resource: string) =>

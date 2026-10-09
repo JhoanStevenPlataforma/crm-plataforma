@@ -533,6 +533,10 @@ export const createDataProvider = ({
     uploadPortalMedia: async (): Promise<string> => {
       throw new Error("crm.portal_slides.errors.demo_upload");
     },
+    /** No storage behind the demo, for a tutorial's files either. */
+    uploadHelpMedia: async (): Promise<string> => {
+      throw new Error("crm.help.errors.demo_upload");
+    },
     /** `activate_portal_template()`, demo-side: exactly one active. */
     activatePortalTemplate: async (templateId: Identifier): Promise<void> => {
       const { data: templates } =

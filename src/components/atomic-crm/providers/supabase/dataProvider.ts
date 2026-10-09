@@ -44,6 +44,8 @@ import {
 } from "../commons/taskAttachments";
 import { getIsInitialized } from "./authProvider";
 import { uploadPortalMedia } from "./portalMedia";
+import { uploadHelpMedia } from "./helpMedia";
+import type { HelpMediaKind } from "../../help/helpMedia";
 import { createFxMethods, type FxClient } from "./fxMethods";
 import { createQuoteMethods } from "./quoteMethods";
 import { subscribeToQuoteChanges, type Unsubscribe } from "./quoteRealtime";
@@ -911,6 +913,9 @@ const getDataProviderWithCustomMethods = () => {
     /** A picture or video for a customer-portal slide; returns its path. */
     uploadPortalMedia: (file: File): Promise<string> =>
       uploadPortalMedia(getSupabaseClient(), file),
+    /** A tutorial's recording, poster or captions; returns its path. */
+    uploadHelpMedia: (kind: HelpMediaKind, file: File): Promise<string> =>
+      uploadHelpMedia(getSupabaseClient(), kind, file),
     /** Makes a portal template the one every quotation shows (admins). */
     activatePortalTemplate: async (templateId: Identifier): Promise<void> => {
       const { error } = await getSupabaseClient().rpc(

@@ -139,6 +139,10 @@ export default (): Db => {
   // cannot upload media, so new slides take text boxes only here.
   db.portal_templates = DEMO_PORTAL_TEMPLATES;
   db.portal_slides = DEMO_PORTAL_SLIDES;
+  // The help centre starts empty: the demo has no storage for a recording, and
+  // a card with nothing to play is worse than the empty state.
+  db.help_categories = [];
+  db.help_tutorials = [];
   db.currencies = DEMO_CURRENCIES;
   db.exchange_rate_providers = DEMO_EXCHANGE_RATE_PROVIDERS;
   db.exchange_rate_settings = DEMO_EXCHANGE_RATE_SETTINGS;

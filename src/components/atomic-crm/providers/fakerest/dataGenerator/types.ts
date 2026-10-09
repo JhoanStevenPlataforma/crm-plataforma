@@ -10,6 +10,8 @@ import type {
   Deal,
   DealNote,
   DealStageChange,
+  HelpCategory,
+  HelpTutorial,
   Lead,
   Sale,
   Tag,
@@ -144,6 +146,8 @@ export interface Db {
   configuration: Array<{ id: number; config: ConfigurationContextValue }>;
   portal_templates: PortalTemplate[];
   portal_slides: PortalSlide[];
+  help_categories: HelpCategory[];
+  help_tutorials: HelpTutorial[];
   // Currencies & exchange rates, seeded as the migration seeds them. Rates,
   // runs and the audit log start empty: each is a record of something that
   // happened, and a demo inventing a rate would show a figure nobody published.

@@ -1386,3 +1386,46 @@ create policy "Sync runs are readable by managers and admins"
 create policy "The rate audit log is readable by managers and admins"
     on public.exchange_rate_audit_logs for select to authenticated
     using ((select public.can_manage_all()));
+
+--
+-- Help centre: everyone signed in reads the manual, only admins write it. A
+-- tutorial that is not published is a draft only admins see, so a recording
+-- can be prepared and checked before anybody is sent to it.
+--
+alter table public.help_categories enable row level security;
+
+create policy "Help categories are readable by authenticated users"
+    on public.help_categories for select to authenticated
+    using (true);
+
+create policy "Help categories can be added by admins"
+    on public.help_categories for insert to authenticated
+    with check ((select public.is_admin()));
+
+create policy "Help categories can be updated by admins"
+    on public.help_categories for update to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));
+
+create policy "Help categories can be deleted by admins"
+    on public.help_categories for delete to authenticated
+    using ((select public.is_admin()));
+
+alter table public.help_tutorials enable row level security;
+
+create policy "Published help tutorials are readable by authenticated users"
+    on public.help_tutorials for select to authenticated
+    using (is_published or (select public.is_admin()));
+
+create policy "Help tutorials can be added by admins"
+    on public.help_tutorials for insert to authenticated
+    with check ((select public.is_admin()));
+
+create policy "Help tutorials can be updated by admins"
+    on public.help_tutorials for update to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));
+
+create policy "Help tutorials can be deleted by admins"
+    on public.help_tutorials for delete to authenticated
+    using ((select public.is_admin()));

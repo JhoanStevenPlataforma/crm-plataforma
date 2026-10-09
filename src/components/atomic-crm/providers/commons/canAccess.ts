@@ -168,6 +168,15 @@ export const canAccess = <
     return params.action === "list" || params.action === "show";
   }
 
+  // The manual is read by everyone and written by admins (RLS says the same).
+  // Stated here because the fall-through below answers `true`.
+  if (
+    params.resource === "help_categories" ||
+    params.resource === "help_tutorials"
+  ) {
+    return params.action === "list" || params.action === "show";
+  }
+
   // Only admins manage users and application configuration. Managers still
   // resolve sales names through ReferenceField/ReferenceInput, which query the
   // data provider directly and do not go through canAccess.

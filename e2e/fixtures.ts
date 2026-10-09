@@ -115,6 +115,16 @@ async function resetDb() {
     );
   }
 
+  // The manual's seeded tutorials are reference data and stay (as drafts); a
+  // spec files its own under an `e2e-` slug, and those go.
+  const { error: helpError } = await adminSupabase
+    .from("help_tutorials")
+    .delete()
+    .like("slug", "e2e-%");
+  if (helpError) {
+    throw new Error(`Failed to reset the manual: ${helpError.message}`);
+  }
+
   for (const table of TABLES) {
     // Supabase client delete need a where clause to get executed, so we use one that will match on all rows (id is not null)
     await adminSupabase.from(table).delete().not("id", "is", null);
@@ -362,6 +372,51 @@ async function createContact({
     salesId: sales_id,
     notes,
   });
+
+  return data;
+}
+
+/**
+ * A tutorial of the manual, filed under the seeded quotations category. The
+ * slug must start with `e2e-`: that is what `resetDb()` removes.
+ */
+async function createHelpTutorial({
+  slug,
+  title,
+  steps = [],
+  video_path = null,
+  is_published = false,
+}: {
+  slug: `e2e-${string}`;
+  title: string;
+  steps?: string[];
+  video_path?: string | null;
+  is_published?: boolean;
+}) {
+  const { data: category, error: categoryError } = await adminSupabase
+    .from("help_categories")
+    .select("id")
+    .eq("slug", "cotizaciones")
+    .single();
+  if (categoryError) {
+    throw new Error(`Failed to read the category: ${categoryError.message}`);
+  }
+
+  const { data, error } = await adminSupabase
+    .from("help_tutorials")
+    .insert({
+      category_id: category.id,
+      slug,
+      title,
+      steps,
+      video_path,
+      is_published,
+    })
+    .select("id")
+    .single();
+  if (error) {
+    throw new Error(`Failed to create tutorial: ${error.message}`);
+  }
 
   return data;
 }
@@ -781,6 +836,7 @@ export const test = base.extend<{
   createCompany: typeof createCompany;
   createContact: typeof createContact;
   createLead: typeof createLead;
+  createHelpTutorial: typeof createHelpTutorial;
   createNotes: typeof createNotes;
   createProduct: typeof createProduct;
   createPriceList: typeof createPriceList;
@@ -809,6 +865,10 @@ export const test = base.extend<{
   // eslint-disable-next-line no-empty-pattern
   createSales: async ({}, cb) => {
     await cb(createSales);
+  },
+  // eslint-disable-next-line no-empty-pattern
+  createHelpTutorial: async ({}, cb) => {
+    await cb(createHelpTutorial);
   },
   // eslint-disable-next-line no-empty-pattern
   createCompany: async ({}, cb) => {

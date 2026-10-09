@@ -335,6 +335,35 @@ Rules that are easy to break from the outside:
 - The canvas autosaves the draft of the selected slide (`usePortalSlides`);
   there is no save button.
 
+#### Help Centre (the in-app manual of video tutorials)
+
+**`docs/proposals/help-center.md` is the reference** (migration
+`20261005120000_help_center.sql`, screens in `help/` at `/help` and
+`/help/:slug`, admin resources `help_tutorials` / `help_categories`, the
+recording pipeline in `tutorials/`). Everyone signed in reads the manual; only
+admins write it, and a tutorial that is not published is a draft RLS shows to
+admins alone.
+
+Rules that are easy to break from the outside:
+
+- **A file in `help-media` is never overwritten.** Every upload is a fresh
+  uuid and replacing a recording is a new `video_path`: the files are cached
+  for a year, so a path whose bytes changed keeps playing the old film.
+- **The bucket is public; the catalogue is not.** That is right only because a
+  tutorial is recorded over made-up data. Never record over real customer data.
+- **The folder / extension rules live in three places that must agree:** the
+  bucket's insert policy (`07_storage.sql`), the `*_path` checks on
+  `help_tutorials`, and `help/helpMedia.ts`.
+- **Build a file's address with `helpMediaUrl()`**, never by hand:
+  `VITE_HELP_MEDIA_BASE_URL` is how the recordings move to a CDN without
+  touching a row.
+- **`preload="none"` on the player is the bandwidth policy.** The index fetches
+  posters only; a recording is requested when play is pressed.
+- **The tutorials are recorded by scripts** (`npm run tutorials:record`), not
+  by hand. `tutorials/overlay.ts` is the visual standard and each
+  `*.tutorial.ts` is its own storyboard; when a screen a tutorial shows
+  changes, re-record it rather than leaving a film of the old screen.
+
 #### Design System and Application Shell
 
 The visual layer is being rebuilt in phases. **`docs/proposals/ui-redesign.md`

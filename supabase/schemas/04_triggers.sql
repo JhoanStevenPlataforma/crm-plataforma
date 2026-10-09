@@ -583,3 +583,14 @@ create or replace trigger configuration_currency_is_base
 create or replace trigger quote_lines_fx_convert
     before insert or update on public.quote_lines
     for each row execute function public.quote_lines_fx_convert();
+
+--
+-- Help centre: "updated on" is what the reader is shown, so the server keeps it.
+--
+create or replace trigger help_categories_set_updated_at
+    before update on public.help_categories
+    for each row execute function public.set_updated_at();
+
+create or replace trigger help_tutorials_set_updated_at
+    before update on public.help_tutorials
+    for each row execute function public.set_updated_at();

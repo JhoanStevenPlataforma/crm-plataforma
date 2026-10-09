@@ -1085,6 +1085,69 @@ export const spanishCrmMessages = {
         fx_rate_kind_invalid: "Ese tipo de tasa no aplica a esta cotización.",
       },
     },
+    help_categories: {
+      name: "Categoría |||| Categorías",
+      forcedCaseName: "Categoría",
+      fields: {
+        title: "Título",
+        slug: "Nombre del enlace",
+        description: "Descripción",
+        icon: "Icono",
+        rank: "Orden",
+      },
+      action: {
+        new: "Nueva categoría",
+      },
+      errors: {
+        conflict: "Otra categoría ya usa este nombre de enlace",
+        in_use:
+          "Esta categoría todavía tiene tutoriales. Muévelos o elimínalos primero.",
+      },
+    },
+    help_tutorials: {
+      name: "Tutorial |||| Tutoriales",
+      forcedCaseName: "Tutorial",
+      field_categories: {
+        content: "Contenido",
+        media: "Grabación",
+        publishing: "Publicación",
+      },
+      fields: {
+        title: "Título",
+        category_id: "Categoría",
+        slug: "Nombre del enlace",
+        description: "Descripción",
+        steps: "Pasos",
+        video_path: "Grabación",
+        poster_path: "Miniatura",
+        captions_path: "Subtítulos",
+        duration_seconds: "Duración (segundos)",
+        rank: "Orden",
+        is_published: "Publicado",
+        updated_at: "Actualizado",
+      },
+      action: {
+        new: "Nuevo tutorial",
+      },
+      helpers: {
+        slug: "Palabras en minúscula unidas por guiones. Es la dirección del tutorial: consérvala cuando reemplaces la grabación.",
+        steps:
+          "Un paso por línea. Se muestran como lista numerada debajo de la grabación.",
+        video_path:
+          "MP4 (H.264) o WebM, hasta 50 MB. Subir un archivo nuevo reemplaza la grabación; el anterior se conserva en el almacenamiento.",
+        poster_path:
+          "La imagen que se ve antes de reproducir: WebP, JPG o PNG, 16:9.",
+        captions_path: "Opcional. Un archivo WebVTT (.vtt).",
+        duration_seconds: "Se completa con la grabación cuando la subes.",
+        is_published:
+          "Un borrador solo lo ven los administradores. Para publicar un tutorial hace falta su grabación.",
+      },
+      errors: {
+        conflict: "Otro tutorial ya usa este nombre de enlace",
+        publish_without_video:
+          "Adjunta una grabación antes de publicar este tutorial",
+      },
+    },
     tax_rates: {
       field_categories: {
         tax: "Impuesto",
@@ -2002,6 +2065,10 @@ export const spanishCrmMessages = {
       welcome_title: "Te damos la bienvenida a Atomic CRM",
     },
     form_section: {
+      help_content: "Qué enseña el tutorial y dónde se archiva",
+      help_media: "Los archivos que reproduce el lector",
+      help_publishing: "Dónde aparece y quién lo ve",
+      help_category: "Un título bajo el que se archivan tutoriales",
       product: "Qué es y cómo se vende",
       pricing: "Precio de lista, moneda e impuesto",
       product_internal: "Notas para el equipo y si se ofrece",
@@ -2787,6 +2854,43 @@ export const spanishCrmMessages = {
           "Leads llegados en los últimos 12 meses; no depende de los filtros de la lista",
       },
     },
+    help: {
+      title: "Manual",
+      description: "Aprende a utilizar el CRM mediante tutoriales rápidos.",
+      manage: "Administrar",
+      view_manual: "Ver el manual",
+      search: "Buscar tutoriales",
+      categories: "Categorías",
+      all_categories: "Todas",
+      no_results: "Ningún tutorial coincide con tu búsqueda.",
+      empty: "Todavía no hay tutoriales.",
+      empty_admin:
+        "Todavía no hay tutoriales. Usa Administrar para agregar el primero.",
+      draft: "Borrador",
+      watch: "Ver tutorial",
+      no_video: "Este tutorial todavía no tiene grabación.",
+      captions: "Subtítulos",
+      steps: "En este tutorial",
+      updated_on: "Actualizado el %{date}",
+      more_in_category: "Más tutoriales de esta categoría",
+      not_found: "Este tutorial no existe o todavía no está publicado.",
+      back: "Volver al manual",
+      media: {
+        upload: "Subir archivo",
+        replace: "Reemplazar archivo",
+        attached: "Archivo adjunto",
+        remove: "Quitar el archivo",
+      },
+      errors: {
+        load_failed: "No se pudo cargar el manual.",
+        upload_type: "Este tipo de archivo no se puede usar aquí.",
+        upload_too_large: "Este archivo es demasiado grande.",
+        upload_failed: "No se pudo subir el archivo.",
+        demo_upload:
+          "La demo no tiene almacenamiento: aquí no se pueden subir archivos.",
+        slug: "Usa solo minúsculas, números y guiones",
+      },
+    },
     navigation: {
       label: "Navegación del CRM",
       more_pages: "Más páginas",
@@ -2806,6 +2910,7 @@ export const spanishCrmMessages = {
         activities: "Actividades",
         analytics: "Analítica",
         settings: "Configuración",
+        help: "Ayuda",
       },
     },
     profile: {

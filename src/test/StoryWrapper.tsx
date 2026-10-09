@@ -95,6 +95,8 @@ export const createCrmDb = (overrides: Partial<Db> = {}): Db =>
     price_lists: [],
     price_list_items: [],
     tax_rates: [],
+    help_categories: [],
+    help_tutorials: [],
     task_statuses: TASK_STATUSES,
     task_priorities: TASK_PRIORITIES,
     task_types: defaultTaskTypes.map((taskType, index) => ({

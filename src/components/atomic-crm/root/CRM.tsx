@@ -35,6 +35,9 @@ import { ReportsLibrary } from "../reports/ReportsLibrary";
 import { Dashboard } from "../dashboard/Dashboard";
 import { MobileDashboard } from "../dashboard/MobileDashboard";
 import deals from "../deals";
+import { helpCategories, helpTutorials } from "../help";
+import { HelpCenterPage } from "../help/HelpCenterPage";
+import { HelpTutorialPage } from "../help/HelpTutorialPage";
 import leads from "../leads";
 import { Layout } from "../layout/Layout";
 import { MobileLayout } from "../layout/MobileLayout";
@@ -370,6 +373,18 @@ const sharedRoutes = (wrap: Wrap) => [
     element={wrap(<CurrenciesPage />)}
   />,
   <Route key="import" path={ImportPage.path} element={wrap(<ImportPage />)} />,
+  // The manual (docs/proposals/help-center.md): what everybody reads. Its
+  // admin screens are the two `help_*` resources below.
+  <Route
+    key="help"
+    path={HelpCenterPage.path}
+    element={wrap(<HelpCenterPage />)}
+  />,
+  <Route
+    key="help-tutorial"
+    path={HelpTutorialPage.path}
+    element={wrap(<HelpTutorialPage />)}
+  />,
   // The analytics module. Four sibling routes rather than a nested layout:
   // `CustomRoutes` renders its children inside one `Routes`, and each page
   // composes `AnalyticsLayout` itself, so there is no `Outlet` to get wrong.
@@ -498,6 +513,16 @@ const sharedResources = (wrap: Wrap) => [
   <Resource key="exchange_rate_sync_runs" name="exchange_rate_sync_runs" />,
   <Resource key="portal_templates" name="portal_templates" />,
   <Resource key="portal_slides" name="portal_slides" />,
+  <Resource
+    key="help_categories"
+    name="help_categories"
+    {...wrapViews(helpCategories, wrap)}
+  />,
+  <Resource
+    key="help_tutorials"
+    name="help_tutorials"
+    {...wrapViews(helpTutorials, wrap)}
+  />,
 ];
 
 const MobileAdmin = (

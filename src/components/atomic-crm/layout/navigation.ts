@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  BookOpenText,
   BriefcaseBusiness,
   Building2,
   Coins,
@@ -321,6 +322,22 @@ export const NAV_SECTIONS: NavSection[] = [
         to: IMPORT_PATH,
         match: "/import/*",
         icon: Import,
+      },
+    ],
+  },
+  {
+    key: "help",
+    labelKey: "crm.navigation.groups.help",
+    icon: BookOpenText,
+    items: [
+      // Ungated: the manual is for whoever is signed in, a new rep first of
+      // all. What a rep must not see -- a draft -- is withheld by RLS.
+      {
+        key: "help",
+        labelKey: "crm.help.title",
+        to: "/help",
+        match: "/help/*",
+        icon: BookOpenText,
       },
     ],
   },
