@@ -48,6 +48,30 @@ async function resetDb() {
     throw new Error(`Failed to purge tasks: ${purgeError.message}`);
   }
 
+  // Sent emails before the quotes and the users they point at: a message is
+  // frozen history, removed only by its own retention path. The settings go
+  // back to the simulated provider, so no spec can inherit a real one.
+  const { error: purgeEmailsError } = await adminSupabase.rpc("purge_emails");
+  if (purgeEmailsError) {
+    throw new Error(`Failed to purge emails: ${purgeEmailsError.message}`);
+  }
+  const { error: emailSettingsError } = await adminSupabase
+    .from("email_settings")
+    .update({
+      provider_key: "mock",
+      is_enabled: true,
+      from_email: null,
+      from_name: null,
+      max_per_user_hour: 60,
+      max_per_recipient_day: 5,
+    })
+    .eq("id", 1);
+  if (emailSettingsError) {
+    throw new Error(
+      `Failed to reset email settings: ${emailSettingsError.message}`,
+    );
+  }
+
   // Quotes through their retention path too, for the same reason: issued
   // versions and the quote audit trail refuse a plain service-role DELETE, and
   // a quote blocks the companies and sales deleted below.
@@ -330,12 +354,15 @@ async function createContact({
   company_id = null,
   sales_id,
   notes = [],
+  emails = [],
 }: {
   first_name: string;
   last_name: string;
   title?: string;
   company_id?: string | number | null;
   sales_id: string | number;
+  /** Work addresses, in order: the first is the one a quotation prints. */
+  emails?: string[];
   notes?: {
     text: string;
     date?: string;
@@ -357,7 +384,7 @@ async function createContact({
       gender: "unknown",
       status: "cold",
       background: "",
-      email_jsonb: [],
+      email_jsonb: emails.map((email) => ({ email, type: "Work" })),
       phone_jsonb: [],
     })
     .select("id")
@@ -926,4 +953,6 @@ export const test = base.extend<{
 export type CreateQuote = typeof createQuote;
 export type IssueQuote = typeof issueQuote;
 
-export { expect };
+// The service-role client, for a spec that must read what the server stored
+// (never to arrange what a factory above can).
+export { adminSupabase, expect };

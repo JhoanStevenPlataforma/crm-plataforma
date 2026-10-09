@@ -81,6 +81,7 @@ const TIMELINE_EVENT_TYPES = [
   "deal.stage_changed",
   "quote.status_changed",
   "quote.commented",
+  "email.message",
 ];
 
 const CATALOGS = {

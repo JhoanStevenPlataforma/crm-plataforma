@@ -4,6 +4,7 @@ import {
   DEMO_EXCHANGE_RATE_SETTINGS,
 } from "./currencies";
 import { DEMO_DEAL_QUOTE_STAGE_RULES } from "../dealQuoteSync";
+import { DEMO_EMAIL_SETTINGS, DEMO_EMAIL_TEMPLATES } from "./emailTemplates";
 import { DEMO_PORTAL_SLIDES, DEMO_PORTAL_TEMPLATES } from "./portalTemplates";
 import { defaultTaskTypes } from "../../../root/defaultConfiguration";
 import { generateCompanies } from "./companies";
@@ -149,6 +150,12 @@ export default (): Db => {
   db.exchange_rates = [];
   db.exchange_rate_sync_runs = [];
   db.exchange_rate_audit_logs = [];
+  // Outbound email: the seeded templates, and no message -- none was sent.
+  db.email_settings = [DEMO_EMAIL_SETTINGS];
+  db.email_templates = DEMO_EMAIL_TEMPLATES;
+  db.email_messages = [];
+  db.email_message_events = [];
+  db.email_suppressions = [];
   db.configuration = [
     {
       id: 1,

@@ -14,6 +14,7 @@ import { SelectField } from "@/components/admin/select-field";
 
 import { formatLocalizedDate } from "../misc/RelativeDate";
 import { AsideSection } from "../misc/AsideSection";
+import { SendEmailButton } from "../emails/SendEmailButton";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Company } from "../types";
 import { getTranslatedCompanySizeLabel } from "./getTranslatedCompanySizeLabel";
@@ -37,6 +38,7 @@ export const CompanyAside = ({ link = "edit" }: CompanyAsideProps) => {
         ) : (
           <ShowButton label={translate("resources.companies.action.show")} />
         )}
+        <SendEmailButton entityType="company" entityId={record.id} />
       </div>
 
       <CompanyInfo record={record} />

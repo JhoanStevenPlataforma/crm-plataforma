@@ -11,6 +11,7 @@ import {
   Import,
   LayoutDashboard,
   ListTodo,
+  Mail,
   Package,
   Percent,
   PieChart,
@@ -307,6 +308,17 @@ export const NAV_SECTIONS: NavSection[] = [
         matchEnd: true,
         icon: Presentation,
         access: { resource: "portal_templates", action: "edit" },
+      },
+      // Outbound email: its history for managers; the provider, the sender,
+      // the credentials and the templates for admins.
+      {
+        key: "email",
+        labelKey: "crm.email.settings.nav",
+        to: "/email",
+        match: "/email",
+        matchEnd: true,
+        icon: Mail,
+        access: { resource: "email_history", action: "list" },
       },
       {
         key: "preferences",

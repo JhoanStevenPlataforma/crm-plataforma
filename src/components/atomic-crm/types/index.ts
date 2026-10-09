@@ -21,3 +21,4 @@ export * from "./catalog";
 export * from "./quotes";
 export * from "./currencies";
 export * from "./help";
+export * from "./email";

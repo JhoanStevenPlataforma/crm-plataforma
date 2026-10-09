@@ -594,3 +594,59 @@ create or replace trigger help_categories_set_updated_at
 create or replace trigger help_tutorials_set_updated_at
     before update on public.help_tutorials
     for each row execute function public.set_updated_at();
+
+--
+-- Outbound email
+--
+create or replace trigger email_settings_guard
+    before update on public.email_settings
+    for each row execute function public.email_settings_guard();
+
+create or replace trigger email_templates_guard
+    before insert or update or delete on public.email_templates
+    for each row execute function public.email_templates_guard();
+
+create or replace trigger email_templates_set_updated_at
+    before update on public.email_templates
+    for each row execute function public.set_updated_at();
+
+-- What a message said is frozen; a message is never deleted, except by the
+-- retention path (`purge_emails()`, `purge_quotes()`).
+create or replace trigger email_messages_guard
+    before update on public.email_messages
+    for each row execute function public.email_messages_guard();
+
+create or replace trigger email_messages_no_delete
+    before delete on public.email_messages
+    for each row execute function public.reject_quote_history_mutation();
+
+--
+-- Outbound email, delivery (phase 2)
+--
+-- What the provider reported is history.
+create or replace trigger email_message_events_immutable
+    before update or delete on public.email_message_events
+    for each row execute function public.reject_quote_history_mutation();
+
+create or replace trigger email_suppressions_guard
+    before insert on public.email_suppressions
+    for each row execute function public.email_suppressions_guard();
+
+--
+-- Outbound email, automations (phase 3)
+--
+create or replace trigger email_automations_guard
+    before update on public.email_automations
+    for each row execute function public.email_automations_guard();
+
+-- Named to fire AFTER `quotes_sync_deal` (same event, alphabetical order): the
+-- confirmation looks at the stage the acceptance has just moved the deal to.
+create or replace trigger quotes_zz_email_automation
+    after update of status_key on public.quotes
+    for each row
+    when (new.status_key = 'accepted' and old.status_key is distinct from new.status_key)
+    execute function public.quotes_email_automation();
+
+create or replace trigger email_messages_notify
+    after update of status on public.email_messages
+    for each row execute function public.email_messages_notify();

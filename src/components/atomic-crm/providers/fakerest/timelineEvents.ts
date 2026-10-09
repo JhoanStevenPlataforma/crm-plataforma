@@ -4,6 +4,7 @@ import type {
   ContactNote,
   DealNote,
   DealStageChange,
+  EmailMessage,
   Quote,
   QuoteStatusChange,
   Task,
@@ -178,12 +179,70 @@ export const getTimelineEvents = async (
     ];
   });
 
+  // A message to a customer, on the record it was written from -- and, for a
+  // quotation, on the deal it was raised against (the view's two email arms).
+  const emails = await listAll<EmailMessage>(dataProvider, "email_messages");
+  const emailEvent = (
+    message: EmailMessage,
+    id: string,
+    entity: { type: TaskEntityType; id: Identifier },
+    quoteNumber?: string | null,
+  ): TimelineEvent => ({
+    id,
+    occurred_at: message.created_at,
+    event_type: "email.message",
+    source: "email_message",
+    task_id: null,
+    actor_sales_id: message.sales_id ?? null,
+    actor_kind: message.sales_id == null ? "system" : "user",
+    entity_type: entity.type,
+    entity_id: entity.id,
+    payload: {
+      message_id: message.id,
+      to_email: message.to_email,
+      to_name: message.to_name,
+      subject: message.subject,
+      status: message.status,
+      error_code: message.error_code,
+      quote_id: message.quote_id,
+      quote_version_id: message.quote_version_id,
+      ...(quoteNumber ? { quote_number: quoteNumber } : {}),
+    },
+  });
+  const fromEmails = emails.flatMap((message) => {
+    const own =
+      message.entity_type != null && message.entity_id != null
+        ? [
+            emailEvent(message, `email_message:${message.id}`, {
+              type: message.entity_type,
+              id: message.entity_id,
+            }),
+          ]
+        : [];
+    const quote =
+      message.quote_id != null
+        ? quoteById.get(String(message.quote_id))
+        : undefined;
+    return quote?.deal_id != null
+      ? [
+          ...own,
+          emailEvent(
+            message,
+            `email_message:deal:${message.id}`,
+            { type: "deal", id: quote.deal_id },
+            quote.quote_number,
+          ),
+        ]
+      : own;
+  });
+
   const all = [
     ...fromTasks,
     ...fromContactNotes,
     ...fromDealNotes,
     ...fromStageChanges,
     ...fromQuoteChanges,
+    ...fromEmails,
   ];
 
   const filtered =

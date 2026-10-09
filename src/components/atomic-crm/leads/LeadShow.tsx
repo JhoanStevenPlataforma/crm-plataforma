@@ -9,6 +9,7 @@ import { EntityTasksPanel } from "../tasks/EntityTasksPanel";
 import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Lead } from "../types";
+import { SendEmailButton } from "../emails/SendEmailButton";
 import { ConvertLeadButton } from "./ConvertLeadButton";
 import { ConvertedSummary } from "./ConvertedSummary";
 import { LeadCompanyField } from "./LeadCompanyField";
@@ -34,6 +35,7 @@ const LeadShowContent = () => {
   return (
     <div className="mt-2 flex flex-col gap-4">
       <TopToolbar>
+        <SendEmailButton entityType="lead" entityId={record.id} />
         <ConvertLeadButton />
         {/* A converted lead is a record of what it produced; editing it
             changes nothing downstream and its status is no longer a choice. */}

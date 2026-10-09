@@ -66,6 +66,7 @@ import {
   quoteLineCallbacks,
 } from "./quotes";
 import { quoteCommentCallbacks } from "./quoteCommentCallbacks";
+import { createDemoEmailMethods } from "./email";
 import { createDemoQuoteMethods, decorateQuoteTokens } from "./quoteMethods";
 import {
   createDemoFxMethods,
@@ -519,6 +520,14 @@ export const createDataProvider = ({
      * provider, and a demo showing healthy providers would be a fabrication.
      */
     ...createDemoFxMethods(() => dataProvider),
+    /**
+     * Outbound email, demo-side: the server's decisions are mirrored and
+     * every message is recorded as `simulated` -- a tab sends nothing.
+     */
+    ...createDemoEmailMethods(
+      () => dataProvider,
+      async () => (await getIdentity())?.id ?? null,
+    ),
     /**
      * Nothing to listen to either: a demo notification is written in this tab,
      * and the inbox reads it on its next fetch. Reaching for the Supabase

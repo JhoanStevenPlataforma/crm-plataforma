@@ -1277,6 +1277,7 @@ export const spanishCrmMessages = {
         events: {
           quote_status_changed: "Cambió el estado de la cotización",
           quote_commented: "El cliente respondió",
+          email_message: "Correo al cliente",
           // Not a task event: the timeline is shared, and this is how a deal's
           // stage transition is labelled on it.
           deal_stage_changed: "Etapa cambiada",
@@ -1665,6 +1666,332 @@ export const spanishCrmMessages = {
           "En la demo no se pueden subir imágenes ni videos: no hay almacenamiento detrás.",
         save_failed:
           "No se pudo guardar la diapositiva. Revisa tu conexión e inténtalo de nuevo.",
+      },
+    },
+    email: {
+      action: {
+        send: "Enviar correo",
+        send_quote: "Enviar por correo",
+      },
+      demo_unavailable:
+        "No disponible en modo demo: una pestaña del navegador no tiene dónde guardar un secreto.",
+      status: {
+        pending: "En cola",
+        processing: "Enviando",
+        accepted: "Aceptado por el proveedor",
+        delivered: "Entregado",
+        bounced: "Rebotado",
+        failed: "Fallido",
+        canceled: "Cancelado",
+        simulated: "Simulado, no enviado",
+      },
+      result: {
+        pending: "El mensaje está en cola y saldrá en el próximo minuto.",
+        processing: "El mensaje se está enviando.",
+        accepted:
+          "El proveedor de correo aceptó el mensaje. La entrega en el buzón aún no está confirmada.",
+        delivered: "El servidor del destinatario confirmó la entrega.",
+        bounced: "El servidor del destinatario rechazó el mensaje.",
+        failed: "El mensaje no se pudo enviar.",
+        canceled: "El mensaje se canceló antes de salir.",
+        simulated:
+          "Envío simulado: el proveedor de correo no está configurado, así que no salió ningún correo del CRM.",
+      },
+      fields: {
+        to: "Para",
+        subject: "Asunto",
+        body: "Mensaje",
+        template: "Plantilla",
+      },
+      compose: {
+        title: "Enviar correo",
+        title_quote: "Enviar la cotización por correo",
+        description:
+          "El mensaje sale desde la dirección de la empresa y queda en el historial de este registro.",
+        description_quote:
+          "El cliente recibe el enlace a la versión %{version}, la que ya está emitida. Enviar no emite ni modifica la cotización.",
+        write: "Redactar",
+        preview: "Vista previa",
+        to_placeholder: "Elige un destinatario",
+        other_address: "Otra dirección…",
+        address_placeholder: "nombre@empresa.com",
+        no_recipients:
+          "Este registro no tiene ninguna dirección de correo. Agrégala primero al contacto.",
+        related_only:
+          "Puedes escribir a las direcciones de este registro. Un manager puede usar otra dirección.",
+        no_template: "Sin plantilla",
+        body_hint:
+          "Texto plano. Se coloca en el diseño de la empresa al enviarlo.",
+        body_hint_quote:
+          "Texto plano. {{quote_link}} se reemplaza por el enlace del cliente al enviarlo.",
+        unresolved:
+          "Completa o quita estas variables antes de enviar: %{variables}",
+        simulated_notice:
+          "Modo simulado: el proveedor de correo no está configurado. El mensaje quedará registrado, pero no saldrá ningún correo.",
+        not_ready:
+          "El correo no está listo: un administrador debe terminar de configurar el proveedor.",
+        link_appended:
+          "El mensaje no tiene el marcador {{quote_link}}: el enlace se agrega después del texto.",
+        send: "Enviar",
+        suppressed: "suprimida",
+        sending: "Enviando…",
+        send_anyway: "Enviar de todos modos",
+      },
+      quote_block: {
+        quote_not_found: "La cotización ya no existe.",
+        quote_not_issued:
+          "Esta cotización aún no se ha emitido. Emítela antes de enviarla.",
+        version_superseded:
+          "Se emitió una versión más reciente. Envía esa: el enlace abre la nueva.",
+        version_answered: "El cliente ya respondió esta versión.",
+        quote_closed:
+          "La cotización está cerrada (aceptada, rechazada, vencida o cancelada).",
+        quote_revision_open:
+          "Hay una revisión en curso. Emítela antes de volver a enviar la cotización.",
+        version_expired:
+          "La vigencia de la oferta ya pasó. Haz una revisión de la cotización para volver a enviarla.",
+      },
+      errors: {
+        generic: "No se pudo procesar el correo.",
+        email_forbidden: "No tienes permiso para hacer eso.",
+        email_entity_invalid:
+          "No se pueden enviar correos desde este registro.",
+        email_disabled: "El envío de correos está desactivado.",
+        email_not_configured:
+          "El proveedor de correo no está configurado: falta la dirección del remitente o las credenciales.",
+        email_recipient_invalid: "La dirección del destinatario no es válida.",
+        email_recipient_not_allowed:
+          "Esa dirección no está relacionada con este registro. Solo un manager o un administrador puede usar otra dirección.",
+        email_recipient_suppressed:
+          "Esta dirección está en la lista de supresión: rebotó de forma permanente o marcó un mensaje como spam.",
+        email_subject_invalid:
+          "El asunto está vacío, es demasiado largo o tiene un salto de línea.",
+        email_body_invalid: "El mensaje está vacío o es demasiado largo.",
+        email_unresolved_variable:
+          "El mensaje todavía tiene una variable sin completar.",
+        email_template_invalid: "Esa plantilla no existe o está inactiva.",
+        email_rate_limited:
+          "Demasiados correos en poco tiempo. Inténtalo más tarde.",
+        email_duplicate_recent:
+          "Hace un momento se envió el mismo mensaje a esta dirección. ¿Lo envías otra vez?",
+        email_quote_not_shareable:
+          "Esta cotización no se puede compartir en este momento.",
+        email_not_retryable: "Solo se puede reintentar un mensaje fallido.",
+        email_idempotency_required: "No se pudo identificar el mensaje.",
+        email_template_unknown_variable:
+          "La plantilla usa una variable que no existe para su tipo.",
+        email_template_locked:
+          "Una plantilla del sistema no se puede eliminar ni cambiar de clave.",
+        email_settings_column_protected:
+          "Las credenciales se guardan con su propio formulario, no con la configuración.",
+      },
+      delivery_errors: {
+        provider_unauthorized:
+          "El proveedor de correo rechazó las credenciales.",
+        provider_unavailable:
+          "El proveedor de correo no estaba disponible temporalmente.",
+        provider_unreachable: "No se pudo contactar al proveedor de correo.",
+        provider_rejected: "El proveedor de correo rechazó el mensaje.",
+        recipient_inactive:
+          "El proveedor ya no envía a esta dirección (rebotó o se quejó antes).",
+        recipient_invalid: "El proveedor considera inválida la dirección.",
+        email_not_configured:
+          "El proveedor no tiene credenciales o dirección de remitente.",
+        email_subject_invalid: "El asunto no es válido.",
+        email_provider_unknown:
+          "El proveedor configurado no está disponible en este despliegue.",
+        email_base_url_missing:
+          "La dirección pública del CRM no está configurada, así que no se pudo armar el enlace.",
+        email_link_unavailable: "No se pudo leer el enlace del cliente.",
+        email_quote_link_missing:
+          "La cotización no tiene un enlace de cliente activo. Créalo y reintenta.",
+        email_quote_not_shareable:
+          "La cotización cambió antes de que saliera el mensaje, así que no se envió.",
+        recipient_bounced: "El servidor del destinatario rechazó el mensaje.",
+        email_recipient_suppressed:
+          "La dirección entró en la lista de supresión antes de que saliera el mensaje.",
+        email_dispatch_interrupted:
+          "El envío se interrumpió y no se sabe si salió. Confirma con el cliente antes de reintentar.",
+      },
+      history: {
+        title: "Correos",
+        empty: "Aún no se ha enviado ningún correo.",
+        load_error: "No se pudieron cargar los correos.",
+        quote_hint: "Envía al cliente el enlace de la cotización emitida.",
+        status: "Estado",
+        all_statuses: "Todos los estados",
+        search: "Destinatario o asunto",
+        count: "%{shown} de %{total} mensajes",
+        date: "Fecha",
+        sender: "Enviado por",
+        problem: "Problema",
+        load_more: "Cargar más",
+        automatic: "Automático",
+      },
+      message: {
+        title: "Correo",
+        to: "Para %{address}",
+        attempts: "%{count} intentos",
+        retry: "Reintentar",
+        retried: "El mensaje volvió a la cola",
+        quote: "Cotización",
+        quote_version: "%{number}, versión %{version}",
+        provider_id: "ID del proveedor",
+        moments: {
+          created: "Creado",
+          accepted: "Aceptado",
+          delivered: "Entregado",
+          bounced: "Rebotado",
+          failed: "Fallido",
+        },
+      },
+      tabs: {
+        history: "Historial",
+        suppressions: "Direcciones suprimidas",
+        templates: "Plantillas",
+        settings: "Proveedor",
+      },
+      events: {
+        title: "Lo que informó el proveedor",
+        delivered: "Entregado al servidor del destinatario",
+        bounced: "Rebotado",
+        complained: "Marcado como spam",
+        permanent: "permanente",
+      },
+      suppressions: {
+        description:
+          "Direcciones a las que el CRM ya no escribe: rebotaron de forma permanente, marcaron un mensaje como spam o se agregaron aquí.",
+        empty: "No hay ninguna dirección suprimida.",
+        load_error: "No se pudieron cargar las direcciones suprimidas.",
+        address: "Dirección",
+        reason: "Motivo",
+        detail: "Detalle",
+        since: "Desde",
+        remove: "Quitar de la lista",
+        removed: "Ya se puede volver a escribir a esa dirección",
+        add_title: "Agregar una dirección",
+        add_help:
+          "Para un cliente que pidió que no le escriban. No se le enviará ningún mensaje.",
+        add: "Agregar",
+        added: "Dirección agregada a la lista",
+        reasons: {
+          hard_bounce: "Rebote permanente",
+          complaint: "Queja de spam",
+          manual: "Agregada a mano",
+        },
+      },
+      templates: {
+        description:
+          "Los mensajes que ofrece el diálogo de envío. Una plantilla inactiva es un borrador que solo ven los administradores.",
+        new: "Nueva plantilla",
+        empty: "Aún no hay plantillas.",
+        load_error: "No se pudieron cargar las plantillas.",
+        name: "Nombre",
+        key: "Clave",
+        key_help:
+          "Minúsculas, dígitos y guiones bajos. Las automatizaciones se refieren a una plantilla por su clave.",
+        scope: "Se usa en",
+        language: "Idioma",
+        category: "Tipo",
+        state: "Estado",
+        active: "Activa",
+        inactive: "Inactiva",
+        system: "Del sistema",
+        active_label: "Disponible en el diálogo de envío",
+        new_title: "Nueva plantilla",
+        edit_title: "Editar plantilla",
+        dialog_help:
+          "Texto plano. Las variables van entre llaves dobles y se completan con los datos del registro.",
+        system_help:
+          "Plantilla del sistema: puedes cambiar su texto, pero no su clave, su ámbito ni su idioma, y no se puede eliminar.",
+        variables: "Variables disponibles: %{variables}",
+        unknown_variables:
+          "Estas variables no existen para este tipo de registro: %{variables}",
+        link_in_subject:
+          "El enlace de la cotización no se puede usar en el asunto.",
+        saved: "Plantilla guardada",
+        deleted: "Plantilla eliminada",
+        scopes: {
+          generic: "Cualquier registro",
+          contact: "Contactos",
+          lead: "Leads",
+          company: "Empresas",
+          deal: "Oportunidades",
+          quote: "Cotizaciones",
+        },
+        categories: {
+          transactional: "Mensaje uno a uno",
+          commercial: "Seguimiento comercial",
+        },
+      },
+      settings: {
+        nav: "Correo",
+        title: "Correo",
+        description:
+          "El proveedor que envía los correos del CRM, la dirección desde la que salen y sus credenciales.",
+        load_error: "No se pudo cargar la configuración de correo.",
+        saved: "Configuración de correo guardada",
+        state: {
+          disabled: "El envío de correos está desactivado",
+          simulated: "Modo simulado: no sale ningún correo del CRM",
+          ready: "El proveedor está configurado",
+          incomplete: "El proveedor no está configurado del todo",
+        },
+        state_hint: {
+          disabled: "Nadie puede enviar correos hasta que se active.",
+          simulated:
+            "Los mensajes quedan registrados como simulados. Elige un proveedor real para enviar.",
+          ready:
+            "Envía un mensaje de prueba para confirmarlo. En producción también hace falta verificar el dominio del remitente con SPF, DKIM y DMARC.",
+          incomplete:
+            "Falta la dirección del remitente o las credenciales del proveedor: no se puede enviar nada.",
+        },
+        provider_title: "Proveedor y remitente",
+        provider_help:
+          "Todos los correos salen de una dirección verificada. Las respuestas pueden llegar a quien lo envió.",
+        enabled: "Envío de correos activado",
+        provider: "Proveedor",
+        providers: {
+          mock: "Simulado (no envía nada)",
+          postmark: "Postmark",
+        },
+        from_email: "Dirección del remitente",
+        from_name: "Nombre del remitente",
+        from_help:
+          "La dirección debe ser de un dominio verificado en el proveedor.",
+        reply_to: "Las respuestas llegan a",
+        reply_to_modes: {
+          sender: "El usuario que envió el mensaje",
+          none: "La dirección del remitente",
+        },
+        transactional_stream: "Stream para mensajes uno a uno",
+        commercial_stream: "Stream para seguimientos comerciales",
+        max_per_user_hour: "Correos por usuario por hora",
+        max_per_recipient_day: "Correos por destinatario por día",
+        secrets_title: "Credenciales",
+        secrets_description:
+          "Se guardan cifradas en el servidor. No se vuelven a mostrar, ni aquí ni en ningún otro lugar.",
+        secrets: {
+          credentials: "Token de API del proveedor",
+          webhook: "Secreto del webhook de entregas",
+        },
+        secrets_help: {
+          credentials: "El server token del servidor de envío del proveedor.",
+          webhook:
+            "Lo que el proveedor debe presentar cuando informa entregas y rebotes.",
+        },
+        secret_stored: "Guardado",
+        secret_missing: "Sin configurar",
+        secret_saved: "Secreto guardado",
+        secret_cleared: "Secreto eliminado",
+        secret_clear: "Quitar",
+        test_title: "Mensaje de prueba",
+        test_help:
+          "Envía un mensaje con la configuración de arriba, a la dirección que elijas.",
+        test_send: "Enviar prueba",
+        test_subject: "Mensaje de prueba del CRM",
+        test_body:
+          "Este es un mensaje de prueba del CRM. Si lo estás leyendo, el envío de correos funciona.",
       },
     },
     fx: {

@@ -868,7 +868,51 @@ select
 from public.quote_portal_events e
     join public.quotes q on q.id = e.quote_id
 where q.deal_id is not null
-  and e.event_type = 'commented';
+  and e.event_type = 'commented'
+
+union all
+
+-- A message sent to a customer, on the record it was written from. One event
+-- per message whatever became of it: how the delivery went travels in the
+-- payload, so a failed send is on the timeline too instead of looking like
+-- nothing was tried. No address book detail beyond the recipient, and never
+-- the text -- the message itself is opened from the event.
+select
+    'email_message:' || m.id, m.created_at, 'email.message',
+    'email_message',
+    null::bigint, m.sales_id,
+    -- An automatic message is signed by the quotation's owner, and was sent
+    -- by nobody: the timeline says which.
+    case when m.origin = 'automation' then 'automation' else 'user' end,
+    m.entity_type::text, m.entity_id,
+    jsonb_build_object('message_id', m.id, 'to_email', m.to_email,
+                       'to_name', m.to_name, 'subject', m.subject,
+                       'status', m.status, 'error_code', m.error_code,
+                       'quote_id', m.quote_id,
+                       'quote_version_id', m.quote_version_id)
+from public.email_messages m
+where m.entity_type is not null
+
+union all
+
+-- A quotation sent by mail, on the DEAL it was raised against: it is the step
+-- of the deal's story between "quoted" and "the customer opened it".
+select
+    'email_message:deal:' || m.id, m.created_at, 'email.message',
+    'email_message',
+    null::bigint, m.sales_id,
+    -- An automatic message is signed by the quotation's owner, and was sent
+    -- by nobody: the timeline says which.
+    case when m.origin = 'automation' then 'automation' else 'user' end,
+    'deal', q.deal_id,
+    jsonb_build_object('message_id', m.id, 'to_email', m.to_email,
+                       'to_name', m.to_name, 'subject', m.subject,
+                       'status', m.status, 'error_code', m.error_code,
+                       'quote_id', m.quote_id, 'quote_number', q.quote_number,
+                       'quote_version_id', m.quote_version_id)
+from public.email_messages m
+    join public.quotes q on q.id = m.quote_id
+where q.deal_id is not null;
 
 create or replace view public.init_state with (security_invoker = off) as
 select count(sub.id) as is_initialized

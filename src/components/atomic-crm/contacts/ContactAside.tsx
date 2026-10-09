@@ -11,6 +11,7 @@ import { ContactStatusSelector } from "./ContactInputs";
 import { ContactPersonalInfo } from "./ContactPersonalInfo";
 import { ContactBackgroundInfo } from "./ContactBackgroundInfo";
 import { AsideSection } from "../misc/AsideSection";
+import { EntityEmailsPanel } from "../emails/EntityEmailsPanel";
 import type { Contact } from "../types";
 import { ContactMergeButton } from "./ContactMergeButton";
 import { ExportVCardButton } from "./ExportVCardButton";
@@ -65,6 +66,11 @@ export const ContactAside = ({ link = "edit" }: { link?: "edit" | "show" }) => {
           <TasksIterator />
         </ReferenceManyField>
         <AddTask />
+      </AsideSection>
+
+      {/* A contact has no timeline: its messages are listed here. */}
+      <AsideSection title={translate("crm.email.history.title")}>
+        <EntityEmailsPanel entityType="contact" entityId={record.id} />
       </AsideSection>
 
       {/* Offered on the contact's page as well as its edit form: the audit

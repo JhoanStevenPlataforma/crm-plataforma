@@ -1045,3 +1045,110 @@ grant all on table public.help_tutorials to service_role;
 revoke all on sequence public.help_tutorials_id_seq from anon, authenticated;
 grant usage on sequence public.help_tutorials_id_seq to authenticated;
 grant all on sequence public.help_tutorials_id_seq to service_role;
+
+--
+-- Outbound email. No `anon` grant anywhere: a customer never reads these
+-- tables, they receive a message.
+--
+revoke all on table public.email_settings from anon, authenticated;
+grant select, update on table public.email_settings to authenticated;
+grant all on table public.email_settings to service_role;
+
+revoke all on table public.email_templates from anon, authenticated;
+grant select, insert, update, delete on table public.email_templates to authenticated;
+grant all on table public.email_templates to service_role;
+revoke all on sequence public.email_templates_id_seq from anon, authenticated;
+grant usage on sequence public.email_templates_id_seq to authenticated;
+grant all on sequence public.email_templates_id_seq to service_role;
+
+-- Read-only for users: every write goes through a function.
+revoke all on table public.email_messages from anon, authenticated;
+grant select on table public.email_messages to authenticated;
+grant all on table public.email_messages to service_role;
+revoke all on sequence public.email_messages_id_seq from anon, authenticated;
+grant all on sequence public.email_messages_id_seq to service_role;
+
+-- What a signed-in user may call. Each checks who is calling itself.
+revoke all on function public.email_status() from public, anon;
+revoke all on function public.email_context(text, bigint, text) from public, anon;
+revoke all on function public.queue_email(text, bigint, text, text, text, uuid, bigint, text, text, boolean) from public, anon;
+revoke all on function public.queue_quote_email(bigint, bigint, text, text, text, uuid, bigint, text, text, boolean, text) from public, anon;
+revoke all on function public.retry_email_message(bigint) from public, anon;
+revoke all on function public.set_email_provider_secret(text, text) from public, anon;
+revoke all on function public.can_see_email_entity(public.task_entity, bigint) from public, anon;
+grant execute on function public.email_status() to authenticated, service_role;
+grant execute on function public.email_context(text, bigint, text) to authenticated, service_role;
+grant execute on function public.queue_email(text, bigint, text, text, text, uuid, bigint, text, text, boolean) to authenticated, service_role;
+grant execute on function public.queue_quote_email(bigint, bigint, text, text, text, uuid, bigint, text, text, boolean, text) to authenticated, service_role;
+grant execute on function public.retry_email_message(bigint) to authenticated, service_role;
+grant execute on function public.set_email_provider_secret(text, text) to authenticated, service_role;
+grant execute on function public.can_see_email_entity(public.task_entity, bigint) to authenticated, service_role;
+
+-- Pure helpers: no data behind them.
+revoke all on function public.is_valid_email(text) from public, anon;
+revoke all on function public.email_template_variables(text) from public, anon;
+revoke all on function public.email_text_variables(text) from public, anon;
+revoke all on function public.email_safe_timezone(text) from public, anon;
+grant execute on function public.is_valid_email(text) to authenticated, service_role;
+grant execute on function public.email_template_variables(text) to authenticated, service_role;
+grant execute on function public.email_text_variables(text) to authenticated, service_role;
+grant execute on function public.email_safe_timezone(text) to authenticated, service_role;
+
+-- Internal, and the outbox: the dispatcher (service role) and the functions
+-- above, never a client.
+revoke all on function public.email_quote_share_block(bigint, bigint) from public, anon, authenticated;
+revoke all on function public.email_entity_recipients(public.task_entity, bigint) from public, anon, authenticated;
+revoke all on function public.email_entity_variables(public.task_entity, bigint, bigint, text) from public, anon, authenticated;
+revoke all on function public.email_enqueue(public.task_entity, bigint, bigint, text, text, text, text, bigint, text, uuid, boolean, text, text) from public, anon, authenticated;
+revoke all on function public.claim_email_messages(integer, bigint) from public, anon, authenticated;
+revoke all on function public.email_message_quote_token(bigint) from public, anon, authenticated;
+revoke all on function public.complete_email_message(bigint, text, text, text, text, boolean, integer) from public, anon, authenticated;
+revoke all on function public.fail_stale_email_messages(interval) from public, anon, authenticated;
+revoke all on function public.email_dispatch_tick() from public, anon, authenticated;
+revoke all on function public.get_email_provider_secret(text) from public, anon, authenticated;
+revoke all on function public.purge_emails() from public, anon, authenticated;
+grant execute on function public.email_quote_share_block(bigint, bigint) to service_role;
+grant execute on function public.email_entity_recipients(public.task_entity, bigint) to service_role;
+grant execute on function public.email_entity_variables(public.task_entity, bigint, bigint, text) to service_role;
+grant execute on function public.email_enqueue(public.task_entity, bigint, bigint, text, text, text, text, bigint, text, uuid, boolean, text, text) to service_role;
+grant execute on function public.claim_email_messages(integer, bigint) to service_role;
+grant execute on function public.email_message_quote_token(bigint) to service_role;
+grant execute on function public.complete_email_message(bigint, text, text, text, text, boolean, integer) to service_role;
+grant execute on function public.fail_stale_email_messages(interval) to service_role;
+grant execute on function public.email_dispatch_tick() to service_role;
+grant execute on function public.get_email_provider_secret(text) to service_role;
+grant execute on function public.purge_emails() to service_role;
+
+--
+-- Outbound email, delivery (phase 2). No `anon` grant.
+--
+revoke all on table public.email_message_events from anon, authenticated;
+grant select on table public.email_message_events to authenticated;
+grant all on table public.email_message_events to service_role;
+revoke all on sequence public.email_message_events_id_seq from anon, authenticated;
+grant all on sequence public.email_message_events_id_seq to service_role;
+
+revoke all on table public.email_suppressions from anon, authenticated;
+grant select, insert, delete on table public.email_suppressions to authenticated;
+grant all on table public.email_suppressions to service_role;
+
+revoke all on function public.email_is_suppressed(text) from public, anon, authenticated;
+revoke all on function public.record_email_event(text, text, text, text, timestamp with time zone, text, boolean, text) from public, anon, authenticated;
+grant execute on function public.email_is_suppressed(text) to service_role;
+grant execute on function public.record_email_event(text, text, text, text, timestamp with time zone, text, boolean, text) to service_role;
+
+--
+-- Outbound email, automations (phase 3). No `anon` grant.
+--
+revoke all on table public.email_automations from anon, authenticated;
+grant select, update on table public.email_automations to authenticated;
+grant all on table public.email_automations to service_role;
+
+revoke all on function public.email_automation_enqueue(text, bigint, bigint, text, text, integer, text, jsonb) from public, anon, authenticated;
+revoke all on function public.email_automation_quote_accepted(bigint) from public, anon, authenticated;
+revoke all on function public.email_automation_followups() from public, anon, authenticated;
+revoke all on function public.task_notification_worker_tick() from public, anon, authenticated;
+grant execute on function public.email_automation_enqueue(text, bigint, bigint, text, text, integer, text, jsonb) to service_role;
+grant execute on function public.email_automation_quote_accepted(bigint) to service_role;
+grant execute on function public.email_automation_followups() to service_role;
+grant execute on function public.task_notification_worker_tick() to service_role;

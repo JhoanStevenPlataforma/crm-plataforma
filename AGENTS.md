@@ -364,6 +364,50 @@ Rules that are easy to break from the outside:
   `*.tutorial.ts` is its own storyboard; when a screen a tutorial shows
   changes, re-record it rather than leaving a film of the old screen.
 
+#### Outbound Email (mail to a customer, and the quotation link by mail)
+
+**`docs/proposals/outbound-email.md` is the reference** (migration
+`20261008120000_outbound_email.sql`, screens in `emails/`, settings at `/email`,
+the `email-dispatch` and `email-webhook` edge functions, the provider seam in
+`supabase/functions/_shared/email/`). Phases 1 and 2 of 3 are built; **the module is not
+production ready until a real provider and a verified sender domain are
+configured** — out of the box the provider is `mock` and nothing leaves.
+
+Rules that are easy to break from the outside:
+
+- **`queue_email()` / `queue_quote_email()` only queue.** Nothing in SQL talks
+  to a provider; the `email-dispatch` function claims (`for update skip
+  locked`), sends and settles. A client never inserts into `email_messages`.
+- **Sharing a quotation changes nothing about it.** `queue_quote_email()` never
+  issues, transitions, re-prices or re-rates, and whether a version may be
+  shared is one function, `email_quote_share_block()`, read by the dialog, the
+  queue, a retry and the dispatcher's claim.
+- **`accepted` is not `delivered`, and `simulated` is neither.** The provider's
+  API taking a message is `accepted`; only its webhook writes `delivered` /
+  `bounced`; the `mock` provider's messages end `simulated`. No screen may show
+  one as another.
+- **The customer link is never stored**: the text carries `{{quote_link}}`, the
+  dispatcher resolves it while sending and redacts it from any error.
+- **`record_email_event()` is idempotent and only moves a status forward**
+  (`accepted → delivered → bounced`); a permanent bounce or a complaint adds
+  the address to `email_suppressions`, which the queue, the dialog's context
+  and the dispatcher's claim all consult. A row inserted there by anything else
+  is forced to `reason = 'manual'`.
+- **What a message said is frozen** (`email_messages_guard`); a retry reuses
+  the row, and a dispatcher that never answered FAILS the message instead of
+  sending it twice.
+- **The body is plain text**, escaped into the layout by `renderEmail.ts` —
+  which imports nothing, because the compose dialog previews with the same file.
+- **The address rule lives in three places that must agree**:
+  `public.is_valid_email()`, `_shared/email/emailAddress.ts`, and the demo
+  mirror (`providers/fakerest/email.ts`).
+- **A free recipient is a manager's or an admin's**, checked in SQL
+  (`email_entity_recipients()` + `can_manage_all()`); hiding the input is not
+  the rule.
+- Credentials live in Supabase Vault (`set_email_provider_secret()`), never in
+  a table a client reads. Refusals are recognised by `error.details`
+  (`EMAIL_ERROR` in `emailRpc.ts`).
+
 #### Design System and Application Shell
 
 The visual layer is being rebuilt in phases. **`docs/proposals/ui-redesign.md`

@@ -1429,3 +1429,104 @@ create policy "Help tutorials can be updated by admins"
 create policy "Help tutorials can be deleted by admins"
     on public.help_tutorials for delete to authenticated
     using ((select public.is_admin()));
+
+--
+-- Outbound email
+--
+-- The settings are the administrators': everybody else learns what they need
+-- (is mail on, is it simulated) from `email_status()`. No insert or delete
+-- policy: there is one row, and the migration wrote it.
+alter table public.email_settings enable row level security;
+
+create policy "Email settings are readable by admins"
+    on public.email_settings for select to authenticated
+    using ((select public.is_admin()));
+
+create policy "Email settings can be updated by admins"
+    on public.email_settings for update to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));
+
+-- Everybody signed in reads the templates they may use; an inactive one is a
+-- draft only admins see. Only admins write them.
+alter table public.email_templates enable row level security;
+
+create policy "Active email templates are readable by authenticated users"
+    on public.email_templates for select to authenticated
+    using (is_active or (select public.is_admin()));
+
+create policy "Email templates can be added by admins"
+    on public.email_templates for insert to authenticated
+    with check ((select public.is_admin()));
+
+create policy "Email templates can be updated by admins"
+    on public.email_templates for update to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));
+
+create policy "Email templates can be deleted by admins"
+    on public.email_templates for delete to authenticated
+    using ((select public.is_admin()));
+
+-- A message is read by whoever sent it, by a manager, and by whoever may read
+-- the record it hangs off -- except a company, which everybody may read: there
+-- the rule would show each rep the others' mail. Nobody writes this table
+-- directly: `queue_email()` / `queue_quote_email()` insert, the dispatcher
+-- settles.
+alter table public.email_messages enable row level security;
+
+create policy "Email messages follow their sender or their record"
+    on public.email_messages for select to authenticated
+    using (
+        (select public.can_manage_all())
+        or sales_id = (select public.current_sale_id())
+        or (entity_type is not null
+            and entity_type <> 'company'
+            and public.can_see_email_entity(entity_type, entity_id))
+    );
+
+--
+-- Outbound email, delivery (phase 2)
+--
+-- An event is read by whoever may read its message; one that matched no
+-- message, by a manager. Nobody writes it: `record_email_event()` does.
+alter table public.email_message_events enable row level security;
+
+create policy "Email events follow their message"
+    on public.email_message_events for select to authenticated
+    using (
+        (select public.can_manage_all())
+        or exists (select 1 from public.email_messages m where m.id = message_id)
+    );
+
+-- The list of addresses not written to: managers read it (it explains a
+-- refusal to their team), administrators add to it and take from it.
+alter table public.email_suppressions enable row level security;
+
+create policy "Email suppressions are readable by managers"
+    on public.email_suppressions for select to authenticated
+    using ((select public.can_manage_all()));
+
+create policy "Email suppressions can be added by admins"
+    on public.email_suppressions for insert to authenticated
+    with check ((select public.is_admin()));
+
+create policy "Email suppressions can be removed by admins"
+    on public.email_suppressions for delete to authenticated
+    using ((select public.is_admin()));
+
+--
+-- Outbound email, automations (phase 3)
+--
+-- What the CRM sends by itself is read by managers and switched by
+-- administrators. No insert or delete policy: the rules are seeded.
+alter table public.email_automations enable row level security;
+
+create policy "Email automations are readable by managers"
+    on public.email_automations for select to authenticated
+    using ((select public.can_manage_all()));
+
+create policy "Email automations can be updated by admins"
+    on public.email_automations for update to authenticated
+    using ((select public.is_admin()))
+    with check ((select public.is_admin()));

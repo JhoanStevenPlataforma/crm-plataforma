@@ -1261,6 +1261,7 @@ export const englishCrmMessages = {
         events: {
           quote_status_changed: "Quotation status changed",
           quote_commented: "The customer wrote back",
+          email_message: "Email to the customer",
           // Not a task event: the timeline is shared, and this is how a deal's
           // stage transition is labelled on it.
           deal_stage_changed: "Stage changed",
@@ -1647,6 +1648,326 @@ export const englishCrmMessages = {
           "Pictures and videos cannot be uploaded in the demo: there is no storage behind it.",
         save_failed:
           "The slide could not be saved. Check your connection and try again.",
+      },
+    },
+    email: {
+      action: {
+        send: "Send email",
+        send_quote: "Send by email",
+      },
+      demo_unavailable:
+        "Not available in demo mode: a browser tab has no vault to keep a secret in.",
+      status: {
+        pending: "Queued",
+        processing: "Sending",
+        accepted: "Accepted by the provider",
+        delivered: "Delivered",
+        bounced: "Bounced",
+        failed: "Failed",
+        canceled: "Canceled",
+        simulated: "Simulated, not sent",
+      },
+      result: {
+        pending: "The message is queued and will be sent in the next minute.",
+        processing: "The message is being sent.",
+        accepted:
+          "The mail provider accepted the message. Delivery to the mailbox is not confirmed yet.",
+        delivered: "The recipient's mail server confirmed the delivery.",
+        bounced: "The recipient's mail server rejected the message.",
+        failed: "The message could not be sent.",
+        canceled: "The message was canceled before it was sent.",
+        simulated:
+          "Simulated send: the mail provider is not configured, so no email left the CRM.",
+      },
+      fields: {
+        to: "To",
+        subject: "Subject",
+        body: "Message",
+        template: "Template",
+      },
+      compose: {
+        title: "Send email",
+        title_quote: "Send the quotation by email",
+        description:
+          "The message is sent from the company's address and is kept in this record's history.",
+        description_quote:
+          "The customer receives the link to version %{version}, the one already issued. Sending does not issue or change the quotation.",
+        write: "Write",
+        preview: "Preview",
+        to_placeholder: "Choose a recipient",
+        other_address: "Another address…",
+        address_placeholder: "name@company.com",
+        no_recipients:
+          "This record has no email address. Add one to the contact first.",
+        related_only:
+          "You can write to the addresses of this record. A manager can use another address.",
+        no_template: "No template",
+        body_hint:
+          "Plain text. It is placed in the company's layout when it is sent.",
+        body_hint_quote:
+          "Plain text. {{quote_link}} is replaced by the customer's link when it is sent.",
+        unresolved:
+          "Fill in or remove these variables before sending: %{variables}",
+        simulated_notice:
+          "Simulated mode: the mail provider is not configured. The message will be recorded, but no email will leave.",
+        not_ready:
+          "Email is not ready: an administrator has to finish configuring the provider.",
+        link_appended:
+          "The message has no {{quote_link}} marker: the link is added after the text.",
+        send: "Send",
+        suppressed: "suppressed",
+        sending: "Sending…",
+        send_anyway: "Send anyway",
+      },
+      quote_block: {
+        quote_not_found: "The quotation no longer exists.",
+        quote_not_issued:
+          "This quotation has not been issued yet. Issue it before sending it.",
+        version_superseded:
+          "A newer version was issued. Send that one: the link opens it.",
+        version_answered: "The customer already answered this version.",
+        quote_closed:
+          "The quotation is closed (accepted, rejected, expired or canceled).",
+        quote_revision_open:
+          "A revision is in progress. Issue it before sending the quotation again.",
+        version_expired:
+          "The offer's validity has passed. Revise the quotation to send it again.",
+      },
+      errors: {
+        generic: "The email could not be processed.",
+        email_forbidden: "You do not have permission to do that.",
+        email_entity_invalid: "Emails cannot be sent from this record.",
+        email_disabled: "Outbound email is switched off.",
+        email_not_configured:
+          "The mail provider is not configured: the sender address or the credentials are missing.",
+        email_recipient_invalid: "The recipient's address is not valid.",
+        email_recipient_not_allowed:
+          "That address is not related to this record. Only a manager or an administrator can use another address.",
+        email_recipient_suppressed:
+          "This address is on the suppression list: it bounced for good or reported a message as spam.",
+        email_subject_invalid:
+          "The subject is empty, too long or contains a line break.",
+        email_body_invalid: "The message is empty or too long.",
+        email_unresolved_variable:
+          "The message still contains a variable that was not filled in.",
+        email_template_invalid: "That template does not exist or is inactive.",
+        email_rate_limited: "Too many emails in a short time. Try again later.",
+        email_duplicate_recent:
+          "The same message was sent to this address a moment ago. Send it again?",
+        email_quote_not_shareable: "This quotation cannot be shared right now.",
+        email_not_retryable: "Only a failed message can be retried.",
+        email_idempotency_required: "The message could not be identified.",
+        email_template_unknown_variable:
+          "The template uses a variable that is not available for its type.",
+        email_template_locked:
+          "A system template cannot be deleted or re-keyed.",
+        email_settings_column_protected:
+          "Credentials are stored with their own form, not with the settings.",
+      },
+      delivery_errors: {
+        provider_unauthorized: "The mail provider rejected the credentials.",
+        provider_unavailable: "The mail provider was temporarily unavailable.",
+        provider_unreachable: "The mail provider could not be reached.",
+        provider_rejected: "The mail provider rejected the message.",
+        recipient_inactive:
+          "The provider no longer sends to this address (it bounced or complained before).",
+        recipient_invalid: "The provider considers the address invalid.",
+        email_not_configured:
+          "The provider has no credentials or no sender address.",
+        email_subject_invalid: "The subject is not valid.",
+        email_provider_unknown:
+          "The configured provider is not available in this deployment.",
+        email_base_url_missing:
+          "The CRM's public address is not configured, so the link could not be built.",
+        email_link_unavailable: "The customer link could not be read.",
+        email_quote_link_missing:
+          "The quotation has no active customer link. Create it and retry.",
+        email_quote_not_shareable:
+          "The quotation changed before the message left, so it was not sent.",
+        recipient_bounced: "The recipient's mail server rejected the message.",
+        email_recipient_suppressed:
+          "The address was added to the suppression list before the message left.",
+        email_dispatch_interrupted:
+          "The send was interrupted and its outcome is unknown. Check with the customer before retrying.",
+      },
+      history: {
+        title: "Emails",
+        empty: "No emails sent yet.",
+        load_error: "The emails could not be loaded.",
+        quote_hint: "Send the customer the link to the issued quotation.",
+        status: "Status",
+        all_statuses: "All statuses",
+        search: "Recipient or subject",
+        count: "%{shown} of %{total} messages",
+        date: "Date",
+        sender: "Sent by",
+        problem: "Problem",
+        load_more: "Load more",
+        automatic: "Automatic",
+      },
+      message: {
+        title: "Email",
+        to: "To %{address}",
+        attempts: "%{count} attempts",
+        retry: "Retry",
+        retried: "The message was queued again",
+        quote: "Quotation",
+        quote_version: "%{number}, version %{version}",
+        provider_id: "Provider ID",
+        moments: {
+          created: "Created",
+          accepted: "Accepted",
+          delivered: "Delivered",
+          bounced: "Bounced",
+          failed: "Failed",
+        },
+      },
+      tabs: {
+        history: "History",
+        suppressions: "Suppressed addresses",
+        templates: "Templates",
+        settings: "Provider",
+      },
+      events: {
+        title: "What the provider reported",
+        delivered: "Delivered to the recipient's server",
+        bounced: "Bounced",
+        complained: "Reported as spam",
+        permanent: "permanent",
+      },
+      suppressions: {
+        description:
+          "Addresses the CRM no longer writes to: they bounced for good, reported a message as spam, or were added here.",
+        empty: "No address is suppressed.",
+        load_error: "The suppressed addresses could not be loaded.",
+        address: "Address",
+        reason: "Reason",
+        detail: "Detail",
+        since: "Since",
+        remove: "Take off the list",
+        removed: "The address can be written to again",
+        add_title: "Add an address",
+        add_help:
+          "For a customer who asked not to be written to. No message will be sent to it.",
+        add: "Add",
+        added: "Address added to the list",
+        reasons: {
+          hard_bounce: "Permanent bounce",
+          complaint: "Spam complaint",
+          manual: "Added by hand",
+        },
+      },
+      templates: {
+        description:
+          "The messages the compose dialog offers. An inactive template is a draft only administrators see.",
+        new: "New template",
+        empty: "There are no templates yet.",
+        load_error: "The templates could not be loaded.",
+        name: "Name",
+        key: "Key",
+        key_help:
+          "Lowercase letters, digits and underscores. Automations refer to a template by its key.",
+        scope: "Used on",
+        language: "Language",
+        category: "Kind",
+        state: "State",
+        active: "Active",
+        inactive: "Inactive",
+        system: "System",
+        active_label: "Offered in the compose dialog",
+        new_title: "New template",
+        edit_title: "Edit template",
+        dialog_help:
+          "Plain text. Variables are written between double braces and are filled in from the record.",
+        system_help:
+          "A system template: its wording can be changed, its key, scope and language cannot, and it cannot be deleted.",
+        variables: "Available variables: %{variables}",
+        unknown_variables:
+          "These variables do not exist for this kind of record: %{variables}",
+        link_in_subject: "The quotation link cannot be used in the subject.",
+        saved: "Template saved",
+        deleted: "Template deleted",
+        scopes: {
+          generic: "Any record",
+          contact: "Contacts",
+          lead: "Leads",
+          company: "Companies",
+          deal: "Deals",
+          quote: "Quotations",
+        },
+        categories: {
+          transactional: "One-to-one message",
+          commercial: "Commercial follow-up",
+        },
+      },
+      settings: {
+        nav: "Email",
+        title: "Email",
+        description:
+          "The provider that sends the CRM's emails, the address they come from and its credentials.",
+        load_error: "The email settings could not be loaded.",
+        saved: "Email settings saved",
+        state: {
+          disabled: "Outbound email is switched off",
+          simulated: "Simulated mode: no email leaves the CRM",
+          ready: "The provider is configured",
+          incomplete: "The provider is not fully configured",
+        },
+        state_hint: {
+          disabled: "Nobody can send emails until it is switched on.",
+          simulated:
+            "Messages are recorded as simulated. Choose a real provider to send.",
+          ready:
+            "Send a test message to confirm it. Production also needs the sender's domain verified with SPF, DKIM and DMARC.",
+          incomplete:
+            "The sender address or the provider's credentials are missing: nothing can be sent.",
+        },
+        provider_title: "Provider and sender",
+        provider_help:
+          "Every email leaves from one verified address. Replies can go to the person who sent it.",
+        enabled: "Outbound email enabled",
+        provider: "Provider",
+        providers: {
+          mock: "Simulated (sends nothing)",
+          postmark: "Postmark",
+        },
+        from_email: "Sender address",
+        from_name: "Sender name",
+        from_help:
+          "The address must belong to a domain verified with the provider.",
+        reply_to: "Replies go to",
+        reply_to_modes: {
+          sender: "The user who sent the message",
+          none: "The sender address",
+        },
+        transactional_stream: "Stream for one-to-one messages",
+        commercial_stream: "Stream for commercial follow-ups",
+        max_per_user_hour: "Emails per user per hour",
+        max_per_recipient_day: "Emails per recipient per day",
+        secrets_title: "Credentials",
+        secrets_description:
+          "Stored encrypted on the server. They are never shown again, here or anywhere else.",
+        secrets: {
+          credentials: "Provider API token",
+          webhook: "Delivery webhook secret",
+        },
+        secrets_help: {
+          credentials: "The server token of the provider's sending server.",
+          webhook:
+            "What the provider must present when it reports deliveries and bounces.",
+        },
+        secret_stored: "Stored",
+        secret_missing: "Not set",
+        secret_saved: "Secret stored",
+        secret_cleared: "Secret removed",
+        secret_clear: "Remove",
+        test_title: "Test message",
+        test_help:
+          "Sends one message through the configuration above, to an address you choose.",
+        test_send: "Send test",
+        test_subject: "CRM test message",
+        test_body:
+          "This is a test message from the CRM. If you are reading it, outbound email works.",
       },
     },
     fx: {

@@ -119,6 +119,22 @@ export const canAccess = <
     return params.action === "list" || params.action === "show";
   }
 
+  // Outbound email (docs/proposals/outbound-email.md). A message is written by
+  // `queue_email()` / `queue_quote_email()` and settled by the dispatcher: no
+  // client creates, edits or deletes one, admins included, so it comes before
+  // the admin shortcut.
+  if (
+    params.resource === "email_messages" ||
+    params.resource === "email_message_events"
+  ) {
+    return params.action === "list" || params.action === "show";
+  }
+  // An address is added to the suppression list or taken off it; an entry
+  // is never edited.
+  if (params.resource === "email_suppressions" && params.action === "edit") {
+    return false;
+  }
+
   // Currencies & exchange rates (docs/proposals/multi-currency-fx.md). These
   // come before the admin shortcut because nobody may do them: a rate is
   // history (a correction is a new row), a currency is deactivated rather than
@@ -182,6 +198,27 @@ export const canAccess = <
   // data provider directly and do not go through canAccess.
   if (params.resource === "sales" || params.resource === "configuration") {
     return false;
+  }
+
+  // The mail provider, the sender and its credentials are an admin's; so is
+  // the wording of the templates everybody sends from.
+  if (params.resource === "email_settings") {
+    return false;
+  }
+  if (params.resource === "email_templates") {
+    return params.action === "list" || params.action === "show";
+  }
+  // The history of every message and the suppression list explain a refusal
+  // to a manager's team; a rep sees the messages of their own records on
+  // those records.
+  if (params.resource === "email_history") {
+    return role === "manager" && params.action === "list";
+  }
+  if (params.resource === "email_suppressions") {
+    return (
+      role === "manager" &&
+      (params.action === "list" || params.action === "show")
+    );
   }
 
   // Teams decide who sees what through the task access rule (§7.3), so editing

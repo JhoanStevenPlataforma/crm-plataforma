@@ -33,7 +33,8 @@ export type TimelineEvent = {
     | "deal_note"
     | "deal_stage_change"
     | "quote_status_change"
-    | "quote_portal_event";
+    | "quote_portal_event"
+    | "email_message";
   task_id?: Identifier | null;
   actor_sales_id?: Identifier | null;
   actor_kind: "user" | "system" | "automation" | "integration" | "import";

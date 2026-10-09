@@ -56,6 +56,7 @@ import { QuotePortalPage } from "../quotes/portal/QuotePortalPage";
 import { QuotePrintPage } from "../quotes/QuotePrintPage";
 import { PortalSlidesPage } from "../portal/PortalSlidesPage";
 import { CurrenciesPage } from "../currencies/CurrenciesPage";
+import { EmailSettingsPage } from "../emails/EmailSettingsPage";
 import { StandardPresentationPreview } from "../portal/StandardPresentationPreview";
 import sales from "../sales";
 import taxRates from "../taxRates";
@@ -372,6 +373,13 @@ const sharedRoutes = (wrap: Wrap) => [
     path={CurrenciesPage.path}
     element={wrap(<CurrenciesPage />)}
   />,
+  // Outbound email: provider, sender and credentials
+  // (docs/proposals/outbound-email.md). The page gates itself to admins.
+  <Route
+    key="email"
+    path={EmailSettingsPage.path}
+    element={wrap(<EmailSettingsPage />)}
+  />,
   <Route key="import" path={ImportPage.path} element={wrap(<ImportPage />)} />,
   // The manual (docs/proposals/help-center.md): what everybody reads. Its
   // admin screens are the two `help_*` resources below.
@@ -511,6 +519,13 @@ const sharedResources = (wrap: Wrap) => [
   <Resource key="exchange_rate_providers" name="exchange_rate_providers" />,
   <Resource key="exchange_rate_settings" name="exchange_rate_settings" />,
   <Resource key="exchange_rate_sync_runs" name="exchange_rate_sync_runs" />,
+  // Outbound email. Registered so the compose dialog, the history panels
+  // and the settings page have a resource to read through.
+  <Resource key="email_messages" name="email_messages" />,
+  <Resource key="email_templates" name="email_templates" />,
+  <Resource key="email_settings" name="email_settings" />,
+  <Resource key="email_message_events" name="email_message_events" />,
+  <Resource key="email_suppressions" name="email_suppressions" />,
   <Resource key="portal_templates" name="portal_templates" />,
   <Resource key="portal_slides" name="portal_slides" />,
   <Resource

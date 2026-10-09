@@ -9192,3 +9192,1682 @@ begin
     return v_count;
 end;
 $$;
+
+-- ===========================================================================
+-- Outbound email (docs/proposals/outbound-email.md)
+-- ===========================================================================
+
+-- Who may attach a message to a record, and who may read the ones attached to
+-- it. The same answer the record's own select policy gives; SECURITY DEFINER
+-- because a policy cannot join a table the reader may not read.
+--
+-- A company is readable by everybody, so anybody may write FROM its page --
+-- which is why the read policy on `email_messages` does not use this function
+-- for a company: that would show every rep each other's mail.
+create or replace function public.can_see_email_entity(
+    p_entity_type public.task_entity,
+    p_entity_id   bigint
+) returns boolean
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select case p_entity_type
+        when 'quote' then (select public.can_see_quote(p_entity_id))
+        when 'deal' then (select public.can_see_deal(p_entity_id))
+        when 'contact' then exists (
+            select 1 from public.contacts c
+             where c.id = p_entity_id
+               and ((select public.can_manage_all())
+                    or c.sales_id = (select public.current_sale_id())))
+        when 'lead' then exists (
+            select 1 from public.leads l
+             where l.id = p_entity_id
+               and ((select public.can_manage_all())
+                    or l.sales_id = (select public.current_sale_id())))
+        when 'company' then (select public.current_sale_id()) is not null
+            and exists (select 1 from public.companies c where c.id = p_entity_id)
+        else false
+    end;
+$$;
+
+-- Which `{{variables}}` a template of each scope may name. The ONE list: the
+-- template guard reads it, `email_context()` returns it, and the client's
+-- variable picker shows what it returns.
+create or replace function public.email_template_variables(p_scope text)
+returns text[]
+    language sql immutable
+    set search_path to ''
+as $$
+    select array['issuer_name', 'sender_name', 'sender_email',
+                 'customer_name', 'customer_company']
+        || case p_scope
+               when 'deal' then array['deal_name']
+               when 'quote' then array['quote_number', 'quote_title', 'quote_version',
+                                       'issue_date', 'valid_until', 'total',
+                                       'currency', 'quote_link']
+               else array[]::text[]
+           end;
+$$;
+
+-- Every `{{name}}` a text mentions.
+create or replace function public.email_text_variables(p_text text)
+returns text[]
+    language sql immutable
+    set search_path to ''
+as $$
+    select coalesce(array_agg(distinct m[1]), array[]::text[])
+      from regexp_matches(coalesce(p_text, ''), '\{\{\s*([A-Za-z0-9_]+)\s*\}\}', 'g') as m;
+$$;
+
+create or replace function public.email_templates_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+declare
+    v_unknown text;
+begin
+    if tg_op = 'DELETE' then
+        if old.is_system then
+            raise exception 'a system email template cannot be deleted'
+                using errcode = 'check_violation', detail = 'email_template_locked';
+        end if;
+        return old;
+    end if;
+
+    if tg_op = 'UPDATE' and old.is_system
+       and (new.key is distinct from old.key
+            or new.scope is distinct from old.scope
+            or new.language is distinct from old.language
+            or new.is_system is distinct from old.is_system) then
+        raise exception 'the key, scope and language of a system email template are fixed'
+            using errcode = 'check_violation', detail = 'email_template_locked';
+    end if;
+
+    -- Only the seed marks a template as the system's.
+    if tg_op = 'INSERT' and new.is_system
+       and coalesce(current_setting('app.email_system_write', true), '') <> 'on' then
+        new.is_system := false;
+    end if;
+
+    select v into v_unknown
+      from unnest(public.email_text_variables(new.subject || ' ' || new.body)) as v
+     where v <> all (public.email_template_variables(new.scope))
+     limit 1;
+    if v_unknown is not null then
+        raise exception 'unknown variable {{%}} for a % template', v_unknown, new.scope
+            using errcode = 'check_violation', detail = 'email_template_unknown_variable';
+    end if;
+
+    -- The link belongs in the text: a subject line is not clickable, and a
+    -- token in a subject is a token in every mail client's notification.
+    if 'quote_link' = any (public.email_text_variables(new.subject)) then
+        raise exception 'the quotation link cannot be used in a subject'
+            using errcode = 'check_violation', detail = 'email_template_unknown_variable';
+    end if;
+
+    return new;
+end;
+$$;
+
+-- The secrets are written by `set_email_provider_secret()` alone. Compared,
+-- not merely "posted": the admin screen sends the whole record back.
+create or replace function public.email_settings_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.email_system_write', true), '') <> 'on'
+       and (new.credentials_secret_id is distinct from old.credentials_secret_id
+            or new.webhook_secret_id is distinct from old.webhook_secret_id) then
+        raise exception 'email credentials are set through set_email_provider_secret()'
+            using errcode = 'check_violation', detail = 'email_settings_column_protected';
+    end if;
+
+    new.updated_at := now();
+    new.updated_by := public.current_sale_id();
+    return new;
+end;
+$$;
+
+-- What a message SAID never changes; how its delivery went does.
+create or replace function public.email_messages_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.quote_purge', true), '') = 'on' then
+        return new;
+    end if;
+
+    if new.sales_id is distinct from old.sales_id
+       or new.origin is distinct from old.origin
+       or new.automation_key is distinct from old.automation_key
+       or new.category is distinct from old.category
+       or new.language is distinct from old.language
+       or new.to_email is distinct from old.to_email
+       or new.to_name is distinct from old.to_name
+       or new.subject is distinct from old.subject
+       or new.body_text is distinct from old.body_text
+       or new.template_key is distinct from old.template_key
+       or new.variables is distinct from old.variables
+       or new.entity_type is distinct from old.entity_type
+       or new.entity_id is distinct from old.entity_id
+       or new.quote_id is distinct from old.quote_id
+       or new.quote_version_id is distinct from old.quote_version_id
+       or new.idempotency_key is distinct from old.idempotency_key
+       or new.dedupe_key is distinct from old.dedupe_key
+       or new.created_at is distinct from old.created_at then
+        raise exception 'the content of email message % is frozen', old.id
+            using errcode = 'check_violation', detail = 'email_message_frozen';
+    end if;
+
+    return new;
+end;
+$$;
+
+-- May this issued version be sent to the customer today? NULL when it may,
+-- otherwise the reason, as the key the client translates.
+--
+-- The link opens the NEWEST issued version, so only that one can be shared
+-- faithfully; and a quotation being revised, answered, lapsed or closed is not
+-- an offer the customer can act on. One function, read by the screen
+-- (`email_context()`), by the queue and again by the dispatcher just before
+-- the message leaves.
+create or replace function public.email_quote_share_block(
+    p_quote_id   bigint,
+    p_version_id bigint
+) returns text
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_quote   public.quotes;
+    v_version public.quote_versions;
+begin
+    select * into v_quote from public.quotes q where q.id = p_quote_id;
+    if not found then
+        return 'quote_not_found';
+    end if;
+
+    select * into v_version
+      from public.quote_versions v
+     where v.id = p_version_id and v.quote_id = p_quote_id;
+    if not found or v_version.issued_at is null then
+        return 'quote_not_issued';
+    end if;
+
+    if v_version.superseded_at is not null
+       or exists (select 1 from public.quote_versions n
+                   where n.quote_id = p_quote_id
+                     and n.issued_at is not null
+                     and n.version_number > v_version.version_number) then
+        return 'version_superseded';
+    end if;
+
+    if v_version.accepted_at is not null or v_version.rejected_at is not null then
+        return 'version_answered';
+    end if;
+
+    if exists (select 1 from public.quote_statuses s
+                where s.key = v_quote.status_key and s.is_terminal) then
+        return 'quote_closed';
+    end if;
+
+    -- A revision is being written: the customer could read this version and
+    -- not answer it.
+    if exists (select 1 from public.quote_versions d
+                where d.quote_id = p_quote_id and d.issued_at is null) then
+        return 'quote_revision_open';
+    end if;
+
+    if v_version.valid_until is not null and v_version.valid_until < current_date then
+        return 'version_expired';
+    end if;
+
+    return null;
+end;
+$$;
+
+-- The addresses a record lets its reader write to: its own contacts. Anything
+-- else is a free address, which only a manager or an admin may type.
+create or replace function public.email_entity_recipients(
+    p_entity_type public.task_entity,
+    p_entity_id   bigint
+) returns table (email text, name text, contact_id bigint)
+    language sql stable security definer
+    set search_path to ''
+as $$
+    with related as (
+        select c.id
+          from public.contacts c
+         where p_entity_type = 'contact' and c.id = p_entity_id
+        union
+        -- From a company's page, only the contacts the caller may read.
+        select c.id
+          from public.contacts c
+         where p_entity_type = 'company' and c.company_id = p_entity_id
+           and ((select public.can_manage_all())
+                or c.sales_id = (select public.current_sale_id()))
+        union
+        select c.id
+          from public.deals d
+          join public.contacts c on c.id = any (d.contact_ids)
+         where p_entity_type = 'deal' and d.id = p_entity_id
+        union
+        -- A quotation is addressed to a company: its contact, and the other
+        -- people of that company.
+        select c.id
+          from public.quotes q
+          join public.contacts c
+            on c.id = q.contact_id or c.company_id = q.company_id
+         where p_entity_type = 'quote' and q.id = p_entity_id
+    ),
+    addresses as (
+        select lower(e.value ->> 'email') as email,
+               nullif(btrim(concat_ws(' ', c.first_name, c.last_name)), '') as name,
+               c.id as contact_id
+          from related r
+          join public.contacts c on c.id = r.id
+         cross join lateral jsonb_array_elements(
+                   case when jsonb_typeof(c.email_jsonb) = 'array'
+                        then c.email_jsonb else '[]'::jsonb end) e
+        union all
+        select lower(l.email::text),
+               nullif(btrim(concat_ws(' ', l.first_name, l.last_name)), ''),
+               null::bigint
+          from public.leads l
+         where p_entity_type = 'lead' and l.id = p_entity_id
+        union all
+        -- The address printed on the document the customer received.
+        select lower(v.party_snapshot -> 'contact' ->> 'email'),
+               nullif(btrim(concat_ws(' ',
+                   v.party_snapshot -> 'contact' ->> 'first_name',
+                   v.party_snapshot -> 'contact' ->> 'last_name')), ''),
+               null::bigint
+          from public.quote_versions v
+         where p_entity_type = 'quote' and v.quote_id = p_entity_id
+           and v.issued_at is not null
+    )
+    select distinct on (a.email) a.email, a.name, a.contact_id
+      from addresses a
+     where public.is_valid_email(a.email)
+     order by a.email, a.contact_id nulls last;
+$$;
+
+-- A time zone name a client sent, or UTC when it is not one Postgres knows.
+create or replace function public.email_safe_timezone(p_timezone text)
+returns text
+    language sql stable
+    set search_path to ''
+as $$
+    select coalesce(
+        (select z.name from pg_catalog.pg_timezone_names z
+          where z.name = p_timezone limit 1),
+        'UTC');
+$$;
+
+-- What a template can say about a record. For a quotation every figure comes
+-- from the ISSUED version's own row and its `party_snapshot`: nothing is
+-- recomputed, converted or read from today's company.
+--
+-- The issue DATE is the one calendar reading of a timestamp, so it needs a
+-- time zone: the sender's (`p_timezone`), which is the day they see on the
+-- document. In UTC a quotation issued in Bogota after 19:00 would be dated
+-- tomorrow in the customer's inbox.
+create or replace function public.email_entity_variables(
+    p_entity_type public.task_entity,
+    p_entity_id   bigint,
+    p_version_id  bigint default null,
+    p_timezone    text default null
+) returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_vars jsonb;
+    v_more jsonb := '{}'::jsonb;
+begin
+    select jsonb_build_object(
+               'issuer_name', coalesce(
+                   (select nullif(btrim(c.config ->> 'title'), '')
+                      from public.configuration c where c.id = 1), ''),
+               'sender_name', coalesce(
+                   nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), ''), ''),
+               'sender_email', coalesce(s.email::text, ''))
+      into v_vars
+      from (select 1) one
+      left join public.sales s on s.id = public.current_sale_id();
+
+    if p_entity_type = 'contact' then
+        select jsonb_build_object(
+                   'customer_name', coalesce(nullif(btrim(concat_ws(' ', c.first_name, c.last_name)), ''), ''),
+                   'customer_company', coalesce(co.name, ''))
+          into v_more
+          from public.contacts c
+          left join public.companies co on co.id = c.company_id
+         where c.id = p_entity_id;
+    elsif p_entity_type = 'lead' then
+        select jsonb_build_object(
+                   'customer_name', coalesce(nullif(btrim(concat_ws(' ', l.first_name, l.last_name)), ''), ''),
+                   'customer_company', coalesce(l.company_name, ''))
+          into v_more
+          from public.leads l where l.id = p_entity_id;
+    elsif p_entity_type = 'company' then
+        select jsonb_build_object('customer_name', co.name, 'customer_company', co.name)
+          into v_more
+          from public.companies co where co.id = p_entity_id;
+    elsif p_entity_type = 'deal' then
+        select jsonb_build_object(
+                   'deal_name', coalesce(d.name, ''),
+                   'customer_name', coalesce(co.name, ''),
+                   'customer_company', coalesce(co.name, ''))
+          into v_more
+          from public.deals d
+          left join public.companies co on co.id = d.company_id
+         where d.id = p_entity_id;
+    elsif p_entity_type = 'quote' then
+        select jsonb_build_object(
+                   'customer_name', coalesce(
+                       nullif(btrim(concat_ws(' ',
+                           v.party_snapshot -> 'contact' ->> 'first_name',
+                           v.party_snapshot -> 'contact' ->> 'last_name')), ''),
+                       v.party_snapshot -> 'company' ->> 'name', ''),
+                   'customer_company', coalesce(v.party_snapshot -> 'company' ->> 'name', ''),
+                   'quote_number', q.quote_number,
+                   'quote_title', coalesce(q.title, ''),
+                   'quote_version', v.version_number,
+                   'issue_date', to_char(
+                       v.issued_at at time zone public.email_safe_timezone(p_timezone),
+                       'YYYY-MM-DD'),
+                   'valid_until', coalesce(to_char(v.valid_until, 'YYYY-MM-DD'), ''),
+                   'total', v.total,
+                   'currency', v.currency)
+          into v_more
+          from public.quotes q
+          join public.quote_versions v on v.quote_id = q.id
+         where q.id = p_entity_id
+           and v.issued_at is not null
+           and (p_version_id is null or v.id = p_version_id)
+         order by v.version_number desc
+         limit 1;
+    end if;
+
+    return v_vars || coalesce(v_more, '{}'::jsonb);
+end;
+$$;
+
+-- Whether mail can be sent at all, for every signed-in user: the screens need
+-- it to offer the button and to say honestly when a send is only simulated.
+-- No secret and no secret id.
+create or replace function public.email_status() returns jsonb
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select jsonb_build_object(
+        'is_enabled',      s.is_enabled,
+        'provider_key',    s.provider_key,
+        'is_simulated',    s.provider_key = 'mock',
+        'is_ready',        s.is_enabled
+                           and (s.provider_key = 'mock'
+                                or (s.from_email is not null
+                                    and s.credentials_secret_id is not null)),
+        'from_email',      s.from_email,
+        'from_name',       s.from_name,
+        'has_credentials', s.credentials_secret_id is not null,
+        'has_webhook_secret', s.webhook_secret_id is not null,
+        'can_send_any',    (select public.can_manage_all()))
+      from public.email_settings s
+     where s.id = 1
+       and (select public.current_sale_id()) is not null;
+$$;
+
+-- Everything the compose dialog needs about one record, in one call: who it
+-- may be sent to, what a template can say, and -- for a quotation -- which
+-- version would be shared and why it cannot be, if it cannot.
+create or replace function public.email_context(
+    p_entity_type text,
+    p_entity_id   bigint,
+    p_timezone    text default null
+) returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_type    public.task_entity;
+    v_version public.quote_versions;
+    v_quote   jsonb := null;
+begin
+    begin
+        v_type := p_entity_type::public.task_entity;
+    exception when others then
+        raise exception 'unknown entity type %', p_entity_type
+            using errcode = 'check_violation', detail = 'email_entity_invalid';
+    end;
+
+    if v_type not in ('contact', 'lead', 'company', 'deal', 'quote')
+       or not (select public.can_see_email_entity(v_type, p_entity_id)) then
+        raise exception 'no permission to email about % %', p_entity_type, p_entity_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    if v_type = 'quote' then
+        select * into v_version
+          from public.quote_versions v
+         where v.quote_id = p_entity_id and v.issued_at is not null
+         order by v.version_number desc
+         limit 1;
+
+        v_quote := jsonb_build_object(
+            'version_id',     v_version.id,
+            'version_number', v_version.version_number,
+            'block',          case when v_version.id is null then 'quote_not_issued'
+                                   else public.email_quote_share_block(p_entity_id, v_version.id)
+                              end);
+    end if;
+
+    return jsonb_build_object(
+        'status',     public.email_status(),
+        'recipients', coalesce(
+            (select jsonb_agg(jsonb_build_object(
+                        'email', r.email, 'name', r.name, 'contact_id', r.contact_id,
+                        'is_suppressed', public.email_is_suppressed(r.email))
+                        order by r.name nulls last, r.email)
+               from public.email_entity_recipients(v_type, p_entity_id) r),
+            '[]'::jsonb),
+        'variables',  public.email_entity_variables(
+                          v_type, p_entity_id, v_version.id, p_timezone),
+        'allowed_variables', to_jsonb(public.email_template_variables(p_entity_type)),
+        'quote',      v_quote);
+end;
+$$;
+
+-- The one writer of `email_messages`. Internal: `queue_email()` and
+-- `queue_quote_email()` decide WHAT may be sent, this decides whether THIS
+-- message may be -- the checks that are the same for every message.
+--
+-- It queues and returns. Nothing here talks to a mail provider, and nothing
+-- here writes to any table but `email_messages`.
+create or replace function public.email_enqueue(
+    p_entity_type       public.task_entity,
+    p_entity_id         bigint,
+    p_quote_version_id  bigint,
+    p_to_email          text,
+    p_to_name           text,
+    p_subject           text,
+    p_body              text,
+    p_template_id       bigint,
+    p_language          text,
+    p_idempotency_key   uuid,
+    p_confirm_duplicate boolean,
+    p_origin            text,
+    p_timezone          text default null
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_actor     bigint := public.current_sale_id();
+    v_settings  public.email_settings;
+    v_existing  public.email_messages;
+    v_row       public.email_messages;
+    v_template  public.email_templates;
+    v_email     text := lower(btrim(coalesce(p_to_email, '')));
+    v_name      text := nullif(btrim(coalesce(p_to_name, '')), '');
+    v_subject   text := btrim(coalesce(p_subject, ''));
+    v_body      text := btrim(coalesce(p_body, ''));
+    v_language  text := coalesce(nullif(btrim(p_language), ''), 'es');
+    v_known     record;
+    v_is_known  boolean := false;
+    v_contact   bigint;
+    v_stray     text;
+    v_category  text := 'transactional';
+begin
+    if v_actor is null then
+        raise exception 'no active user'
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    if p_idempotency_key is null then
+        raise exception 'an idempotency key is required'
+            using errcode = 'check_violation', detail = 'email_idempotency_required';
+    end if;
+
+    -- The same press of "Send", again: the answer it already got. Serialised
+    -- on the key, so two identical requests in flight cannot both insert.
+    perform pg_advisory_xact_lock(hashtextextended('email:key:' || p_idempotency_key::text, 0));
+    select * into v_existing
+      from public.email_messages m where m.idempotency_key = p_idempotency_key;
+    if found then
+        if v_existing.sales_id is distinct from v_actor then
+            raise exception 'idempotency key already used'
+                using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+        end if;
+        return v_existing;
+    end if;
+
+    select * into v_settings from public.email_settings s where s.id = 1;
+    if not found or not v_settings.is_enabled then
+        raise exception 'outbound email is switched off'
+            using errcode = 'check_violation', detail = 'email_disabled';
+    end if;
+    if v_settings.provider_key <> 'mock'
+       and (v_settings.from_email is null or v_settings.credentials_secret_id is null) then
+        raise exception 'the email provider is not configured'
+            using errcode = 'check_violation', detail = 'email_not_configured';
+    end if;
+
+    if not public.is_valid_email(v_email) then
+        raise exception 'invalid recipient address'
+            using errcode = 'check_violation', detail = 'email_recipient_invalid';
+    end if;
+    if v_name is not null and (char_length(v_name) > 120 or v_name ~ '[[:cntrl:]"<>]') then
+        raise exception 'invalid recipient name'
+            using errcode = 'check_violation', detail = 'email_recipient_invalid';
+    end if;
+    -- An address that bounced for good, or whose owner reported us as spam.
+    if public.email_is_suppressed(v_email) then
+        raise exception 'this address is on the suppression list'
+            using errcode = 'check_violation', detail = 'email_recipient_suppressed';
+    end if;
+    -- A line break in a subject is a second header.
+    if char_length(v_subject) not between 1 and 200 or v_subject ~ '[[:cntrl:]]' then
+        raise exception 'invalid subject'
+            using errcode = 'check_violation', detail = 'email_subject_invalid';
+    end if;
+    if char_length(v_body) not between 1 and 20000 then
+        raise exception 'invalid body'
+            using errcode = 'check_violation', detail = 'email_body_invalid';
+    end if;
+    if v_language not in ('es', 'en', 'fr') then
+        v_language := 'es';
+    end if;
+
+    -- A variable nobody filled would reach the customer as `{{braces}}`. The
+    -- one marker that may remain is the quotation link, in the text of a
+    -- quotation's message: the dispatcher resolves it.
+    select v into v_stray
+      from unnest(public.email_text_variables(v_subject)) as v limit 1;
+    if v_stray is null then
+        select v into v_stray
+          from unnest(public.email_text_variables(v_body)) as v
+         where v <> 'quote_link' or p_quote_version_id is null
+         limit 1;
+    end if;
+    if v_stray is not null then
+        raise exception 'the message still contains the variable {{%}}', v_stray
+            using errcode = 'check_violation', detail = 'email_unresolved_variable';
+    end if;
+
+    -- Who it may go to.
+    if p_entity_type is not null then
+        for v_known in
+            select r.email, r.name, r.contact_id
+              from public.email_entity_recipients(p_entity_type, p_entity_id) r
+        loop
+            if v_known.email = v_email then
+                v_is_known := true;
+                v_contact  := v_known.contact_id;
+                v_name     := coalesce(v_name, v_known.name);
+            end if;
+        end loop;
+    end if;
+    if not v_is_known and not (select public.can_manage_all()) then
+        raise exception 'this address is not related to the record'
+            using errcode = 'insufficient_privilege', detail = 'email_recipient_not_allowed';
+    end if;
+
+    if p_template_id is not null then
+        select * into v_template from public.email_templates t where t.id = p_template_id;
+        if not found or not v_template.is_active then
+            raise exception 'unknown or inactive email template'
+                using errcode = 'check_violation', detail = 'email_template_invalid';
+        end if;
+        v_category := v_template.category;
+    end if;
+
+    -- Frequency. Serialised per sender and per recipient so two tabs cannot
+    -- both read "one below the limit".
+    perform pg_advisory_xact_lock(hashtextextended('email:sender:' || v_actor::text, 0));
+    perform pg_advisory_xact_lock(hashtextextended('email:to:' || v_email, 0));
+
+    if (select count(*) from public.email_messages m
+         where m.sales_id = v_actor
+           and m.created_at > now() - interval '1 hour'
+           and m.status <> 'canceled') >= v_settings.max_per_user_hour
+       or (select count(*) from public.email_messages m
+            where m.to_email = v_email
+              and m.created_at > now() - interval '1 day'
+              and m.status not in ('canceled', 'failed')) >= v_settings.max_per_recipient_day then
+        raise exception 'too many emails in a short time'
+            using errcode = 'check_violation', detail = 'email_rate_limited';
+    end if;
+
+    -- The same thing to the same person minutes ago is a double click on
+    -- another tab far more often than an intention.
+    if not coalesce(p_confirm_duplicate, false) and exists (
+        select 1 from public.email_messages m
+         where m.to_email = v_email
+           and m.created_at > now() - interval '10 minutes'
+           and m.status not in ('canceled', 'failed')
+           and m.entity_type is not distinct from p_entity_type
+           and m.entity_id is not distinct from p_entity_id
+           and m.quote_version_id is not distinct from p_quote_version_id
+           and (p_quote_version_id is not null or m.subject = v_subject)) then
+        raise exception 'the same message was sent to this address a moment ago'
+            using errcode = 'check_violation', detail = 'email_duplicate_recent';
+    end if;
+
+    insert into public.email_messages
+        (sales_id, origin, category, language, to_email, to_name, contact_id,
+         subject, body_text, template_id, template_key, variables,
+         entity_type, entity_id, quote_id, quote_version_id, idempotency_key)
+    values
+        (v_actor, p_origin, v_category, v_language, v_email, v_name, v_contact,
+         v_subject, v_body, v_template.id, v_template.key,
+         public.email_entity_variables(
+             p_entity_type, p_entity_id, p_quote_version_id, p_timezone),
+         p_entity_type, p_entity_id,
+         case when p_quote_version_id is null then null else p_entity_id end,
+         p_quote_version_id, p_idempotency_key)
+    returning * into v_row;
+
+    return v_row;
+end;
+$$;
+
+-- A message written from a contact, a lead, a company or a deal. Without a
+-- record it is the administrator's test message, and only theirs.
+create or replace function public.queue_email(
+    p_entity_type       text,
+    p_entity_id         bigint,
+    p_to_email          text,
+    p_subject           text,
+    p_body              text,
+    p_idempotency_key   uuid,
+    p_template_id       bigint default null,
+    p_to_name           text default null,
+    p_language          text default null,
+    p_confirm_duplicate boolean default false
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_type public.task_entity;
+begin
+    if p_entity_type is null and p_entity_id is null then
+        if not (select public.is_admin()) then
+            raise exception 'only an administrator can send a test message'
+                using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+        end if;
+        return public.email_enqueue(null, null, null, p_to_email, p_to_name,
+            p_subject, p_body, p_template_id, p_language, p_idempotency_key,
+            p_confirm_duplicate, 'test');
+    end if;
+
+    begin
+        v_type := p_entity_type::public.task_entity;
+    exception when others then
+        raise exception 'unknown entity type %', p_entity_type
+            using errcode = 'check_violation', detail = 'email_entity_invalid';
+    end;
+
+    -- A quotation is shared through `queue_quote_email()`, which knows which
+    -- version may be: this door must not be a way around it.
+    if v_type not in ('contact', 'lead', 'company', 'deal') or p_entity_id is null then
+        raise exception 'unknown entity type %', p_entity_type
+            using errcode = 'check_violation', detail = 'email_entity_invalid';
+    end if;
+
+    if not (select public.can_see_email_entity(v_type, p_entity_id)) then
+        raise exception 'no permission to email about % %', p_entity_type, p_entity_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    return public.email_enqueue(v_type, p_entity_id, null, p_to_email, p_to_name,
+        p_subject, p_body, p_template_id, p_language, p_idempotency_key,
+        p_confirm_duplicate, 'manual');
+end;
+$$;
+
+-- Send the customer the link to ONE issued version.
+--
+-- It shares; it does not issue, transition, re-price or re-rate. The only
+-- other write it can cause is the quotation's permanent link, when the quote
+-- has none left (a revoked one): the same row "Create link" would insert.
+create or replace function public.queue_quote_email(
+    p_quote_id          bigint,
+    p_version_id        bigint,
+    p_to_email          text,
+    p_subject           text,
+    p_body              text,
+    p_idempotency_key   uuid,
+    p_template_id       bigint default null,
+    p_to_name           text default null,
+    p_language          text default null,
+    p_confirm_duplicate boolean default false,
+    p_timezone          text default null
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_block text;
+begin
+    if p_quote_id is null or not (select public.can_see_quote(p_quote_id)) then
+        raise exception 'no permission to share quote %', p_quote_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    v_block := public.email_quote_share_block(p_quote_id, p_version_id);
+    if v_block is not null then
+        raise exception 'version % of quote % cannot be shared: %',
+                        p_version_id, p_quote_id, v_block
+            using errcode = 'check_violation', detail = 'email_quote_not_shareable',
+                  hint = v_block;
+    end if;
+
+    -- A message promising a link the quotation does not have would be a dead
+    -- button in the customer's inbox.
+    perform public.quote_share_link(p_quote_id, true);
+
+    return public.email_enqueue('quote', p_quote_id, p_version_id, p_to_email,
+        p_to_name, p_subject, p_body, p_template_id, p_language,
+        p_idempotency_key, p_confirm_duplicate, 'manual', p_timezone);
+end;
+$$;
+
+-- Try a failed message again: the SAME row, so the history shows one message
+-- that took two attempts and not two messages.
+create or replace function public.retry_email_message(p_id bigint)
+returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_row   public.email_messages;
+    v_block text;
+begin
+    select * into v_row from public.email_messages m where m.id = p_id for update;
+    if not found
+       or not ((select public.can_manage_all())
+               or v_row.sales_id = (select public.current_sale_id())) then
+        raise exception 'no permission to retry email message %', p_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    if v_row.status <> 'failed' then
+        raise exception 'only a failed message can be retried'
+            using errcode = 'check_violation', detail = 'email_not_retryable';
+    end if;
+
+    if v_row.quote_version_id is not null then
+        v_block := public.email_quote_share_block(v_row.quote_id, v_row.quote_version_id);
+        if v_block is not null then
+            raise exception 'the quotation can no longer be shared: %', v_block
+                using errcode = 'check_violation', detail = 'email_quote_not_shareable',
+                      hint = v_block;
+        end if;
+    end if;
+
+    update public.email_messages
+       set status = 'pending', attempt = 0, scheduled_for = now(),
+           claimed_at = null, failed_at = null
+     where id = p_id
+    returning * into v_row;
+    return v_row;
+end;
+$$;
+
+--
+-- The outbox (service_role only)
+--
+
+-- Claim what is due, or one message by id (the sender's own press of "Send",
+-- which should not wait for the next tick).
+--
+-- Each row comes back as everything the dispatcher needs and nothing it does
+-- not: the sender identity is resolved here, from the settings, so the
+-- function holding the provider key never chooses a From address itself.
+create or replace function public.claim_email_messages(
+    p_limit      integer default 20,
+    p_message_id bigint default null
+) returns setof jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_settings public.email_settings;
+    v_row      public.email_messages;
+    v_block    text;
+    v_state    text;
+    v_sender   public.sales;
+    v_issuer   text;
+    v_logo     text;
+begin
+    select * into v_settings from public.email_settings s where s.id = 1;
+    if not found or not v_settings.is_enabled
+       or (v_settings.provider_key <> 'mock'
+           and (v_settings.from_email is null
+                or v_settings.credentials_secret_id is null)) then
+        -- Left pending: switching the provider back on sends them.
+        return;
+    end if;
+
+    select nullif(btrim(c.config ->> 'title'), ''),
+           nullif(case jsonb_typeof(c.config -> 'lightModeLogo')
+                      when 'string' then c.config ->> 'lightModeLogo'
+                      when 'object' then c.config -> 'lightModeLogo' ->> 'src'
+                  end, '')
+      into v_issuer, v_logo
+      from public.configuration c where c.id = 1;
+
+    for v_row in
+        select m.*
+          from public.email_messages m
+         where m.status = 'pending'
+           and m.scheduled_for <= now()
+           and (p_message_id is null or m.id = p_message_id)
+           -- A paused rule's messages wait where they are. Excluded here,
+           -- not skipped in the loop: skipped rows would fill the LIMIT
+           -- and starve everything behind them.
+           and not exists (select 1 from public.email_automations a
+                            where a.key = m.automation_key and a.state = 'paused')
+         order by m.scheduled_for, m.id
+         limit greatest(1, least(coalesce(p_limit, 20), 100))
+           for update skip locked
+    loop
+        -- A rule switched off after it queued a message takes the message
+        -- with it.
+        if v_row.origin = 'automation' then
+            select a.state into v_state
+              from public.email_automations a where a.key = v_row.automation_key;
+            if v_state is distinct from 'enabled' then
+                update public.email_messages
+                   set status = 'canceled', error_code = 'email_automation_disabled',
+                       error = 'the automation was switched off'
+                 where id = v_row.id;
+                continue;
+            end if;
+        end if;
+
+        -- A confirmation is about an acceptance that must still stand.
+        if v_row.automation_key = 'quote_accepted' and not exists (
+            select 1 from public.quote_versions v
+             where v.id = v_row.quote_version_id and v.accepted_at is not null) then
+            update public.email_messages
+               set status = 'canceled', error_code = 'email_quote_not_shareable',
+                   error = 'quote_not_accepted'
+             where id = v_row.id;
+            continue;
+        end if;
+
+        -- Between the press of "Send" and now the quotation may have been
+        -- revised, answered or closed. Then the message does not leave.
+        -- (Not asked of a confirmation: its version IS answered.)
+        if v_row.quote_version_id is not null
+           and v_row.automation_key is distinct from 'quote_accepted' then
+            v_block := public.email_quote_share_block(v_row.quote_id, v_row.quote_version_id);
+            if v_block is not null then
+                update public.email_messages
+                   set status = 'canceled', error_code = 'email_quote_not_shareable',
+                       error = v_block
+                 where id = v_row.id;
+                continue;
+            end if;
+        end if;
+
+        -- The address may have bounced since the message was queued.
+        if public.email_is_suppressed(v_row.to_email::text) then
+            update public.email_messages
+               set status = 'canceled', error_code = 'email_recipient_suppressed',
+                   error = 'the address is on the suppression list'
+             where id = v_row.id;
+            continue;
+        end if;
+
+        update public.email_messages
+           set status = 'processing', attempt = attempt + 1, claimed_at = now(),
+               provider_key = v_settings.provider_key
+         where id = v_row.id
+        returning * into v_row;
+
+        v_sender := null;
+        select * into v_sender from public.sales s where s.id = v_row.sales_id;
+
+        return next jsonb_build_object(
+            'id',               v_row.id,
+            'attempt',          v_row.attempt,
+            'provider_key',     v_row.provider_key,
+            'category',         v_row.category,
+            'language',         v_row.language,
+            'to_email',         v_row.to_email,
+            'to_name',          v_row.to_name,
+            'subject',          v_row.subject,
+            'body_text',        v_row.body_text,
+            'variables',        v_row.variables,
+            'quote_id',         v_row.quote_id,
+            'quote_version_id', v_row.quote_version_id,
+            'from_email',       v_settings.from_email,
+            'from_name',        coalesce(v_settings.from_name, v_issuer),
+            'reply_to',         case when v_settings.reply_to_mode = 'sender'
+                                     then v_sender.email::text end,
+            'message_stream',   case when v_row.category = 'commercial'
+                                     then v_settings.commercial_stream
+                                     else v_settings.transactional_stream end,
+            'issuer_name',      v_issuer,
+            'logo_url',         v_logo);
+    end loop;
+end;
+$$;
+
+-- The customer link of a message being sent. Read at the last moment and
+-- handed to the dispatcher only: it is never written anywhere.
+create or replace function public.email_message_quote_token(p_message_id bigint)
+returns text
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select t.token
+      from public.email_messages m
+      join public.quote_access_tokens t
+        on t.quote_id = m.quote_id
+       and t.token is not null
+       and t.revoked_at is null
+     where m.id = p_message_id
+       and m.status = 'processing';
+$$;
+
+-- Record what the provider answered.
+--
+-- `accepted` means its API took the message, nothing more. A failure the
+-- dispatcher calls retryable goes back to the queue with a backoff until the
+-- attempts run out; any other is final. Settling a row that is no longer
+-- `processing` changes nothing, so a late or repeated answer cannot rewrite an
+-- outcome.
+create or replace function public.complete_email_message(
+    p_id                  bigint,
+    p_status              text,
+    p_provider_message_id text default null,
+    p_error_code          text default null,
+    p_error               text default null,
+    p_retryable           boolean default false,
+    p_max_attempts        integer default 5
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_row     public.email_messages;
+    v_backoff interval;
+begin
+    if p_status not in ('accepted', 'simulated', 'failed') then
+        raise exception 'illegal email status %', p_status
+            using errcode = 'check_violation';
+    end if;
+
+    select * into v_row from public.email_messages m where m.id = p_id for update;
+    if not found then
+        raise exception 'email message % not found', p_id
+            using errcode = 'no_data_found';
+    end if;
+    if v_row.status <> 'processing' then
+        return v_row;
+    end if;
+
+    if p_status = 'failed' and coalesce(p_retryable, false)
+       and v_row.attempt < p_max_attempts then
+        v_backoff := make_interval(secs => least(3600, power(2, v_row.attempt)::int * 60));
+        update public.email_messages
+           set status = 'pending', scheduled_for = now() + v_backoff, claimed_at = null,
+               error_code = left(p_error_code, 80), error = left(p_error, 500)
+         where id = p_id
+        returning * into v_row;
+        return v_row;
+    end if;
+
+    update public.email_messages
+       set status              = p_status,
+           provider_message_id = coalesce(left(p_provider_message_id, 200), provider_message_id),
+           accepted_at         = case when p_status = 'accepted' then now() end,
+           failed_at           = case when p_status = 'failed' then now() end,
+           error_code          = case when p_status = 'failed' then left(p_error_code, 80) end,
+           error               = case when p_status = 'failed' then left(p_error, 500) end
+     where id = p_id
+    returning * into v_row;
+    return v_row;
+end;
+$$;
+
+-- A dispatcher that died between "the provider answered" and "we wrote it
+-- down" leaves a row at `processing`. Nobody knows whether that mail left, so
+-- it is NOT sent again by itself: it fails, visibly, and a person who can ask
+-- the customer decides whether to retry. A duplicate quotation in a customer's
+-- inbox is the worse of the two mistakes.
+create or replace function public.fail_stale_email_messages(
+    p_older_than interval default '10 minutes'
+) returns integer
+    language sql security definer
+    set search_path to ''
+as $$
+    with failed as (
+        update public.email_messages
+           set status = 'failed', failed_at = now(),
+               error_code = 'email_dispatch_interrupted',
+               error = 'the dispatcher did not report an outcome'
+         where status = 'processing'
+           and claimed_at < now() - p_older_than
+        returning 1
+    )
+    select count(*)::int from failed;
+$$;
+
+-- The scheduled tick (`email-dispatch`, every minute): posts to the
+-- `email-dispatch` edge function with the URL and key held in Vault. A no-op
+-- until both exist, and when nothing is due.
+create or replace function public.email_dispatch_tick() returns bigint
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_url text;
+    v_key text;
+begin
+    perform public.fail_stale_email_messages();
+
+    if not exists (select 1 from public.email_messages m
+                    where m.status = 'pending' and m.scheduled_for <= now()) then
+        return null;
+    end if;
+
+    select d.decrypted_secret into v_url
+      from vault.decrypted_secrets d where d.name = 'email_dispatch_url';
+    select d.decrypted_secret into v_key
+      from vault.decrypted_secrets d where d.name = 'email_dispatch_service_key';
+    if v_url is null or v_key is null then
+        return null;
+    end if;
+
+    return net.http_post(
+        url                  := v_url,
+        body                 := jsonb_build_object('trigger', 'cron'),
+        headers              := jsonb_build_object(
+                                    'Content-Type', 'application/json',
+                                    'Authorization', 'Bearer ' || v_key),
+        timeout_milliseconds := 60000);
+end;
+$$;
+
+--
+-- Credentials (Supabase Vault). `p_kind` is 'credentials' (the provider's API
+-- token) or 'webhook' (the secret its delivery webhook must present). The
+-- value never reaches a table a client can read.
+--
+create or replace function public.set_email_provider_secret(p_kind text, p_secret text)
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_settings public.email_settings;
+    v_secret   text := nullif(btrim(coalesce(p_secret, '')), '');
+    v_id       uuid;
+begin
+    if not (select public.is_admin()) then
+        raise exception 'only an administrator can set email credentials'
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+    if p_kind not in ('credentials', 'webhook') then
+        raise exception 'unknown secret kind %', p_kind
+            using errcode = 'check_violation', detail = 'email_secret_kind_invalid';
+    end if;
+
+    select * into v_settings from public.email_settings s where s.id = 1 for update;
+
+    if p_kind = 'credentials' then
+        v_id := v_settings.credentials_secret_id;
+    else
+        v_id := v_settings.webhook_secret_id;
+    end if;
+
+    if v_secret is null then
+        if v_id is not null then
+            delete from vault.secrets s where s.id = v_id;
+        end if;
+        v_id := null;
+    elsif v_id is null then
+        v_id := vault.create_secret(v_secret, 'email_provider_' || p_kind,
+                                    'Outbound email: ' || p_kind);
+    else
+        perform vault.update_secret(v_id, v_secret);
+    end if;
+
+    perform set_config('app.email_system_write', 'on', true);
+    if p_kind = 'credentials' then
+        update public.email_settings set credentials_secret_id = v_id where id = 1;
+    else
+        update public.email_settings set webhook_secret_id = v_id where id = 1;
+    end if;
+    perform set_config('app.email_system_write', '', true);
+end;
+$$;
+
+create or replace function public.get_email_provider_secret(p_kind text)
+returns text
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select d.decrypted_secret
+      from public.email_settings s
+      join vault.decrypted_secrets d
+        on d.id = case p_kind when 'credentials' then s.credentials_secret_id
+                              when 'webhook' then s.webhook_secret_id end
+     where s.id = 1;
+$$;
+
+--
+-- Delivery (phase 2)
+--
+
+-- Whether the CRM refuses to write to an address.
+create or replace function public.email_is_suppressed(p_email text) returns boolean
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select exists (select 1 from public.email_suppressions s
+                    where s.email = lower(btrim(coalesce(p_email, ''))));
+$$;
+
+-- Record one event the provider's webhook reported, and apply it.
+--
+-- Idempotent on `(provider_key, provider_event_id)`: a replay changes nothing
+-- and says so. A status only ever moves FORWARD -- accepted, then delivered,
+-- then bounced (a mailbox can accept a message and bounce it later, never the
+-- reverse) -- so events arriving out of order cannot walk a message back.
+--
+-- `delivered` is written here and nowhere else: this is the verifiable
+-- confirmation the provider's API acceptance is not.
+create or replace function public.record_email_event(
+    p_provider_key        text,
+    p_provider_event_id   text,
+    p_provider_message_id text,
+    p_event_type          text,
+    p_occurred_at         timestamp with time zone default null,
+    p_recipient           text default null,
+    p_is_permanent        boolean default false,
+    p_detail              text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_message   public.email_messages;
+    v_event_id  bigint;
+    v_when      timestamp with time zone := coalesce(p_occurred_at, now());
+    v_recipient text := nullif(lower(btrim(coalesce(p_recipient, ''))), '');
+    v_detail    text := nullif(left(btrim(coalesce(p_detail, '')), 500), '');
+begin
+    if p_event_type not in ('delivered', 'bounced', 'complained') then
+        raise exception 'unknown email event type %', p_event_type
+            using errcode = 'check_violation', detail = 'email_event_invalid';
+    end if;
+    if coalesce(btrim(p_provider_event_id), '') = '' then
+        raise exception 'an event id is required'
+            using errcode = 'check_violation', detail = 'email_event_invalid';
+    end if;
+
+    if p_provider_message_id is not null then
+        select * into v_message
+          from public.email_messages m
+         where m.provider_key = p_provider_key
+           and m.provider_message_id = p_provider_message_id
+         for update;
+    end if;
+
+    if v_recipient is not null and not public.is_valid_email(v_recipient) then
+        v_recipient := null;
+    end if;
+
+    insert into public.email_message_events
+        (message_id, provider_key, provider_event_id, provider_message_id,
+         event_type, is_permanent, recipient, occurred_at, detail)
+    values
+        (v_message.id, p_provider_key, left(p_provider_event_id, 200),
+         left(p_provider_message_id, 200), p_event_type,
+         coalesce(p_is_permanent, false), v_recipient, v_when, v_detail)
+    on conflict (provider_key, provider_event_id) do nothing
+    returning id into v_event_id;
+
+    if v_event_id is null then
+        return jsonb_build_object('duplicate', true, 'matched', v_message.id is not null,
+                                  'status', v_message.status);
+    end if;
+
+    if v_message.id is not null then
+        if p_event_type = 'delivered' and v_message.status in ('processing', 'accepted') then
+            update public.email_messages
+               set status = 'delivered', delivered_at = v_when,
+                   accepted_at = coalesce(accepted_at, v_when)
+             where id = v_message.id
+            returning * into v_message;
+        elsif p_event_type = 'bounced'
+              and v_message.status in ('processing', 'accepted', 'delivered') then
+            update public.email_messages
+               set status = 'bounced', bounced_at = v_when,
+                   error_code = 'recipient_bounced', error = v_detail
+             where id = v_message.id
+            returning * into v_message;
+        end if;
+    end if;
+
+    -- An address that is dead, or whose owner said "spam", is not written to
+    -- again -- whatever message the event was about.
+    v_recipient := coalesce(v_recipient, v_message.to_email::text);
+    if v_recipient is not null
+       and (p_event_type = 'complained'
+            or (p_event_type = 'bounced' and coalesce(p_is_permanent, false))) then
+        -- Through the hatch: this row states the provider's verdict, which a
+        -- row inserted any other way may not (`email_suppressions_guard`).
+        perform set_config('app.email_system_write', 'on', true);
+        insert into public.email_suppressions (email, reason, detail, source_message_id)
+        values (v_recipient,
+                case when p_event_type = 'complained' then 'complaint' else 'hard_bounce' end,
+                v_detail, v_message.id)
+        on conflict (email) do nothing;
+        perform set_config('app.email_system_write', '', true);
+    end if;
+
+    return jsonb_build_object('duplicate', false, 'matched', v_message.id is not null,
+                              'status', v_message.status);
+end;
+$$;
+
+-- A row inserted by anything but `record_email_event()` is a person's entry:
+-- its `reason` is 'manual' whatever was posted, so a hand-made row can never
+-- pass for a provider's verdict.
+create or replace function public.email_suppressions_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    new.email := lower(btrim(new.email::text));
+    if coalesce(current_setting('app.email_system_write', true), '') <> 'on' then
+        new.reason            := 'manual';
+        new.created_by        := public.current_sale_id();
+        new.source_message_id := null;
+    end if;
+    return new;
+end;
+$$;
+
+--
+-- Automations (phase 3)
+--
+
+create or replace function public.email_automations_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if new.key is distinct from old.key then
+        raise exception 'the key of an email automation is fixed'
+            using errcode = 'check_violation', detail = 'email_automation_locked';
+    end if;
+    if not exists (select 1 from public.email_templates t
+                    where t.key = new.template_key and t.scope = 'quote') then
+        raise exception 'unknown quotation template %', new.template_key
+            using errcode = 'check_violation', detail = 'email_template_invalid';
+    end if;
+    new.updated_at := now();
+    new.updated_by := public.current_sale_id();
+    return new;
+end;
+$$;
+
+-- Queue one automatic message about a quotation, once.
+--
+-- Internal, and the ONE writer of automatic mail. Returns what it did as a
+-- word -- 'queued', or the reason nothing was queued -- so the sweep and the
+-- tests can tell "not due" from "refused" from "already sent".
+--
+-- The text is the template's, unfilled: the dispatcher fills it from
+-- `variables`, with the same function the compose dialog uses, so an automatic
+-- message and a hand-written one format a total and a date identically.
+create or replace function public.email_automation_enqueue(
+    p_key        text,
+    p_quote_id   bigint,
+    p_version_id bigint,
+    p_to_email   text,
+    p_to_name    text,
+    p_step       integer,
+    p_language   text default null,
+    p_variables  jsonb default null
+) returns text
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_rule      public.email_automations;
+    v_settings  public.email_settings;
+    v_quote     public.quotes;
+    v_template  public.email_templates;
+    v_owner     public.sales;
+    v_email     text := lower(btrim(coalesce(p_to_email, '')));
+    v_name      text := nullif(btrim(coalesce(p_to_name, '')), '');
+    v_language  text := coalesce(nullif(btrim(p_language), ''), 'es');
+    v_variables jsonb;
+    v_id        bigint;
+begin
+    select * into v_rule from public.email_automations a where a.key = p_key;
+    if not found or v_rule.state <> 'enabled' then
+        return 'rule_not_enabled';
+    end if;
+
+    select * into v_settings from public.email_settings s where s.id = 1;
+    if not found or not v_settings.is_enabled then
+        return 'email_disabled';
+    end if;
+
+    select * into v_quote from public.quotes q where q.id = p_quote_id;
+    if not found then
+        return 'quote_not_found';
+    end if;
+
+    if not public.is_valid_email(v_email) then
+        return 'no_recipient';
+    end if;
+    if public.email_is_suppressed(v_email) then
+        return 'recipient_suppressed';
+    end if;
+    if v_name is not null and (char_length(v_name) > 120 or v_name ~ '[[:cntrl:]"<>]') then
+        v_name := null;
+    end if;
+
+    -- The same ceiling a person is held to: an automation is not a way to
+    -- write to somebody more often than the team may.
+    perform pg_advisory_xact_lock(hashtextextended('email:to:' || v_email, 0));
+    if (select count(*) from public.email_messages m
+         where m.to_email = v_email
+           and m.created_at > now() - interval '1 day'
+           and m.status not in ('canceled', 'failed')) >= v_settings.max_per_recipient_day then
+        return 'rate_limited';
+    end if;
+
+    select * into v_template
+      from public.email_templates t
+     where t.key = v_rule.template_key and t.scope = 'quote' and t.is_active
+     order by (t.language = v_language) desc, t.language
+     limit 1;
+    if not found then
+        return 'no_template';
+    end if;
+
+    -- Signed by the quotation's owner: there is no "current user" in a sweep.
+    select * into v_owner from public.sales s where s.id = v_quote.sales_id;
+    v_variables := coalesce(p_variables,
+                            public.email_entity_variables('quote', p_quote_id, p_version_id))
+        || jsonb_build_object(
+               'sender_name', coalesce(
+                   nullif(btrim(concat_ws(' ', v_owner.first_name, v_owner.last_name)), ''), ''),
+               'sender_email', coalesce(v_owner.email::text, ''));
+
+    insert into public.email_messages
+        (sales_id, origin, automation_key, category, language, to_email, to_name,
+         subject, body_text, template_id, template_key, variables,
+         entity_type, entity_id, quote_id, quote_version_id,
+         idempotency_key, dedupe_key)
+    values
+        (v_quote.sales_id, 'automation', p_key, v_template.category,
+         v_template.language, v_email, v_name,
+         v_template.subject, v_template.body, v_template.id, v_template.key,
+         v_variables, 'quote', p_quote_id, p_quote_id, p_version_id,
+         gen_random_uuid(),
+         -- "This rule, this version, this step, once."
+         format('auto:%s:%s:%s', p_key, p_version_id, p_step))
+    on conflict (dedupe_key) do nothing
+    returning id into v_id;
+
+    return case when v_id is null then 'already_sent' else 'queued' end;
+end;
+$$;
+
+-- The confirmation of an acceptance.
+--
+-- To the address the customer signed with, or the document's contact. When the
+-- quotation was raised against a deal and the pipeline has a rule for
+-- "accepted", the confirmation waits for the deal to BE in that stage: a
+-- customer is not congratulated on a sale the pipeline has not recorded.
+create or replace function public.email_automation_quote_accepted(p_quote_id bigint)
+returns text
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote   public.quotes;
+    v_version public.quote_versions;
+    v_stage   text;
+    v_last    public.email_messages;
+begin
+    select * into v_quote from public.quotes q where q.id = p_quote_id;
+    if not found or v_quote.status_key <> 'accepted' then
+        return 'not_accepted';
+    end if;
+
+    select * into v_version
+      from public.quote_versions v
+     where v.quote_id = p_quote_id and v.accepted_at is not null
+     order by v.version_number desc
+     limit 1;
+    if not found then
+        return 'not_accepted';
+    end if;
+
+    if v_quote.deal_id is not null then
+        select r.to_stage into v_stage
+          from public.deal_quote_stage_rules r where r.trigger_key = 'accepted';
+        if v_stage is not null and not exists (
+            select 1 from public.deals d
+             where d.id = v_quote.deal_id and d.stage = v_stage) then
+            return 'deal_not_won';
+        end if;
+    end if;
+
+    -- The language, and the date as the sender read it, of what the customer
+    -- was last sent about this version.
+    select * into v_last
+      from public.email_messages m
+     where m.quote_version_id = v_version.id and m.origin = 'manual'
+     order by m.created_at desc
+     limit 1;
+
+    return public.email_automation_enqueue(
+        'quote_accepted', p_quote_id, v_version.id,
+        coalesce(v_version.accepted_by_email::text,
+                 v_version.party_snapshot -> 'contact' ->> 'email'),
+        coalesce(v_version.accepted_by_name,
+                 nullif(btrim(concat_ws(' ',
+                     v_version.party_snapshot -> 'contact' ->> 'first_name',
+                     v_version.party_snapshot -> 'contact' ->> 'last_name')), '')),
+        1, v_last.language, v_last.variables);
+end;
+$$;
+
+-- An acceptance happens in the CUSTOMER's transaction (`quote_portal_accept`).
+-- Whatever goes wrong with a courtesy email must never undo it: the failure
+-- becomes a warning, the acceptance stands.
+create or replace function public.quotes_email_automation() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    begin
+        perform public.email_automation_quote_accepted(new.id);
+    exception when others then
+        raise warning 'acceptance confirmation for quote % not queued: %', new.id, sqlerrm;
+    end;
+    return null;
+end;
+$$;
+
+-- The follow-up sweep (hourly).
+--
+-- A reminder goes ONLY to an address somebody already sent this version to, and
+-- counts its days from that message -- so nobody is written to who was not
+-- chosen by a person first. Before queueing it checks, again, everything a
+-- person's send checks: the version is still the live offer
+-- (`email_quote_share_block()`), the customer has not answered or started
+-- negotiating, the address is not suppressed, the step was not already sent.
+create or replace function public.email_automation_followups() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_rule      public.email_automations;
+    v_candidate record;
+    v_sent      integer;
+    v_queued    integer := 0;
+begin
+    select * into v_rule from public.email_automations a where a.key = 'quote_followup';
+    if not found or v_rule.state <> 'enabled' then
+        return 0;
+    end if;
+
+    for v_candidate in
+        select distinct on (m.quote_version_id)
+               m.quote_id, m.quote_version_id, m.to_email::text as to_email,
+               m.to_name, m.created_at, m.language, m.variables
+          from public.email_messages m
+          join public.quotes q on q.id = m.quote_id
+         where m.origin = 'manual'
+           and m.quote_version_id is not null
+           and m.status in ('accepted', 'delivered', 'simulated')
+           -- Waiting for an answer: not answered, not being negotiated.
+           and q.status_key in ('sent', 'viewed', 'under_review')
+         order by m.quote_version_id, m.created_at desc
+    loop
+        if public.email_quote_share_block(v_candidate.quote_id, v_candidate.quote_version_id)
+               is not null then
+            continue;
+        end if;
+
+        select count(*) into v_sent
+          from public.email_messages a
+         where a.origin = 'automation'
+           and a.automation_key = 'quote_followup'
+           and a.quote_version_id = v_candidate.quote_version_id;
+
+        if v_sent >= v_rule.max_sends
+           or now() < v_candidate.created_at
+                      + make_interval(days => (v_sent + 1) * v_rule.delay_days) then
+            continue;
+        end if;
+
+        if public.email_automation_enqueue(
+               'quote_followup', v_candidate.quote_id, v_candidate.quote_version_id,
+               v_candidate.to_email, v_candidate.to_name, v_sent + 1,
+               v_candidate.language, v_candidate.variables) = 'queued' then
+            v_queued := v_queued + 1;
+        end if;
+    end loop;
+
+    return v_queued;
+end;
+$$;
+
+-- A message that bounced or failed for good is news for whoever sent it: one
+-- in-app notification, on the record the message was written from. The
+-- database writes the KEY and its parameters, never a sentence
+-- (`notificationText.ts` renders them in the reader's language).
+create or replace function public.email_messages_notify() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if new.status not in ('bounced', 'failed')
+       or new.status is not distinct from old.status
+       or new.sales_id is null
+       or new.entity_type is null then
+        return null;
+    end if;
+
+    begin
+        insert into public.task_notifications (
+            task_id, entity_type, entity_id, recipient_id, channel,
+            scheduled_for, title, body, message_key, message_params,
+            dedupe_key, status, sent_at, delivered_at)
+        select null, new.entity_type, new.entity_id, s.id, 'in_app',
+               now(),
+               format('An email to %s %s', new.to_email,
+                      case new.status when 'bounced' then 'bounced' else 'could not be sent' end),
+               new.subject,
+               'crm.notifications.email.' || new.status,
+               jsonb_build_object('to', new.to_email, 'subject', new.subject),
+               format('email:%s:%s', new.id, new.status),
+               'delivered', now(), now()
+          from public.sales s
+         where s.id = new.sales_id and s.disabled is not true
+        on conflict (dedupe_key) do nothing;
+    exception when others then
+        -- A notification is a courtesy; the delivery record is the fact.
+        raise warning 'email % status notification not written: %', new.id, sqlerrm;
+    end;
+    return null;
+end;
+$$;
+
+-- The scheduled tick of the team's own notification emails
+-- (`task-notification-worker`), which nothing called until now: posts to the
+-- worker with the URL and key held in Vault (`task_worker_url`,
+-- `task_worker_service_key`). A no-op until both exist, and when nothing waits.
+create or replace function public.task_notification_worker_tick() returns bigint
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_url text;
+    v_key text;
+begin
+    if not exists (select 1 from public.task_notifications n
+                    where n.status = 'queued'
+                      and n.channel <> 'in_app'
+                      and n.scheduled_for <= now()) then
+        return null;
+    end if;
+
+    select d.decrypted_secret into v_url
+      from vault.decrypted_secrets d where d.name = 'task_worker_url';
+    select d.decrypted_secret into v_key
+      from vault.decrypted_secrets d where d.name = 'task_worker_service_key';
+    if v_url is null or v_key is null then
+        return null;
+    end if;
+
+    return net.http_post(
+        url                  := v_url,
+        body                 := jsonb_build_object('trigger', 'cron'),
+        headers              := jsonb_build_object(
+                                    'Content-Type', 'application/json',
+                                    'Authorization', 'Bearer ' || v_key),
+        timeout_milliseconds := 60000);
+end;
+$$;
+
+-- The retention path of the message history: service_role only, through the
+-- `app.quote_purge` hatch the other append-only tables share. The e2e reset
+-- calls it before `purge_quotes()`, because a message pins its sender.
+create or replace function public.purge_emails() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_count integer;
+begin
+    perform set_config('app.quote_purge', 'on', true);
+    delete from public.email_suppressions where email is not null;
+    delete from public.email_message_events where id is not null;
+    delete from public.email_messages where id is not null;
+    get diagnostics v_count = row_count;
+    perform set_config('app.quote_purge', '', true);
+    return v_count;
+end;
+$$;

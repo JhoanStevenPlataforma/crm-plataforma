@@ -30,6 +30,7 @@ import { EntityTasksPanel } from "../tasks/EntityTasksPanel";
 import { EntityTimeline } from "../timeline/EntityTimeline";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { Deal } from "../types";
+import { SendEmailButton } from "../emails/SendEmailButton";
 import { ContactList } from "./ContactList";
 import { formatMoney } from "../misc/reporting";
 import { findDealLabel, formatISODateString, isPastDay } from "./dealUtils";
@@ -84,6 +85,7 @@ const DealShowContent = () => {
                 </>
               ) : (
                 <>
+                  <SendEmailButton entityType="deal" entityId={record.id} />
                   <ArchiveButton record={record} />
                   <EditButton />
                 </>

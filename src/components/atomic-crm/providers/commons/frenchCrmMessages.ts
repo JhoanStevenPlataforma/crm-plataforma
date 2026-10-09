@@ -1280,6 +1280,7 @@ export const frenchCrmMessages = {
         events: {
           quote_status_changed: "Statut du devis modifié",
           quote_commented: "Le client a répondu",
+          email_message: "E-mail au client",
           // Not a task event: the timeline is shared, and this is how a
           // deal's stage transition is labelled on it.
           deal_stage_changed: "Étape modifiée",
@@ -1667,6 +1668,331 @@ export const frenchCrmMessages = {
           "Impossible d'envoyer des images ou des vidéos dans la démo : aucun stockage derrière.",
         save_failed:
           "La diapositive n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.",
+      },
+    },
+    email: {
+      action: {
+        send: "Envoyer un e-mail",
+        send_quote: "Envoyer par e-mail",
+      },
+      demo_unavailable:
+        "Indisponible en mode démo : un onglet de navigateur n'a pas de coffre où garder un secret.",
+      status: {
+        pending: "En file d'attente",
+        processing: "Envoi en cours",
+        accepted: "Accepté par le fournisseur",
+        delivered: "Remis",
+        bounced: "Rejeté",
+        failed: "Échec",
+        canceled: "Annulé",
+        simulated: "Simulé, non envoyé",
+      },
+      result: {
+        pending: "Le message est en file d'attente et partira dans la minute.",
+        processing: "Le message est en cours d'envoi.",
+        accepted:
+          "Le fournisseur d'e-mail a accepté le message. La remise dans la boîte n'est pas encore confirmée.",
+        delivered: "Le serveur du destinataire a confirmé la remise.",
+        bounced: "Le serveur du destinataire a rejeté le message.",
+        failed: "Le message n'a pas pu être envoyé.",
+        canceled: "Le message a été annulé avant son envoi.",
+        simulated:
+          "Envoi simulé : le fournisseur d'e-mail n'est pas configuré, aucun e-mail n'a quitté le CRM.",
+      },
+      fields: {
+        to: "À",
+        subject: "Objet",
+        body: "Message",
+        template: "Modèle",
+      },
+      compose: {
+        title: "Envoyer un e-mail",
+        title_quote: "Envoyer le devis par e-mail",
+        description:
+          "Le message part de l'adresse de l'entreprise et reste dans l'historique de cette fiche.",
+        description_quote:
+          "Le client reçoit le lien vers la version %{version}, celle déjà émise. L'envoi n'émet pas et ne modifie pas le devis.",
+        write: "Rédiger",
+        preview: "Aperçu",
+        to_placeholder: "Choisir un destinataire",
+        other_address: "Autre adresse…",
+        address_placeholder: "nom@entreprise.com",
+        no_recipients:
+          "Cette fiche n'a aucune adresse e-mail. Ajoutez-en une au contact d'abord.",
+        related_only:
+          "Vous pouvez écrire aux adresses de cette fiche. Un manager peut utiliser une autre adresse.",
+        no_template: "Sans modèle",
+        body_hint:
+          "Texte brut. Il est placé dans la mise en page de l'entreprise à l'envoi.",
+        body_hint_quote:
+          "Texte brut. {{quote_link}} est remplacé par le lien du client à l'envoi.",
+        unresolved:
+          "Renseignez ou retirez ces variables avant l'envoi : %{variables}",
+        simulated_notice:
+          "Mode simulé : le fournisseur d'e-mail n'est pas configuré. Le message sera enregistré, mais aucun e-mail ne partira.",
+        not_ready:
+          "L'e-mail n'est pas prêt : un administrateur doit terminer la configuration du fournisseur.",
+        link_appended:
+          "Le message n'a pas le repère {{quote_link}} : le lien est ajouté après le texte.",
+        send: "Envoyer",
+        suppressed: "supprimée",
+        sending: "Envoi…",
+        send_anyway: "Envoyer quand même",
+      },
+      quote_block: {
+        quote_not_found: "Le devis n'existe plus.",
+        quote_not_issued:
+          "Ce devis n'a pas encore été émis. Émettez-le avant de l'envoyer.",
+        version_superseded:
+          "Une version plus récente a été émise. Envoyez celle-là : le lien l'ouvre.",
+        version_answered: "Le client a déjà répondu à cette version.",
+        quote_closed: "Le devis est clos (accepté, refusé, expiré ou annulé).",
+        quote_revision_open:
+          "Une révision est en cours. Émettez-la avant de renvoyer le devis.",
+        version_expired:
+          "La validité de l'offre est dépassée. Révisez le devis pour le renvoyer.",
+      },
+      errors: {
+        generic: "L'e-mail n'a pas pu être traité.",
+        email_forbidden: "Vous n'avez pas la permission de faire cela.",
+        email_entity_invalid:
+          "Les e-mails ne peuvent pas être envoyés depuis cette fiche.",
+        email_disabled: "L'envoi d'e-mails est désactivé.",
+        email_not_configured:
+          "Le fournisseur d'e-mail n'est pas configuré : il manque l'adresse d'expédition ou les identifiants.",
+        email_recipient_invalid: "L'adresse du destinataire n'est pas valide.",
+        email_recipient_not_allowed:
+          "Cette adresse n'est pas liée à cette fiche. Seul un manager ou un administrateur peut utiliser une autre adresse.",
+        email_recipient_suppressed:
+          "Cette adresse est sur la liste de suppression : rejet définitif ou message signalé comme spam.",
+        email_subject_invalid:
+          "L'objet est vide, trop long ou contient un saut de ligne.",
+        email_body_invalid: "Le message est vide ou trop long.",
+        email_unresolved_variable:
+          "Le message contient encore une variable non renseignée.",
+        email_template_invalid: "Ce modèle n'existe pas ou est inactif.",
+        email_rate_limited:
+          "Trop d'e-mails en peu de temps. Réessayez plus tard.",
+        email_duplicate_recent:
+          "Le même message a été envoyé à cette adresse il y a un instant. L'envoyer à nouveau ?",
+        email_quote_not_shareable:
+          "Ce devis ne peut pas être partagé pour le moment.",
+        email_not_retryable: "Seul un message en échec peut être relancé.",
+        email_idempotency_required: "Le message n'a pas pu être identifié.",
+        email_template_unknown_variable:
+          "Le modèle utilise une variable indisponible pour son type.",
+        email_template_locked:
+          "Un modèle système ne peut être ni supprimé ni renommé.",
+        email_settings_column_protected:
+          "Les identifiants s'enregistrent avec leur propre formulaire, pas avec les réglages.",
+      },
+      delivery_errors: {
+        provider_unauthorized:
+          "Le fournisseur d'e-mail a refusé les identifiants.",
+        provider_unavailable:
+          "Le fournisseur d'e-mail était momentanément indisponible.",
+        provider_unreachable: "Le fournisseur d'e-mail est injoignable.",
+        provider_rejected: "Le fournisseur d'e-mail a rejeté le message.",
+        recipient_inactive:
+          "Le fournisseur n'envoie plus à cette adresse (rejet ou plainte antérieurs).",
+        recipient_invalid: "Le fournisseur juge l'adresse invalide.",
+        email_not_configured:
+          "Le fournisseur n'a pas d'identifiants ou pas d'adresse d'expédition.",
+        email_subject_invalid: "L'objet n'est pas valide.",
+        email_provider_unknown:
+          "Le fournisseur configuré n'est pas disponible dans ce déploiement.",
+        email_base_url_missing:
+          "L'adresse publique du CRM n'est pas configurée : le lien n'a pas pu être construit.",
+        email_link_unavailable: "Le lien du client n'a pas pu être lu.",
+        email_quote_link_missing:
+          "Le devis n'a pas de lien client actif. Créez-le puis relancez.",
+        email_quote_not_shareable:
+          "Le devis a changé avant le départ du message : il n'a pas été envoyé.",
+        recipient_bounced: "Le serveur du destinataire a rejeté le message.",
+        email_recipient_suppressed:
+          "L'adresse a été ajoutée à la liste de suppression avant le départ du message.",
+        email_dispatch_interrupted:
+          "L'envoi a été interrompu et son issue est inconnue. Vérifiez auprès du client avant de relancer.",
+      },
+      history: {
+        title: "E-mails",
+        empty: "Aucun e-mail envoyé pour l'instant.",
+        load_error: "Les e-mails n'ont pas pu être chargés.",
+        quote_hint: "Envoyez au client le lien du devis émis.",
+        status: "Statut",
+        all_statuses: "Tous les statuts",
+        search: "Destinataire ou objet",
+        count: "%{shown} sur %{total} messages",
+        date: "Date",
+        sender: "Envoyé par",
+        problem: "Problème",
+        load_more: "Charger plus",
+        automatic: "Automatique",
+      },
+      message: {
+        title: "E-mail",
+        to: "À %{address}",
+        attempts: "%{count} tentatives",
+        retry: "Relancer",
+        retried: "Le message a été remis en file d'attente",
+        quote: "Devis",
+        quote_version: "%{number}, version %{version}",
+        provider_id: "ID du fournisseur",
+        moments: {
+          created: "Créé",
+          accepted: "Accepté",
+          delivered: "Remis",
+          bounced: "Rejeté",
+          failed: "Échec",
+        },
+      },
+      tabs: {
+        history: "Historique",
+        suppressions: "Adresses supprimées",
+        templates: "Modèles",
+        settings: "Fournisseur",
+      },
+      events: {
+        title: "Ce que le fournisseur a signalé",
+        delivered: "Remis au serveur du destinataire",
+        bounced: "Rejeté",
+        complained: "Signalé comme spam",
+        permanent: "définitif",
+      },
+      suppressions: {
+        description:
+          "Adresses auxquelles le CRM n'écrit plus : rejet définitif, message signalé comme spam, ou ajout manuel.",
+        empty: "Aucune adresse n'est supprimée.",
+        load_error: "Les adresses supprimées n'ont pas pu être chargées.",
+        address: "Adresse",
+        reason: "Motif",
+        detail: "Détail",
+        since: "Depuis",
+        remove: "Retirer de la liste",
+        removed: "Cette adresse peut de nouveau recevoir des messages",
+        add_title: "Ajouter une adresse",
+        add_help:
+          "Pour un client qui a demandé à ne plus être contacté. Aucun message ne lui sera envoyé.",
+        add: "Ajouter",
+        added: "Adresse ajoutée à la liste",
+        reasons: {
+          hard_bounce: "Rejet définitif",
+          complaint: "Plainte pour spam",
+          manual: "Ajoutée à la main",
+        },
+      },
+      templates: {
+        description:
+          "Les messages proposés par la fenêtre d'envoi. Un modèle inactif est un brouillon visible des seuls administrateurs.",
+        new: "Nouveau modèle",
+        empty: "Il n'y a pas encore de modèle.",
+        load_error: "Les modèles n'ont pas pu être chargés.",
+        name: "Nom",
+        key: "Clé",
+        key_help:
+          "Minuscules, chiffres et tirets bas. Les automatisations désignent un modèle par sa clé.",
+        scope: "Utilisé sur",
+        language: "Langue",
+        category: "Type",
+        state: "État",
+        active: "Actif",
+        inactive: "Inactif",
+        system: "Système",
+        active_label: "Proposé dans la fenêtre d'envoi",
+        new_title: "Nouveau modèle",
+        edit_title: "Modifier le modèle",
+        dialog_help:
+          "Texte brut. Les variables s'écrivent entre doubles accolades et sont renseignées depuis la fiche.",
+        system_help:
+          "Modèle système : son texte peut être modifié, pas sa clé, sa portée ni sa langue, et il ne peut pas être supprimé.",
+        variables: "Variables disponibles : %{variables}",
+        unknown_variables:
+          "Ces variables n'existent pas pour ce type de fiche : %{variables}",
+        link_in_subject: "Le lien du devis ne peut pas figurer dans l'objet.",
+        saved: "Modèle enregistré",
+        deleted: "Modèle supprimé",
+        scopes: {
+          generic: "Toute fiche",
+          contact: "Contacts",
+          lead: "Prospects",
+          company: "Entreprises",
+          deal: "Opportunités",
+          quote: "Devis",
+        },
+        categories: {
+          transactional: "Message individuel",
+          commercial: "Relance commerciale",
+        },
+      },
+      settings: {
+        nav: "E-mail",
+        title: "E-mail",
+        description:
+          "Le fournisseur qui envoie les e-mails du CRM, l'adresse d'expédition et ses identifiants.",
+        load_error: "Les réglages d'e-mail n'ont pas pu être chargés.",
+        saved: "Réglages d'e-mail enregistrés",
+        state: {
+          disabled: "L'envoi d'e-mails est désactivé",
+          simulated: "Mode simulé : aucun e-mail ne quitte le CRM",
+          ready: "Le fournisseur est configuré",
+          incomplete: "Le fournisseur n'est pas entièrement configuré",
+        },
+        state_hint: {
+          disabled:
+            "Personne ne peut envoyer d'e-mails tant qu'il n'est pas activé.",
+          simulated:
+            "Les messages sont enregistrés comme simulés. Choisissez un vrai fournisseur pour envoyer.",
+          ready:
+            "Envoyez un message de test pour le confirmer. En production, le domaine d'expédition doit aussi être vérifié avec SPF, DKIM et DMARC.",
+          incomplete:
+            "Il manque l'adresse d'expédition ou les identifiants du fournisseur : rien ne peut être envoyé.",
+        },
+        provider_title: "Fournisseur et expéditeur",
+        provider_help:
+          "Tous les e-mails partent d'une adresse vérifiée. Les réponses peuvent revenir à la personne qui a envoyé le message.",
+        enabled: "Envoi d'e-mails activé",
+        provider: "Fournisseur",
+        providers: {
+          mock: "Simulé (n'envoie rien)",
+          postmark: "Postmark",
+        },
+        from_email: "Adresse d'expédition",
+        from_name: "Nom de l'expéditeur",
+        from_help:
+          "L'adresse doit appartenir à un domaine vérifié chez le fournisseur.",
+        reply_to: "Les réponses vont à",
+        reply_to_modes: {
+          sender: "L'utilisateur qui a envoyé le message",
+          none: "L'adresse d'expédition",
+        },
+        transactional_stream: "Flux pour les messages individuels",
+        commercial_stream: "Flux pour les relances commerciales",
+        max_per_user_hour: "E-mails par utilisateur et par heure",
+        max_per_recipient_day: "E-mails par destinataire et par jour",
+        secrets_title: "Identifiants",
+        secrets_description:
+          "Stockés chiffrés sur le serveur. Ils ne sont plus jamais affichés, ni ici ni ailleurs.",
+        secrets: {
+          credentials: "Jeton d'API du fournisseur",
+          webhook: "Secret du webhook de remise",
+        },
+        secrets_help: {
+          credentials: "Le server token du serveur d'envoi du fournisseur.",
+          webhook:
+            "Ce que le fournisseur doit présenter lorsqu'il signale remises et rejets.",
+        },
+        secret_stored: "Enregistré",
+        secret_missing: "Non défini",
+        secret_saved: "Secret enregistré",
+        secret_cleared: "Secret supprimé",
+        secret_clear: "Retirer",
+        test_title: "Message de test",
+        test_help:
+          "Envoie un message avec la configuration ci-dessus, à l'adresse de votre choix.",
+        test_send: "Envoyer le test",
+        test_subject: "Message de test du CRM",
+        test_body:
+          "Ceci est un message de test du CRM. Si vous le lisez, l'envoi d'e-mails fonctionne.",
       },
     },
     fx: {

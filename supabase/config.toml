@@ -193,3 +193,13 @@ verify_jwt = false
 # which one itself, so the gateway does not need to verify a JWT.
 [functions.exchange-rates-sync]
 verify_jwt = false
+# Outbound email dispatcher (docs/proposals/outbound-email.md). Called by pg_cron
+# with the service-role key, or by the user who has just queued a message; the
+# function checks which one itself.
+[functions.email-dispatch]
+verify_jwt = false
+# Delivery webhook of the mail provider (docs/proposals/outbound-email.md): the
+# caller is a provider, not a user. The function authenticates it with the secret
+# stored in Vault.
+[functions.email-webhook]
+verify_jwt = false

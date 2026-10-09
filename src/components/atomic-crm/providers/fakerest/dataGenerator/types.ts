@@ -54,6 +54,11 @@ import type {
   ExchangeRateProvider,
   ExchangeRateSettings,
   ExchangeRateSyncRun,
+  EmailMessage,
+  EmailMessageEvent,
+  EmailSettings,
+  EmailSuppression,
+  EmailTemplate,
 } from "../../../types";
 import type { ConfigurationContextValue } from "../../../root/ConfigurationContext";
 
@@ -157,4 +162,14 @@ export interface Db {
   exchange_rates: ExchangeRate[];
   exchange_rate_sync_runs: ExchangeRateSyncRun[];
   exchange_rate_audit_logs: ExchangeRateAuditLog[];
+  // Outbound email. Templates are seeded as the migration seeds them; the
+  // messages start empty, because each is a record of something that
+  // happened -- and in a demo tab nothing is ever sent, only simulated.
+  email_settings: EmailSettings[];
+  email_templates: EmailTemplate[];
+  email_messages: EmailMessage[];
+  // What a provider reported, and the addresses it made unreachable: both
+  // empty, for a demo tab has no provider to report anything.
+  email_message_events: EmailMessageEvent[];
+  email_suppressions: EmailSuppression[];
 }

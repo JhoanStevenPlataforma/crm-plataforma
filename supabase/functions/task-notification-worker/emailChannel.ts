@@ -1,3 +1,4 @@
+import { postmarkProvider } from "../_shared/email/postmark.ts";
 import type { EmailMessage } from "./notificationMessage.ts";
 
 /**
@@ -6,9 +7,11 @@ import type { EmailMessage } from "./notificationMessage.ts";
  * The repo already talks to Postmark for INBOUND mail (`functions/postmark`),
  * so outbound reuses the same account rather than introducing a second
  * provider — one set of credentials, one deliverability reputation.
+ *
+ * The request itself is the shared provider's (`_shared/email/postmark.ts`),
+ * the one the customer-facing dispatcher uses: one place writes headers and
+ * reads Postmark's answer.
  */
-
-const POSTMARK_ENDPOINT = "https://api.postmarkapp.com/email";
 
 export type SendResult =
   | { ok: true; providerMessageId: string | null }
@@ -46,41 +49,19 @@ export const sendEmail = async (
   message: EmailMessage,
   config: EmailConfig,
 ): Promise<SendResult> => {
-  try {
-    const response = await fetch(POSTMARK_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "X-Postmark-Server-Token": config.serverToken,
-      },
-      body: JSON.stringify({
-        From: config.fromEmail,
-        To: message.to,
-        Subject: message.subject,
-        TextBody: message.textBody,
-        MessageStream: config.messageStream,
-      }),
-    });
+  const result = await postmarkProvider.send(
+    {
+      from: { email: config.fromEmail },
+      to: { email: message.to },
+      subject: message.subject,
+      textBody: message.textBody,
+      messageStream: config.messageStream,
+    },
+    config.serverToken,
+    fetch,
+  );
 
-    const payload = (await response.json().catch(() => null)) as {
-      MessageID?: string;
-      Message?: string;
-      ErrorCode?: number;
-    } | null;
-
-    if (!response.ok || (payload?.ErrorCode ?? 0) !== 0) {
-      return {
-        ok: false,
-        error: payload?.Message ?? `postmark responded ${response.status}`,
-      };
-    }
-
-    return { ok: true, providerMessageId: payload?.MessageID ?? null };
-  } catch (error: unknown) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "unknown send error",
-    };
-  }
+  return result.ok
+    ? { ok: true, providerMessageId: result.providerMessageId }
+    : { ok: false, error: result.message };
 };

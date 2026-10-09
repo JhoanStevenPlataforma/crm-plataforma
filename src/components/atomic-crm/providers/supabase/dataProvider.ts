@@ -12,6 +12,7 @@ import type {
   Deal,
   DealNote,
   DealStageGate,
+  EmailMessage,
   RAFile,
   ReportCatalog,
   ReportResult,
@@ -46,6 +47,7 @@ import { getIsInitialized } from "./authProvider";
 import { uploadPortalMedia } from "./portalMedia";
 import { uploadHelpMedia } from "./helpMedia";
 import type { HelpMediaKind } from "../../help/helpMedia";
+import { createEmailMethods, type EmailClient } from "./emailMethods";
 import { createFxMethods, type FxClient } from "./fxMethods";
 import { createQuoteMethods } from "./quoteMethods";
 import { subscribeToQuoteChanges, type Unsubscribe } from "./quoteRealtime";
@@ -60,7 +62,11 @@ const getBaseDataProvider = () =>
     supabaseClient: getSupabaseClient(),
     sortOrder: "asc,desc.nullslast" as any,
     // A currency is keyed by its ISO code, not by a surrogate id.
-    primaryKeys: new Map([["currencies", ["code"]]]),
+    primaryKeys: new Map([
+      ["currencies", ["code"]],
+      // The suppressed address IS the row (outbound-email.md).
+      ["email_suppressions", ["email"]],
+    ]),
   });
 
 /**
@@ -898,6 +904,13 @@ const getDataProviderWithCustomMethods = () => {
     ...createQuoteMethods(getSupabaseClient),
     /** Currencies & exchange rates (docs/proposals/multi-currency-fx.md). */
     ...createFxMethods(() => getSupabaseClient() as unknown as FxClient),
+    /** Outbound email (docs/proposals/outbound-email.md). */
+    ...createEmailMethods(
+      () => getSupabaseClient() as unknown as EmailClient,
+      async (id) =>
+        (await baseDataProvider.getOne<EmailMessage>("email_messages", { id }))
+          .data,
+    ),
     /** Supabase Realtime, filtered to one quote (quotes §6.5). */
     subscribeToQuoteChanges: (
       quoteId: Identifier,
