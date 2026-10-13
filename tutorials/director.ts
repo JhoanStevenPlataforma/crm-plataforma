@@ -41,6 +41,13 @@ interface TutorialWindow {
 const readingTime = (text: string): number =>
   Math.min(6500, Math.max(2200, text.length * 62));
 
+/**
+ * `TUTORIAL_REHEARSAL=1` runs a script at a fraction of its pauses, to find
+ * the locator that no longer matches without sitting through the film. What
+ * it records is not watchable; record again without it.
+ */
+const PACE = process.env.TUTORIAL_REHEARSAL ? 0.04 : 1;
+
 const POINTER_TRAVEL_MS = 560;
 const BEFORE_CLICK_MS = 380;
 const AFTER_CLICK_MS = 520;
@@ -74,7 +81,7 @@ export class Director {
   }
 
   pause(ms: number): Promise<void> {
-    return this.page.waitForTimeout(ms);
+    return this.page.waitForTimeout(ms * PACE);
   }
 
   /** The opening card: what the viewer is about to learn, in one line. */
@@ -86,6 +93,22 @@ export class Director {
       text: `${title}. ${subtitle}`,
     });
     await this.pause(3200);
+  }
+
+  /**
+   * A card in the middle of a film: the title of the part that begins. For a
+   * film long enough to have parts; a tutorial has one subject and no need.
+   */
+  async chapter(title: string, subtitle: string): Promise<void> {
+    await this.overlay("caption", null);
+    await this.overlay("ring", null);
+    await this.overlay("zoom", null);
+    const start = this.now();
+    await this.overlay("card", { eyebrow: this.eyebrow, title, subtitle });
+    await this.pause(Math.max(3200, (title.length + subtitle.length) * 55));
+    this.cues.push({ start, end: this.now(), text: `${title}. ${subtitle}` });
+    await this.overlay("card", null);
+    await this.pause(500);
   }
 
   /** Lifts the opening card once the screen behind it is ready. */
@@ -163,7 +186,7 @@ export class Director {
   async type(target: Locator, text: string): Promise<void> {
     await this.click(target);
     await target.press("ControlOrMeta+a");
-    await target.pressSequentially(text, { delay: TYPING_DELAY_MS });
+    await target.pressSequentially(text, { delay: TYPING_DELAY_MS * PACE });
     await this.pause(280);
   }
 

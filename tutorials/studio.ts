@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import type { BrowserContextOptions, Page } from "@playwright/test";
 
-import { expect, test as base } from "../e2e/fixtures";
+import { type CrmRole, expect, test as base } from "../e2e/fixtures";
 import { Director } from "./director";
 import { installOverlay } from "./overlay";
 
@@ -52,11 +52,18 @@ export interface Studio {
   open: (route: string, title: string, subtitle: string) => Promise<void>;
 }
 
-export const test = base.extend<{ studio: Studio; eyebrow: string }>({
+export const test = base.extend<{
+  studio: Studio;
+  eyebrow: string;
+  presenterRole: CrmRole;
+}>({
   eyebrow: ["Manual", { option: true }],
+  // An admin for the film that tours the whole menu: a manager's sidebar has
+  // no portal slides and no settings.
+  presenterRole: [PRESENTER.role, { option: true }],
 
   studio: async (
-    { browser, baseURL, createSales, eyebrow },
+    { browser, baseURL, createSales, eyebrow, presenterRole },
     provide,
     testInfo,
   ) => {
@@ -65,7 +72,7 @@ export const test = base.extend<{ studio: Studio; eyebrow: string }>({
     await rm(outputDir, { recursive: true, force: true });
     await mkdir(outputDir, { recursive: true });
 
-    const presenter = await createSales(PRESENTER);
+    const presenter = await createSales({ ...PRESENTER, role: presenterRole });
 
     const options = {
       baseURL,

@@ -75,12 +75,14 @@ interface Factories {
     last_name: string;
     company_id: number;
     sales_id: number;
+    emails?: string[];
   }) => Promise<{ id: number }>;
   createDeal: (deal: {
     name: string;
     company_id: number;
     sales_id: number;
     amount: number;
+    stage?: string;
   }) => Promise<{ id: number }>;
   taxRateByCode: (code: string) => Promise<{ id: number }>;
 }
@@ -108,6 +110,13 @@ export const stockCatalogue = async (factories: Factories) => {
 export const openForBusiness = async (
   factories: Factories,
   presenterId: number,
+  // The product video picks the story up after the lead was converted, with
+  // the amount and the address it was given on camera.
+  {
+    dealAmount = 0,
+    dealStage,
+    contactEmail,
+  }: { dealAmount?: number; dealStage?: string; contactEmail?: string } = {},
 ) => {
   const catalogue = await stockCatalogue(factories);
   const priceList = await factories.createPriceList({
@@ -127,12 +136,14 @@ export const openForBusiness = async (
     ...CAST.contact,
     company_id: company.id,
     sales_id: presenterId,
+    ...(contactEmail ? { emails: [contactEmail] } : {}),
   });
   const deal = await factories.createDeal({
     name: CAST.deal,
     company_id: company.id,
     sales_id: presenterId,
-    amount: 0,
+    amount: dealAmount,
+    ...(dealStage ? { stage: dealStage } : {}),
   });
   return { catalogue, priceList, company, contact, deal };
 };
