@@ -7,6 +7,7 @@
  */
 export {
   QUOTE_LINK_MARKER,
+  emailIconUrl,
   emailLanguage,
   formatEmailDate,
   renderEmail,

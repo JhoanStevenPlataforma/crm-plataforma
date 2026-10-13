@@ -55,4 +55,17 @@ describe("LeadList", () => {
       .element(screen.getByRole("button", { name: /assign to/i }))
       .not.toBeInTheDocument();
   });
+
+  it("opens the CRM's compose dialog from a row's email icon, and stays on the list", async () => {
+    const screen = await render(<Success />);
+
+    await screen
+      .getByRole("table")
+      .getByRole("button", { name: "Send email" })
+      .first()
+      .click();
+
+    await expect.element(screen.getByRole("dialog")).toBeVisible();
+    await expect.element(screen.getByText("Lucia Prospect")).toBeVisible();
+  });
 });

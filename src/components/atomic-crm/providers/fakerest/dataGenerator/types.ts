@@ -57,6 +57,7 @@ import type {
   EmailMessage,
   EmailMessageEvent,
   EmailSettings,
+  EmailAutomation,
   EmailSuppression,
   EmailTemplate,
 } from "../../../types";
@@ -172,4 +173,7 @@ export interface Db {
   // empty, for a demo tab has no provider to report anything.
   email_message_events: EmailMessageEvent[];
   email_suppressions: EmailSuppression[];
+  // The two rules, switched off as the migration seeds them. A demo tab has
+  // no scheduler and no customer: the rows are there to be read and set.
+  email_automations: EmailAutomation[];
 }

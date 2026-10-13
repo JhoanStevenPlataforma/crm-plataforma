@@ -301,6 +301,63 @@ describe("dispatching the outbox", () => {
     expect(sent[0].body.HtmlBody).not.toContain("/#/quote#");
   });
 
+  it("fills an automation's template from the snapshot the message was queued with", async () => {
+    // Arrange: what `email_automation_enqueue()` stores is the template itself.
+    const { deps, sent } = stage({
+      messages: [
+        claimed({
+          language: "en",
+          subject: "Reminder: quotation {{quote_number}} from {{issuer_name}}",
+          body_text:
+            "Dear {{customer_name}},\n\nIssued on {{issue_date}}, for {{total}} {{currency}}.\n\n{{quote_link}}\n\n{{sender_name}}",
+          variables: {
+            quote_number: "Q-2026-00001",
+            issuer_name: "Acme",
+            customer_name: "Ana Compras",
+            issue_date: "2026-10-08",
+            total: "1234567.5",
+            currency: "COP",
+            sender_name: "Olga Ventas",
+          },
+        }),
+      ],
+      responses: [{ status: 200, body: { MessageID: "pm-3", ErrorCode: 0 } }],
+    });
+
+    // Act
+    await dispatchBatch({}, deps);
+
+    // Assert
+    expect(sent[0].body.Subject).toBe(
+      "Reminder: quotation Q-2026-00001 from Acme",
+    );
+    expect(sent[0].body.TextBody).toBe(
+      `Dear Ana Compras,\n\nIssued on October 8, 2026, for 1,234,567.50 COP.\n\nhttps://crm.test/#/quote#${TOKEN}\n\nOlga Ventas`,
+    );
+    expect(sent[0].body.HtmlBody).not.toContain("{{");
+  });
+
+  it("never lets a customer read braces, and never reads a value as a template", async () => {
+    const { deps, sent } = stage({
+      messages: [
+        claimed({
+          subject: "Hola {{customer_name}}\n{{deal_name}}",
+          body_text: "{{customer_name}} / {{valid_until}} / {{quote_link}}",
+          variables: { customer_name: "{{total}}", total: "300.00" },
+        }),
+      ],
+      responses: [{ status: 200, body: { MessageID: "pm-4", ErrorCode: 0 } }],
+    });
+
+    await dispatchBatch({}, deps);
+
+    // One line, whatever a value carried: a subject is a header.
+    expect(sent[0].body.Subject).toBe("Hola {{total}}");
+    expect(sent[0].body.TextBody).toBe(
+      `{{total}} /  / https://crm.test/#/quote#${TOKEN}`,
+    );
+  });
+
   it("goes on to the next message when one could not be settled", async () => {
     const { deps, sent } = stage({
       messages: [claimed({ id: 1 }), claimed({ id: 2 })],

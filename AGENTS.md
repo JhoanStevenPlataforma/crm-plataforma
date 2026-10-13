@@ -369,9 +369,11 @@ Rules that are easy to break from the outside:
 **`docs/proposals/outbound-email.md` is the reference** (migration
 `20261008120000_outbound_email.sql`, screens in `emails/`, settings at `/email`,
 the `email-dispatch` and `email-webhook` edge functions, the provider seam in
-`supabase/functions/_shared/email/`). Phases 1 and 2 of 3 are built; **the module is not
+`supabase/functions/_shared/email/`). The three phases are built, automations
+included (`20261010120000_outbound_email_automations.sql`); **the module is not
 production ready until a real provider and a verified sender domain are
-configured** — out of the box the provider is `mock` and nothing leaves.
+configured** — out of the box the provider is `mock`, nothing leaves, and both
+automations are switched off.
 
 Rules that are easy to break from the outside:
 
@@ -404,6 +406,24 @@ Rules that are easy to break from the outside:
 - **A free recipient is a manager's or an admin's**, checked in SQL
   (`email_entity_recipients()` + `can_manage_all()`); hiding the input is not
   the rule.
+- **Automatic mail is two seeded rules in `email_automations`**
+  (`quote_accepted`, `quote_followup`), read by managers and switched by admins:
+  `disabled` cancels what was waiting, `paused` keeps it. A rule is never a row
+  somebody inserts, and `email_automation_enqueue()` is the one writer of
+  automatic mail (`origin = 'automation'`, signed by the quotation's owner,
+  told once by its `dedupe_key` alone).
+- **An automation's message is stored as its TEMPLATE**; the dispatcher fills it
+  with `_shared/email/fillTemplate.ts`, the file the compose dialog uses. So
+  **never show `email_messages.subject` / `body_text` raw** — read a message
+  through `emailMessageText()`, or the team sees `{{braces}}`.
+- **The acceptance confirmation's trigger is on `quote_versions.accepted_at`**,
+  not on `quotes.status_key`: `quote_portal_accept()` moves the status first and
+  stamps the version after, so a trigger on the status finds no accepted
+  version and silently sends nothing.
+- **An automatic message leaves only through the scheduler** (the Vault secrets
+  `email_dispatch_url` / `email_dispatch_service_key`): nobody presses Send.
+- **The compose dialog opens on `quote_share` by KEY**: every template an
+  automation sends is a quotation template too.
 - Credentials live in Supabase Vault (`set_email_provider_secret()`), never in
   a table a client reads. Refusals are recognised by `error.details`
   (`EMAIL_ERROR` in `emailRpc.ts`).

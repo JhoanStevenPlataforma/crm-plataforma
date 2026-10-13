@@ -1789,6 +1789,45 @@ export const englishCrmMessages = {
           "The address was added to the suppression list before the message left.",
         email_dispatch_interrupted:
           "The send was interrupted and its outcome is unknown. Check with the customer before retrying.",
+        email_automation_disabled:
+          "The automation was switched off before the message left, so it was not sent.",
+      },
+      automations: {
+        description:
+          "Mail the CRM sends by itself. Both rules ship switched off: nothing is sent automatically until an administrator enables one.",
+        load_error: "The automations could not be loaded.",
+        saved: "The automation was saved",
+        state: "State",
+        template: "Template",
+        delay_days: "Days without an answer before reminding",
+        max_sends: "Reminders per quotation, at most",
+        followup_invalid:
+          "The wait must be between %{min_days} and %{max_days} days, and the reminders between %{min_sends} and %{max_sends}.",
+        states: {
+          disabled: "Off",
+          paused: "Paused",
+          enabled: "On",
+        },
+        state_help: {
+          disabled:
+            "Off: nothing is sent, and whatever was waiting to leave is canceled.",
+          paused:
+            "Paused: nothing is sent, and what was waiting keeps waiting until the rule is switched on again.",
+          enabled:
+            "On: the CRM sends this message by itself, signed by the owner of the quotation.",
+        },
+        rules: {
+          quote_accepted: {
+            title: "Acceptance confirmation",
+            description:
+              "When a customer accepts a quotation, they receive a confirmation at the address they signed with.",
+          },
+          quote_followup: {
+            title: "Quotation follow-up",
+            description:
+              "A reminder to the address a quotation was sent to by mail, when the customer has not answered after some days.",
+          },
+        },
       },
       history: {
         title: "Emails",
@@ -1826,6 +1865,7 @@ export const englishCrmMessages = {
         history: "History",
         suppressions: "Suppressed addresses",
         templates: "Templates",
+        automations: "Automations",
         settings: "Provider",
       },
       events: {
@@ -1917,8 +1957,7 @@ export const englishCrmMessages = {
           disabled: "Nobody can send emails until it is switched on.",
           simulated:
             "Messages are recorded as simulated. Choose a real provider to send.",
-          ready:
-            "Send a test message to confirm it. Production also needs the sender's domain verified with SPF, DKIM and DMARC.",
+          ready: "Send a test message to confirm it.",
           incomplete:
             "The sender address or the provider's credentials are missing: nothing can be sent.",
         },
@@ -1930,6 +1969,7 @@ export const englishCrmMessages = {
         providers: {
           mock: "Simulated (sends nothing)",
           postmark: "Postmark",
+          resend: "Resend",
         },
         from_email: "Sender address",
         from_name: "Sender name",
@@ -2273,6 +2313,18 @@ export const englishCrmMessages = {
           body: "The offer lapsed without an answer.",
         },
       },
+      /**
+       * A message to a customer that bounced, or failed for good, told to
+       * whoever signed it. The body is data: the subject they wrote.
+       */
+      email: {
+        bounced: {
+          title: "The email to %{to} bounced",
+        },
+        failed: {
+          title: "The email to %{to} could not be sent",
+        },
+      },
       fx: {
         sync_failed: {
           title: "Exchange rates: %{provider} is failing",
@@ -2360,7 +2412,7 @@ export const englishCrmMessages = {
         stay: "Stay signed in",
         sign_out: "Sign out",
       },
-      welcome_title: "Welcome to Atomic CRM",
+      welcome_title: "Welcome to Hermes CRM",
     },
     form_section: {
       help_content: "What the tutorial teaches and where it is filed",

@@ -7,6 +7,7 @@ import {
 } from "ra-core";
 
 import type { EmailEntityType, EmailMessage } from "../types";
+import { emailMessageText } from "./emailTemplate";
 import { EmailMessageDialog } from "./EmailMessageDialog";
 import { EmailStatusBadge } from "./EmailStatusBadge";
 import { SendEmailButton } from "./SendEmailButton";
@@ -65,7 +66,7 @@ export const EntityEmailsPanel = ({
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">
-                    {message.subject}
+                    {emailMessageText(message).subject}
                   </span>
                   <EmailStatusBadge status={message.status} />
                 </span>

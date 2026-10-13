@@ -102,6 +102,7 @@ export const createCrmDb = (overrides: Partial<Db> = {}): Db =>
     email_messages: [],
     email_message_events: [],
     email_suppressions: [],
+    email_automations: [],
     task_statuses: TASK_STATUSES,
     task_priorities: TASK_PRIORITIES,
     task_types: defaultTaskTypes.map((taskType, index) => ({

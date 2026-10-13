@@ -66,6 +66,8 @@ const getBaseDataProvider = () =>
       ["currencies", ["code"]],
       // The suppressed address IS the row (outbound-email.md).
       ["email_suppressions", ["email"]],
+      // A rule is its key: there are exactly as many rows as rules.
+      ["email_automations", ["key"]],
     ]),
   });
 

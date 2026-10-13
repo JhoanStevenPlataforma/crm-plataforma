@@ -194,7 +194,7 @@ export const getTimelineEvents = async (
     source: "email_message",
     task_id: null,
     actor_sales_id: message.sales_id ?? null,
-    actor_kind: message.sales_id == null ? "system" : "user",
+    actor_kind: message.origin === "automation" ? "automation" : "user",
     entity_type: entity.type,
     entity_id: entity.id,
     payload: {
@@ -206,6 +206,9 @@ export const getTimelineEvents = async (
       error_code: message.error_code,
       quote_id: message.quote_id,
       quote_version_id: message.quote_version_id,
+      origin: message.origin,
+      language: message.language,
+      variables: message.origin === "automation" ? message.variables : null,
       ...(quoteNumber ? { quote_number: quoteNumber } : {}),
     },
   });

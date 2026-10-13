@@ -1812,6 +1812,45 @@ export const spanishCrmMessages = {
           "La dirección entró en la lista de supresión antes de que saliera el mensaje.",
         email_dispatch_interrupted:
           "El envío se interrumpió y no se sabe si salió. Confirma con el cliente antes de reintentar.",
+        email_automation_disabled:
+          "La automatización se apagó antes de que el mensaje saliera, así que no se envió.",
+      },
+      automations: {
+        description:
+          "Correos que el CRM envía por sí solo. Las dos reglas vienen apagadas: nada se envía automáticamente hasta que un administrador active una.",
+        load_error: "No se pudieron cargar las automatizaciones.",
+        saved: "La automatización se guardó",
+        state: "Estado",
+        template: "Plantilla",
+        delay_days: "Días sin respuesta antes de recordar",
+        max_sends: "Recordatorios por cotización, como máximo",
+        followup_invalid:
+          "La espera debe estar entre %{min_days} y %{max_days} días, y los recordatorios entre %{min_sends} y %{max_sends}.",
+        states: {
+          disabled: "Apagada",
+          paused: "En pausa",
+          enabled: "Activa",
+        },
+        state_help: {
+          disabled:
+            "Apagada: no se envía nada, y lo que estaba esperando para salir se cancela.",
+          paused:
+            "En pausa: no se envía nada, y lo que estaba esperando sigue esperando hasta que la regla se active de nuevo.",
+          enabled:
+            "Activa: el CRM envía este mensaje por sí solo, firmado por el responsable de la cotización.",
+        },
+        rules: {
+          quote_accepted: {
+            title: "Confirmación de aceptación",
+            description:
+              "Cuando un cliente acepta una cotización, recibe una confirmación en la dirección con la que firmó.",
+          },
+          quote_followup: {
+            title: "Seguimiento de cotización",
+            description:
+              "Un recordatorio a la dirección a la que se envió la cotización por correo, cuando el cliente no ha respondido después de unos días.",
+          },
+        },
       },
       history: {
         title: "Correos",
@@ -1849,6 +1888,7 @@ export const spanishCrmMessages = {
         history: "Historial",
         suppressions: "Direcciones suprimidas",
         templates: "Plantillas",
+        automations: "Automatizaciones",
         settings: "Proveedor",
       },
       events: {
@@ -1941,8 +1981,7 @@ export const spanishCrmMessages = {
           disabled: "Nadie puede enviar correos hasta que se active.",
           simulated:
             "Los mensajes quedan registrados como simulados. Elige un proveedor real para enviar.",
-          ready:
-            "Envía un mensaje de prueba para confirmarlo. En producción también hace falta verificar el dominio del remitente con SPF, DKIM y DMARC.",
+          ready: "Envía un mensaje de prueba para confirmarlo.",
           incomplete:
             "Falta la dirección del remitente o las credenciales del proveedor: no se puede enviar nada.",
         },
@@ -1954,6 +1993,7 @@ export const spanishCrmMessages = {
         providers: {
           mock: "Simulado (no envía nada)",
           postmark: "Postmark",
+          resend: "Resend",
         },
         from_email: "Dirección del remitente",
         from_name: "Nombre del remitente",
@@ -2301,6 +2341,14 @@ export const spanishCrmMessages = {
           body: "La oferta caducó sin respuesta.",
         },
       },
+      email: {
+        bounced: {
+          title: "El correo a %{to} rebotó",
+        },
+        failed: {
+          title: "El correo a %{to} no se pudo enviar",
+        },
+      },
       fx: {
         sync_failed: {
           title: "Tasas de cambio: %{provider} está fallando",
@@ -2389,7 +2437,7 @@ export const spanishCrmMessages = {
         stay: "Seguir conectado",
         sign_out: "Cerrar sesión",
       },
-      welcome_title: "Te damos la bienvenida a Atomic CRM",
+      welcome_title: "Te damos la bienvenida a Hermes CRM",
     },
     form_section: {
       help_content: "Qué enseña el tutorial y dónde se archiva",

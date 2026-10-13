@@ -79,6 +79,7 @@ Deno.serve(async (req: Request) => {
     {
       providerKey: await providerKeyOf(new URL(req.url)),
       authorization: req.headers.get("Authorization"),
+      headers: Object.fromEntries(req.headers),
       rawBody: await req.text(),
     },
     { registry: emailProviders, readSecret, rpc },

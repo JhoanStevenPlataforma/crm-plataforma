@@ -129,6 +129,14 @@ export const canAccess = <
   ) {
     return params.action === "list" || params.action === "show";
   }
+  // The rules the CRM sends mail by are seeded: a rule is behaviour, so nobody
+  // adds or removes one.
+  if (
+    params.resource === "email_automations" &&
+    (params.action === "create" || params.action === "delete")
+  ) {
+    return false;
+  }
   // An address is added to the suppression list or taken off it; an entry
   // is never edited.
   if (params.resource === "email_suppressions" && params.action === "edit") {
@@ -214,7 +222,11 @@ export const canAccess = <
   if (params.resource === "email_history") {
     return role === "manager" && params.action === "list";
   }
-  if (params.resource === "email_suppressions") {
+  if (
+    params.resource === "email_suppressions" ||
+    // What the CRM sends by itself: a manager reads it, an admin switches it.
+    params.resource === "email_automations"
+  ) {
     return (
       role === "manager" &&
       (params.action === "list" || params.action === "show")

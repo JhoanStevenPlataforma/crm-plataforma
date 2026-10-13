@@ -1,57 +1,53 @@
-import type { EmailEntityType, EmailLanguage, EmailTemplate } from "../types";
-import { formatEmailDate } from "./emailRender";
+import type {
+  EmailEntityType,
+  EmailLanguage,
+  EmailMessage,
+  EmailTemplate,
+} from "../types";
+import {
+  fillTemplate,
+  QUOTE_LINK_VARIABLE,
+  VARIABLE_PATTERN,
+} from "../../../../supabase/functions/_shared/email/fillTemplate.ts";
 
 /**
- * Filling a template for the compose dialog
- * (docs/proposals/outbound-email.md).
+ * Templates in the compose dialog (docs/proposals/outbound-email.md).
  *
- * `{{name}}` is the only syntax, the same one `email_text_variables()` reads.
- * The result is PLAIN TEXT the user goes on editing; the server escapes it
- * into the layout, so nothing here needs to.
+ * The fill itself is the dispatcher's own module, re-exported rather than
+ * rewritten: an automatic message and a hand-written one must format a total
+ * and a date identically. Here a variable with no value becomes nothing for
+ * the user to see and fix, instead of braces the server would refuse.
  */
+export { fillTemplate } from "../../../../supabase/functions/_shared/email/fillTemplate.ts";
+export type { EmailVariables } from "../../../../supabase/functions/_shared/email/fillTemplate.ts";
 
-const VARIABLE_PATTERN = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
-const QUOTE_LINK = "quote_link";
-const DATE_VARIABLES = new Set(["issue_date", "valid_until"]);
-const LOCALES: Record<EmailLanguage, string> = {
-  es: "es-CO",
-  en: "en-US",
-  fr: "fr-FR",
-};
-
-export type EmailVariables = Record<string, string | number | null | undefined>;
-
-const display = (
-  name: string,
-  value: string | number | null | undefined,
-  language: EmailLanguage,
-): string => {
-  if (value == null) return "";
-  if (DATE_VARIABLES.has(name)) return formatEmailDate(String(value), language);
-  // The stored total, formatted for reading. Never recomputed.
-  if (name === "total" && Number.isFinite(Number(value))) {
-    return new Intl.NumberFormat(LOCALES[language], {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(Number(value));
-  }
-  return String(value);
-};
+const QUOTE_LINK = QUOTE_LINK_VARIABLE;
 
 /**
- * Replaces every variable the record has a value for. The quotation link is
- * left as its marker: only the server knows it, and it resolves it while
- * sending. A variable with no value becomes nothing, for the user to see and
- * fix, rather than staying as braces the server would refuse.
+ * What a message says, for somebody reading it in the CRM.
+ *
+ * A person's message is stored as it was written. An automation's is stored as
+ * its TEMPLATE with the variables beside it -- the dispatcher fills it while
+ * sending -- so every screen that shows one fills it the same way, with the
+ * same function, instead of showing the team a row of braces.
  */
-export const fillTemplate = (
-  text: string,
-  variables: EmailVariables,
-  language: EmailLanguage,
-): string =>
-  text.replace(VARIABLE_PATTERN, (marker, name: string) =>
-    name === QUOTE_LINK ? marker : display(name, variables[name], language),
-  );
+export const emailMessageText = (
+  message: Pick<EmailMessage, "subject"> &
+    Partial<
+      Pick<EmailMessage, "origin" | "body_text" | "variables" | "language">
+    >,
+): { subject: string; body: string } => {
+  const body = message.body_text ?? "";
+  if (message.origin !== "automation") {
+    return { subject: message.subject, body };
+  }
+  const language = asEmailLanguage(message.language);
+  const variables = message.variables ?? {};
+  return {
+    subject: fillTemplate(message.subject, variables, language),
+    body: fillTemplate(body, variables, language),
+  };
+};
 
 /** Variables still in the text that the server would refuse. */
 export const unresolvedVariables = (
@@ -77,9 +73,14 @@ export const templatesFor = (
       (template.scope === "generic" || template.scope === entityType),
   );
 
+/** The system template a person shares a quotation with. */
+const QUOTE_SHARE_KEY = "quote_share";
+
 /**
  * The template the dialog opens with: for a quotation, the one written for
- * sharing it, in the user's language when it exists.
+ * sharing it, in the user's language when it exists. By KEY: the templates
+ * the automations send are quotation templates too, and a dialog that opened
+ * on "acceptance confirmation" would be offering the wrong message.
  */
 export const defaultTemplate = (
   templates: EmailTemplate[],
@@ -87,7 +88,10 @@ export const defaultTemplate = (
   language: EmailLanguage,
 ): EmailTemplate | undefined => {
   if (entityType !== "quote") return undefined;
-  const own = templates.filter((template) => template.scope === "quote");
+  const own = templates.filter(
+    (template) =>
+      template.scope === "quote" && template.key === QUOTE_SHARE_KEY,
+  );
   return own.find((template) => template.language === language) ?? own[0];
 };
 

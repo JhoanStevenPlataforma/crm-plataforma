@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { formatAddress, isValidEmail } from "./emailAddress.ts";
 import { mockProvider } from "./mock.ts";
 import { postmarkProvider } from "./postmark.ts";
-import { renderEmail } from "./renderEmail.ts";
+import { emailIconUrl, renderEmail } from "./renderEmail.ts";
 import type { FetchLike, OutboundEmail } from "./types.ts";
 
 type Call = { url: string; headers: Record<string, string>; body: any };
@@ -265,6 +265,31 @@ describe("the rendered message", () => {
     expect(html).toContain("October 8, 2026");
     expect(html).toContain("1,234,567.50 COP");
     expect(html).not.toContain("Valid until");
+  });
+
+  it("heads the message with the product's icon and the issuer, and says a reply reaches somebody", () => {
+    const { html } = renderEmail({
+      bodyText: "Hola Laura",
+      language: "es",
+      issuerName: "Hermes",
+      iconUrl: emailIconUrl("https://crm.test/"),
+    });
+
+    expect(html).toContain('<img src="https://crm.test/appIcon/192.png"');
+    expect(html).toContain(">Hermes</td>");
+    expect(html).toContain("Puede responder directamente a este correo.");
+  });
+
+  it("draws the icon itself where a mail client could not fetch the picture", () => {
+    const { html } = renderEmail({
+      bodyText: "Hola Laura",
+      issuerName: "Hermes",
+      iconUrl: emailIconUrl("http://localhost:5173"),
+    });
+
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("localhost");
+    expect(html).toContain(">H</td>");
   });
 
   it("refuses a link or a logo that is not a web address", () => {

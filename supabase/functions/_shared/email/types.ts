@@ -84,7 +84,12 @@ export interface EmailProvider {
    * provider. Absent for a provider that reports nothing.
    */
   verifyWebhook?: (
-    request: { authorization: string | null; rawBody: string },
+    request: {
+      authorization: string | null;
+      rawBody: string;
+      /** The request's headers, names in lower case. */
+      headers?: Record<string, string>;
+    },
     secret: string,
   ) => Promise<boolean>;
   /**

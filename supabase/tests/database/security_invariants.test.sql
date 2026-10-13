@@ -100,6 +100,8 @@ select is(
         'fx_integration_health()',
         'is_admin()',
         'issue_quote_version(p_quote_id bigint, p_token_days integer, p_token_label text, p_override_reason text, p_reason text)',
+        -- Writes the audit event through emit_task_event; checks can_see_task().
+        'link_task_to_entity(p_task_id bigint, p_entity_type task_entity, p_entity_id bigint, p_label text, p_primary boolean)',
         'mark_quote_comments_read(p_quote_id bigint)',
         'move_deal_stage(p_deal_id bigint, p_to_stage text, p_reason text, p_index integer, p_attachments jsonb, p_override_reason text)',
         'notification_prefs_for(p_sales_id bigint)',

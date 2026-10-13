@@ -1,6 +1,7 @@
 import type { EmailTemplate } from "../types";
 import {
   defaultTemplate,
+  emailMessageText,
   fillTemplate,
   templatesFor,
   unresolvedVariables,
@@ -61,6 +62,54 @@ describe("fillTemplate", () => {
   });
 });
 
+describe("emailMessageText", () => {
+  const variables = {
+    quote_number: "Q-2026-00007",
+    issuer_name: "Acme",
+    issue_date: "2026-10-08",
+  };
+
+  it("fills an automation's stored template, the way the dispatcher sends it", () => {
+    const text = emailMessageText({
+      origin: "automation",
+      language: "en",
+      subject: "Reminder: quotation {{quote_number}} from {{issuer_name}}",
+      body_text: "Issued on {{issue_date}}. {{quote_link}}",
+      variables,
+    });
+
+    expect(text).toEqual({
+      subject: "Reminder: quotation Q-2026-00007 from Acme",
+      body: "Issued on October 8, 2026. {{quote_link}}",
+    });
+  });
+
+  it("leaves a person's message exactly as they wrote it", () => {
+    const text = emailMessageText({
+      origin: "manual",
+      language: "en",
+      subject: "About {{quote_number}}",
+      body_text: "Literal {{issuer_name}}",
+      variables,
+    });
+
+    expect(text).toEqual({
+      subject: "About {{quote_number}}",
+      body: "Literal {{issuer_name}}",
+    });
+  });
+
+  it("fills a timeline event, which carries a subject and no body", () => {
+    expect(
+      emailMessageText({
+        origin: "automation",
+        subject: "{{quote_number}}",
+        variables,
+      }),
+    ).toEqual({ subject: "Q-2026-00007", body: "" });
+  });
+});
+
 describe("unresolvedVariables", () => {
   it("allows the link marker in the text of a quotation, and nowhere else", () => {
     expect(unresolvedVariables("Asunto", "Ver {{quote_link}}", true)).toEqual(
@@ -88,17 +137,23 @@ describe("the templates a record offers", () => {
     template({ id: 3, scope: "generic", key: "greeting" }),
     template({ id: 4, scope: "deal", key: "deal_followup" }),
     template({ id: 5, is_active: false }),
+    // What an automation sends: offered, but never what the dialog opens on.
+    template({ id: 6, key: "quote_accepted", language: "en" }),
   ];
 
   it("are its own scope and the generic ones, active only", () => {
     expect(templatesFor(templates, "quote").map((t) => t.id)).toEqual([
-      1, 2, 3,
+      1, 2, 3, 6,
     ]);
     expect(templatesFor(templates, "contact").map((t) => t.id)).toEqual([3]);
   });
 
-  it("open on the quotation template in the user's language", () => {
-    const offered = templatesFor(templates, "quote");
+  it("open on the template for sharing a quotation, in the user's language", () => {
+    // The automation's template first: the order must not decide.
+    const offered = templatesFor(templates, "quote").sort(
+      (a, b) =>
+        Number(b.key === "quote_accepted") - Number(a.key === "quote_accepted"),
+    );
 
     expect(defaultTemplate(offered, "quote", "en")?.id).toBe(2);
     expect(defaultTemplate(offered, "quote", "fr")?.id).toBe(1);

@@ -12,7 +12,7 @@ import type { TaskEntityType, TaskNotification } from "../types";
  *
  * So: a row with an entity subject links; a task row keeps the old behaviour.
  *
- * `task_entity` names nine entity kinds and this CRM routes four of them.
+ * `task_entity` names nine entity kinds and this CRM routes five of them.
  * `project`, `ticket`, `invoice` and `order` are reserved in the enum for
  * modules that do not exist yet (§12), and a link to a route the router does
  * not have is worse than no link — it lands the user on a blank page rather
@@ -23,6 +23,8 @@ const ROUTED_ENTITIES: Partial<Record<TaskEntityType, string>> = {
   contact: "contacts",
   company: "companies",
   deal: "deals",
+  // A lead can be written to by mail, and a bounce is news on that lead.
+  lead: "leads",
 };
 
 /**

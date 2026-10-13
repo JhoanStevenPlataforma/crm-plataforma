@@ -132,6 +132,9 @@ export const EmailProviderForm = ({
               <SelectItem value="postmark">
                 {translate("crm.email.settings.providers.postmark")}
               </SelectItem>
+              <SelectItem value="resend">
+                {translate("crm.email.settings.providers.resend")}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -190,28 +193,35 @@ export const EmailProviderForm = ({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email-stream-transactional">
-              {translate("crm.email.settings.transactional_stream")}
-            </Label>
-            <Input
-              id="email-stream-transactional"
-              value={draft.transactional_stream}
-              onChange={(event) =>
-                set("transactional_stream", event.target.value)
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email-stream-commercial">
-              {translate("crm.email.settings.commercial_stream")}
-            </Label>
-            <Input
-              id="email-stream-commercial"
-              value={draft.commercial_stream}
-              onChange={(event) => set("commercial_stream", event.target.value)}
-            />
-          </div>
+          {/* Streams are Postmark's: no other provider reads them. */}
+          {draft.provider_key === "postmark" ? (
+            <>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="email-stream-transactional">
+                  {translate("crm.email.settings.transactional_stream")}
+                </Label>
+                <Input
+                  id="email-stream-transactional"
+                  value={draft.transactional_stream}
+                  onChange={(event) =>
+                    set("transactional_stream", event.target.value)
+                  }
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="email-stream-commercial">
+                  {translate("crm.email.settings.commercial_stream")}
+                </Label>
+                <Input
+                  id="email-stream-commercial"
+                  value={draft.commercial_stream}
+                  onChange={(event) =>
+                    set("commercial_stream", event.target.value)
+                  }
+                />
+              </div>
+            </>
+          ) : null}
           <div className="flex flex-col gap-2">
             <Label htmlFor="email-limit-user">
               {translate("crm.email.settings.max_per_user_hour")}

@@ -1813,6 +1813,45 @@ export const frenchCrmMessages = {
           "L'adresse a été ajoutée à la liste de suppression avant le départ du message.",
         email_dispatch_interrupted:
           "L'envoi a été interrompu et son issue est inconnue. Vérifiez auprès du client avant de relancer.",
+        email_automation_disabled:
+          "L'automatisation a été désactivée avant le départ du message : il n'a pas été envoyé.",
+      },
+      automations: {
+        description:
+          "Les e-mails que le CRM envoie de lui-même. Les deux règles sont livrées désactivées : rien n'est envoyé automatiquement tant qu'un administrateur n'en active pas une.",
+        load_error: "Les automatisations n'ont pas pu être chargées.",
+        saved: "L'automatisation a été enregistrée",
+        state: "État",
+        template: "Modèle",
+        delay_days: "Jours sans réponse avant de relancer",
+        max_sends: "Relances par devis, au maximum",
+        followup_invalid:
+          "L'attente doit être comprise entre %{min_days} et %{max_days} jours, et les relances entre %{min_sends} et %{max_sends}.",
+        states: {
+          disabled: "Désactivée",
+          paused: "En pause",
+          enabled: "Active",
+        },
+        state_help: {
+          disabled:
+            "Désactivée : rien n'est envoyé, et ce qui attendait de partir est annulé.",
+          paused:
+            "En pause : rien n'est envoyé, et ce qui attendait continue d'attendre jusqu'à la réactivation de la règle.",
+          enabled:
+            "Active : le CRM envoie ce message de lui-même, signé par le responsable du devis.",
+        },
+        rules: {
+          quote_accepted: {
+            title: "Confirmation d'acceptation",
+            description:
+              "Quand un client accepte un devis, il reçoit une confirmation à l'adresse avec laquelle il a signé.",
+          },
+          quote_followup: {
+            title: "Relance de devis",
+            description:
+              "Un rappel à l'adresse à laquelle le devis a été envoyé par e-mail, quand le client n'a pas répondu après quelques jours.",
+          },
+        },
       },
       history: {
         title: "E-mails",
@@ -1850,6 +1889,7 @@ export const frenchCrmMessages = {
         history: "Historique",
         suppressions: "Adresses supprimées",
         templates: "Modèles",
+        automations: "Automatisations",
         settings: "Fournisseur",
       },
       events: {
@@ -1955,6 +1995,7 @@ export const frenchCrmMessages = {
         providers: {
           mock: "Simulé (n'envoie rien)",
           postmark: "Postmark",
+          resend: "Resend",
         },
         from_email: "Adresse d'expédition",
         from_name: "Nom de l'expéditeur",
@@ -2301,6 +2342,14 @@ export const frenchCrmMessages = {
           body: "L'offre a expiré sans réponse.",
         },
       },
+      email: {
+        bounced: {
+          title: "L'e-mail à %{to} a été rejeté",
+        },
+        failed: {
+          title: "L'e-mail à %{to} n'a pas pu être envoyé",
+        },
+      },
       fx: {
         sync_failed: {
           title: "Taux de change : %{provider} est en échec",
@@ -2389,7 +2438,7 @@ export const frenchCrmMessages = {
         stay: "Rester connecté",
         sign_out: "Se déconnecter",
       },
-      welcome_title: "Bienvenue sur Atomic CRM",
+      welcome_title: "Bienvenue sur Hermes CRM",
     },
     form_section: {
       help_content: "Ce que le tutoriel enseigne et où il est classé",

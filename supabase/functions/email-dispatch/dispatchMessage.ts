@@ -1,4 +1,10 @@
 import {
+  fillTemplate,
+  type EmailVariables,
+} from "../_shared/email/fillTemplate.ts";
+import {
+  emailIconUrl,
+  emailLanguage,
   renderEmail,
   type EmailQuoteSummary,
 } from "../_shared/email/renderEmail.ts";
@@ -33,8 +39,11 @@ export interface ClaimedEmail {
   to_name: string | null;
   subject: string;
   body_text: string;
-  /** For a quotation, the figures of the version shared. */
-  variables: EmailQuoteSummary | null;
+  /**
+   * What the record said when the message was queued: for a quotation, the
+   * figures of the version shared. An automation's text is filled from it.
+   */
+  variables: (EmailVariables & EmailQuoteSummary) | null;
   quote_id: number | null;
   quote_version_id: number | null;
   from_email: string | null;
@@ -145,11 +154,21 @@ const send = async (
     secrets.push(credentials);
   }
 
+  // A person's message arrives filled (the queue refuses leftover braces);
+  // an automation's is the template itself, filled here from the snapshot.
+  const language = emailLanguage(message.language);
+  const variables = message.variables ?? {};
+  const subject = fillTemplate(message.subject, variables, language)
+    .replace(/\s+/g, " ")
+    .trim();
+
   const rendered = renderEmail({
-    bodyText: message.body_text,
+    bodyText: fillTemplate(message.body_text, variables, language),
     language: message.language,
-    issuerName: message.issuer_name,
+    // An installation with no title still signs its mail: the sender's name.
+    issuerName: message.issuer_name ?? message.from_name,
     logoUrl: message.logo_url,
+    iconUrl: emailIconUrl(deps.baseUrl),
     quoteLink,
     quote: message.quote_version_id != null ? message.variables : null,
   });
@@ -163,7 +182,7 @@ const send = async (
         },
         to: { email: message.to_email, name: message.to_name },
         replyTo: message.reply_to,
-        subject: message.subject,
+        subject,
         textBody: rendered.text,
         htmlBody: rendered.html,
         messageStream: message.message_stream,

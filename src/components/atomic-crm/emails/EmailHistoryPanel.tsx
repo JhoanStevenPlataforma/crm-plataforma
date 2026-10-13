@@ -28,6 +28,7 @@ import {
 
 import { SectionCard } from "../misc/SectionCard";
 import type { EmailMessage, EmailStatus, Sale } from "../types";
+import { emailMessageText } from "./emailTemplate";
 import { EmailMessageDialog } from "./EmailMessageDialog";
 import { EmailStatusBadge } from "./EmailStatusBadge";
 
@@ -75,7 +76,7 @@ export const EmailHistoryPanel = () => {
     ? data.filter(
         (message) =>
           message.to_email.toLowerCase().includes(needle) ||
-          message.subject.toLowerCase().includes(needle),
+          emailMessageText(message).subject.toLowerCase().includes(needle),
       )
     : data;
 
@@ -87,11 +88,16 @@ export const EmailHistoryPanel = () => {
     ),
   ];
   const { data: senders = [] } = useGetMany<Sale>("sales", { ids: senderIds });
-  const senderOf = (id: EmailMessage["sales_id"]) => {
-    const sale = senders.find((row) => String(row.id) === String(id));
-    return sale
-      ? `${sale.first_name} ${sale.last_name}`
-      : translate("crm.email.history.automatic");
+  // An automation's message is signed by the quotation's owner, and was sent
+  // by nobody: the column says which.
+  const senderOf = (message: EmailMessage) => {
+    const sale = senders.find(
+      (row) => String(row.id) === String(message.sales_id),
+    );
+    const automatic = translate("crm.email.history.automatic");
+    if (!sale) return automatic;
+    const name = `${sale.first_name} ${sale.last_name}`;
+    return message.origin === "automation" ? `${automatic} · ${name}` : name;
   };
 
   return (
@@ -184,14 +190,14 @@ export const EmailHistoryPanel = () => {
                         className="cursor-pointer text-left hover:underline"
                         onClick={() => setOpenId(message.id)}
                       >
-                        {message.subject}
+                        {emailMessageText(message).subject}
                       </button>
                     </TableCell>
                     <TableCell>
                       <EmailStatusBadge status={message.status} />
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {senderOf(message.sales_id)}
+                      {senderOf(message)}
                     </TableCell>
                     <TableCell className="max-w-64 truncate text-sm text-muted-foreground">
                       {message.error_code

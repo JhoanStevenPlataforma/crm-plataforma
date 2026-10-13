@@ -4,7 +4,11 @@ import {
   DEMO_EXCHANGE_RATE_SETTINGS,
 } from "./currencies";
 import { DEMO_DEAL_QUOTE_STAGE_RULES } from "../dealQuoteSync";
-import { DEMO_EMAIL_SETTINGS, DEMO_EMAIL_TEMPLATES } from "./emailTemplates";
+import {
+  DEMO_EMAIL_AUTOMATIONS,
+  DEMO_EMAIL_SETTINGS,
+  DEMO_EMAIL_TEMPLATES,
+} from "./emailTemplates";
 import { DEMO_PORTAL_SLIDES, DEMO_PORTAL_TEMPLATES } from "./portalTemplates";
 import { defaultTaskTypes } from "../../../root/defaultConfiguration";
 import { generateCompanies } from "./companies";
@@ -156,6 +160,7 @@ export default (): Db => {
   db.email_messages = [];
   db.email_message_events = [];
   db.email_suppressions = [];
+  db.email_automations = DEMO_EMAIL_AUTOMATIONS;
   db.configuration = [
     {
       id: 1,

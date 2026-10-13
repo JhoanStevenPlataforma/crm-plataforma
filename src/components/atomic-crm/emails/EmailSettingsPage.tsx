@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import type { EmailSettings } from "../types";
+import { EmailAutomationsPanel } from "./EmailAutomationsPanel";
 import { EmailHistoryPanel } from "./EmailHistoryPanel";
 import { EmailProviderForm } from "./EmailProviderForm";
 import { EmailSecretsCard } from "./EmailSecretsCard";
@@ -14,7 +15,13 @@ import { EmailSuppressionsPanel } from "./EmailSuppressionsPanel";
 import { EmailTemplatesPanel } from "./EmailTemplatesPanel";
 import { EmailTestCard } from "./EmailTestCard";
 
-const TABS = ["history", "suppressions", "templates", "settings"] as const;
+const TABS = [
+  "history",
+  "suppressions",
+  "automations",
+  "templates",
+  "settings",
+] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -22,11 +29,12 @@ type Tab = (typeof TABS)[number];
  *
  * One page with tabs, the active one in the URL (`?tab=`), like the currencies
  * page: every message with how its delivery went, the addresses the CRM no
- * longer writes to, the templates, and the provider with its sender and
- * credentials.
+ * longer writes to, what it sends by itself, the templates, and the provider
+ * with its sender and credentials.
  *
- * Managers reach the first two -- they are what explains a refusal to their
- * team; the templates and the provider are an admin's. The page gates itself
+ * Managers reach the first three -- they are what explains a message, or a
+ * refusal, to their team -- and read the automations without switching them;
+ * the templates and the provider are an admin's. The page gates itself
  * (the router does not), and the database enforces the same rules whatever is
  * rendered here.
  */
@@ -79,6 +87,9 @@ export const EmailSettingsPage = () => {
             </TabsContent>
             <TabsContent value="suppressions">
               <EmailSuppressionsPanel />
+            </TabsContent>
+            <TabsContent value="automations">
+              <EmailAutomationsPanel canEdit={canConfigure === true} />
             </TabsContent>
           </>
         ) : null}

@@ -299,6 +299,17 @@ describe("canAccess", () => {
       }
     });
 
+    test("the automations are read by managers, switched by admins, and nobody adds or removes one", () => {
+      expect(allowed("list", "email_automations")).toEqual([
+        "admin",
+        "manager",
+      ]);
+      expect(allowed("edit", "email_automations")).toEqual(["admin"]);
+      for (const action of ["create", "delete"]) {
+        expect(allowed(action, "email_automations")).toEqual([]);
+      }
+    });
+
     test("the provider settings and the templates are an admin's to write", () => {
       for (const action of ["list", "edit"]) {
         expect(allowed(action, "email_settings")).toEqual(["admin"]);

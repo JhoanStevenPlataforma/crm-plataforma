@@ -639,13 +639,13 @@ create or replace trigger email_automations_guard
     before update on public.email_automations
     for each row execute function public.email_automations_guard();
 
--- Named to fire AFTER `quotes_sync_deal` (same event, alphabetical order): the
--- confirmation looks at the stage the acceptance has just moved the deal to.
-create or replace trigger quotes_zz_email_automation
-    after update of status_key on public.quotes
+-- When the acceptance is STAMPED on the version, which is after the status
+-- moved and `quotes_sync_deal` moved the deal: the confirmation looks at both.
+create or replace trigger quote_versions_email_automation
+    after update of accepted_at on public.quote_versions
     for each row
-    when (new.status_key = 'accepted' and old.status_key is distinct from new.status_key)
-    execute function public.quotes_email_automation();
+    when (new.accepted_at is not null and old.accepted_at is null)
+    execute function public.quote_versions_email_automation();
 
 create or replace trigger email_messages_notify
     after update of status on public.email_messages

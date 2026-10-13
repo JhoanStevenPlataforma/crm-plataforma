@@ -3,7 +3,7 @@ import { useTranslate } from "ra-core";
 
 import { useConfigurationContext } from "../root/ConfigurationContext";
 import type { EmailLanguage } from "../types";
-import { QUOTE_LINK_MARKER, renderEmail } from "./emailRender";
+import { emailIconUrl, QUOTE_LINK_MARKER, renderEmail } from "./emailRender";
 import type { EmailQuoteSummary } from "./emailRender";
 import type { EmailVariables } from "./emailTemplate";
 
@@ -43,6 +43,7 @@ export const EmailPreview = ({
         language,
         issuerName: title,
         logoUrl: lightModeLogo,
+        iconUrl: emailIconUrl(window.location.origin),
         quoteLink: isQuote
           ? `${window.location.origin}/#/quote#${LINK_PLACEHOLDER}`
           : null,

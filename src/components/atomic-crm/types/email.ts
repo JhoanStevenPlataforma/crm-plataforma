@@ -69,9 +69,30 @@ export type EmailTemplate = {
   is_system: boolean;
 } & Pick<RaRecord, "id">;
 
+/**
+ * A rule the CRM sends mail by: seeded, never created or deleted. `paused`
+ * keeps what is waiting; `disabled` cancels it.
+ */
+export type EmailAutomationState = "disabled" | "paused" | "enabled";
+export type EmailAutomationKey = "quote_accepted" | "quote_followup";
+
+/** Keyed by `key`: the rule IS its key. */
+export type EmailAutomation = {
+  id: EmailAutomationKey;
+  key: EmailAutomationKey;
+  state: EmailAutomationState;
+  /** The quotation template it sends, by key (the language is the message's). */
+  template_key: string;
+  /** Only the follow-up waits. */
+  delay_days: number | null;
+  max_sends: number;
+  updated_at: string;
+  updated_by: Identifier | null;
+};
+
 /** The administrators' row. Holds no secret: only whether one exists. */
 export type EmailSettings = {
-  provider_key: "mock" | "postmark";
+  provider_key: "mock" | "postmark" | "resend";
   is_enabled: boolean;
   from_email: string | null;
   from_name: string | null;

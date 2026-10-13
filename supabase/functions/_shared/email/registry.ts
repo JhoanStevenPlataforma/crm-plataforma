@@ -1,5 +1,6 @@
 import { mockProvider } from "./mock.ts";
 import { postmarkProvider } from "./postmark.ts";
+import { resendProvider } from "./resend.ts";
 import type { EmailProviderRegistry } from "./types.ts";
 
 /**
@@ -10,4 +11,5 @@ import type { EmailProviderRegistry } from "./types.ts";
 export const emailProviders: EmailProviderRegistry = {
   [mockProvider.key]: mockProvider,
   [postmarkProvider.key]: postmarkProvider,
+  [resendProvider.key]: resendProvider,
 };

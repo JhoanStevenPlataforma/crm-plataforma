@@ -203,6 +203,9 @@ revoke all on function public.dispatch_due_reminders(integer) from public, anon,
 -- authenticated grant (from `alter default privileges` below, or the explicit
 -- grants above) intact; verified per-function. security_invariants.test.sql
 -- asserts anon executes zero SECURITY DEFINER function.
+-- A definer since 2026-10-12 (it must reach emit_task_event); it checks
+-- can_see_task() itself.
+revoke all on function public.link_task_to_entity(bigint, public.task_entity, bigint, text, boolean) from public, anon;
 revoke all on function public.can_manage_all() from public, anon;
 revoke all on function public.can_see_deal(bigint) from public, anon;
 revoke all on function public.can_see_task(bigint) from public, anon;
@@ -1148,6 +1151,8 @@ revoke all on function public.email_automation_enqueue(text, bigint, bigint, tex
 revoke all on function public.email_automation_quote_accepted(bigint) from public, anon, authenticated;
 revoke all on function public.email_automation_followups() from public, anon, authenticated;
 revoke all on function public.task_notification_worker_tick() from public, anon, authenticated;
+revoke all on function public.quote_versions_email_automation() from public, anon, authenticated;
+revoke all on function public.email_messages_notify() from public, anon, authenticated;
 grant execute on function public.email_automation_enqueue(text, bigint, bigint, text, text, integer, text, jsonb) to service_role;
 grant execute on function public.email_automation_quote_accepted(bigint) to service_role;
 grant execute on function public.email_automation_followups() to service_role;

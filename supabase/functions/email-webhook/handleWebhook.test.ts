@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { mockProvider } from "../_shared/email/mock.ts";
 import { postmarkProvider } from "../_shared/email/postmark.ts";
+import { resendProvider } from "../_shared/email/resend.ts";
 import { timingSafeEqual } from "../_shared/email/timingSafe.ts";
 import {
   handleWebhook,
@@ -54,7 +55,11 @@ const stage = (options: { secret?: string | null; fail?: boolean } = {}) => {
     };
   };
   const deps: WebhookDeps = {
-    registry: { mock: mockProvider, postmark: postmarkProvider },
+    registry: {
+      mock: mockProvider,
+      postmark: postmarkProvider,
+      resend: resendProvider,
+    },
     readSecret: async () =>
       options.secret === undefined ? SECRET : options.secret,
     rpc,
@@ -282,6 +287,78 @@ describe("the delivery webhook", () => {
 
     expect(delivered.body).toMatchObject({ ignored: true });
     expect(bounced.body).toMatchObject({ ignored: true });
+    expect(recorded).toHaveLength(0);
+  });
+});
+
+describe("the delivery webhook of a provider that signs its calls", () => {
+  const SIGNING_SECRET = `whsec_${btoa("resend-signing-key")}`;
+  const rawBody = JSON.stringify({
+    type: "email.delivered",
+    created_at: "2026-10-13T15:00:00.000Z",
+    data: { email_id: "re-1", to: ["ana@cliente.test"] },
+  });
+
+  /** The three headers Resend would send for `body`, signed now. */
+  const sign = async (body: string) => {
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode("resend-signing-key"),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const digest = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(`msg_1.${timestamp}.${body}`),
+    );
+    return {
+      "svix-id": "msg_1",
+      "svix-timestamp": timestamp,
+      "svix-signature": `v1,${btoa(String.fromCharCode(...new Uint8Array(digest)))}`,
+    };
+  };
+
+  it("records an event whose signature covers the body it arrived with", async () => {
+    const { deps, recorded } = stage({ secret: SIGNING_SECRET });
+
+    const response = await handleWebhook(
+      {
+        providerKey: "resend",
+        authorization: null,
+        headers: await sign(rawBody),
+        rawBody,
+      },
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(recorded).toEqual([
+      expect.objectContaining({
+        p_provider_key: "resend",
+        p_provider_event_id: "delivered:re-1:ana@cliente.test",
+        p_provider_message_id: "re-1",
+        p_event_type: "delivered",
+      }),
+    ]);
+  });
+
+  it("refuses a body that is not the one that was signed, and records nothing", async () => {
+    const { deps, recorded } = stage({ secret: SIGNING_SECRET });
+
+    const response = await handleWebhook(
+      {
+        providerKey: "resend",
+        authorization: null,
+        headers: await sign(rawBody),
+        rawBody: rawBody.replace("re-1", "re-2"),
+      },
+      deps,
+    );
+
+    expect(response.status).toBe(401);
     expect(recorded).toHaveLength(0);
   });
 });

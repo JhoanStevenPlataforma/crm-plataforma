@@ -43,3 +43,18 @@ export const isQuotePortalLocation = ({
   hash: string;
 }): boolean =>
   /(^|\/)quote\/?$/.test(pathname) || /^#\/quote\/?(?:[?#]|$)/.test(hash);
+
+/**
+ * A customer link whose second `#` arrived percent-encoded, put right; null
+ * for any other address.
+ *
+ * A fragment may not hold a `#`, so some mail providers and mail clients
+ * rewrite `#/quote#<token>` as `#/quote%23<token>` on its way to the customer.
+ * The hash router then reads the token as part of the path and finds no route.
+ * The entry point repairs the address before the router starts, so a link
+ * opens whichever way it arrived.
+ */
+export const repairedQuotePortalHash = (hash: string): string | null => {
+  const match = /^#\/quote\/?%23([0-9a-f]{64})$/.exec(hash);
+  return match ? `#${QUOTE_PORTAL_PATH}#${match[1]}` : null;
+};

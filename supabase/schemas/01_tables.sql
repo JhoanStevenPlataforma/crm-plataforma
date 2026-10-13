@@ -2584,7 +2584,7 @@ $$;
 create table public.email_settings (
     id                    smallint primary key default 1 check (id = 1),
     provider_key          text not null default 'mock'
-        check (provider_key in ('mock', 'postmark')),
+        check (provider_key in ('mock', 'postmark', 'resend')),
     is_enabled            boolean not null default true,
     from_email            extensions.citext
         check (from_email is null or public.is_valid_email(from_email::text)),
@@ -2597,6 +2597,7 @@ create table public.email_settings (
         check (reply_to_mode in ('sender', 'none')),
     -- Postmark message streams: what tells a one-to-one message from a
     -- commercial follow-up, with its own reputation and unsubscribe rules.
+    -- Resend has none and ignores both.
     transactional_stream  text not null default 'outbound'
         check (transactional_stream ~ '^[a-z0-9-]{1,60}$'),
     commercial_stream     text not null default 'broadcast'

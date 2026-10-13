@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { emailErrorMessage } from "../providers/commons/emailRpc";
 import type { CrmDataProvider } from "../providers/types";
 import type { EmailMessage, EmailMessageEvent } from "../types";
+import { emailMessageText } from "./emailTemplate";
 import { EmailStatusBadge } from "./EmailStatusBadge";
 import { useEmailStatus } from "./useEmailStatus";
 
@@ -111,7 +112,9 @@ export const EmailMessageDialog = ({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {message?.subject ?? translate("crm.email.message.title")}
+            {message
+              ? emailMessageText(message).subject
+              : translate("crm.email.message.title")}
           </DialogTitle>
           <DialogDescription>
             {message
@@ -232,7 +235,7 @@ export const EmailMessageDialog = ({
             ) : null}
 
             <pre className="max-h-64 overflow-y-auto rounded-md border bg-muted/40 p-3 font-sans text-sm whitespace-pre-wrap">
-              {message.body_text}
+              {emailMessageText(message).body}
             </pre>
           </div>
         )}

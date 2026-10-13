@@ -889,7 +889,12 @@ select
                        'to_name', m.to_name, 'subject', m.subject,
                        'status', m.status, 'error_code', m.error_code,
                        'quote_id', m.quote_id,
-                       'quote_version_id', m.quote_version_id)
+                       'quote_version_id', m.quote_version_id,
+                       -- An automation's subject is its template: what the
+                       -- client fills it with travels beside it.
+                       'origin', m.origin, 'language', m.language,
+                       'variables', case when m.origin = 'automation'
+                                         then m.variables end)
 from public.email_messages m
 where m.entity_type is not null
 
@@ -909,7 +914,10 @@ select
                        'to_name', m.to_name, 'subject', m.subject,
                        'status', m.status, 'error_code', m.error_code,
                        'quote_id', m.quote_id, 'quote_number', q.quote_number,
-                       'quote_version_id', m.quote_version_id)
+                       'quote_version_id', m.quote_version_id,
+                       'origin', m.origin, 'language', m.language,
+                       'variables', case when m.origin = 'automation'
+                                         then m.variables end)
 from public.email_messages m
     join public.quotes q on q.id = m.quote_id
 where q.deal_id is not null;

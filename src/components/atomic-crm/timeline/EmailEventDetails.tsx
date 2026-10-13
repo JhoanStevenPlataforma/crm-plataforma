@@ -3,7 +3,8 @@ import { useTranslate, type Identifier } from "ra-core";
 
 import { EmailMessageDialog } from "../emails/EmailMessageDialog";
 import { EmailStatusBadge } from "../emails/EmailStatusBadge";
-import type { EmailStatus, TimelineEvent } from "../types";
+import { emailMessageText } from "../emails/emailTemplate";
+import type { EmailMessage, EmailStatus, TimelineEvent } from "../types";
 
 /**
  * A message to a customer, on the timeline of the record it was sent from:
@@ -33,7 +34,16 @@ export const EmailEventDetails = ({ event }: { event: TimelineEvent }) => {
           className="w-fit cursor-pointer text-left hover:underline"
           onClick={() => setIsOpen(true)}
         >
-          {String(payload.subject ?? "")}
+          {
+            emailMessageText({
+              subject: String(payload.subject ?? ""),
+              origin: payload.origin as EmailMessage["origin"] | undefined,
+              language: payload.language as EmailMessage["language"],
+              variables:
+                (payload.variables as EmailMessage["variables"] | null) ??
+                undefined,
+            }).subject
+          }
         </button>
       ) : null}
       {isOpen && messageId != null ? (

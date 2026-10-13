@@ -1,4 +1,8 @@
-import { isQuotePortalLocation, tokenFromHash } from "./quotePortalPaths";
+import {
+  isQuotePortalLocation,
+  repairedQuotePortalHash,
+  tokenFromHash,
+} from "./quotePortalPaths";
 
 const TOKEN = "ab".repeat(32);
 
@@ -45,6 +49,27 @@ describe("tokenFromHash", () => {
       `#${TOKEN}0`,
     ]) {
       expect(tokenFromHash(hash)).toBeNull();
+    }
+  });
+});
+
+describe("repairedQuotePortalHash", () => {
+  it("puts back the # a mail provider percent-encoded in a customer link", () => {
+    expect(repairedQuotePortalHash(`#/quote%23${TOKEN}`)).toBe(
+      `#/quote#${TOKEN}`,
+    );
+  });
+
+  it("leaves every other address alone", () => {
+    for (const hash of [
+      `#/quote#${TOKEN}`,
+      "#/quote%23abc",
+      `#/quotes%23${TOKEN}`,
+      `#/quote%23${TOKEN}0`,
+      "#/quotes/1/show",
+      "",
+    ]) {
+      expect(repairedQuotePortalHash(hash)).toBeNull();
     }
   });
 });

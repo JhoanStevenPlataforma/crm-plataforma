@@ -26,6 +26,8 @@ export const MAX_WEBHOOK_BYTES = 64 * 1024;
 export interface WebhookRequest {
   providerKey: string;
   authorization: string | null;
+  /** For a provider that signs its calls. Names in lower case. */
+  headers?: Record<string, string>;
   rawBody: string;
 }
 
@@ -62,7 +64,11 @@ export const handleWebhook = async (
     return answer(503, { message: "The webhook is not configured" });
   }
   const isAuthentic = await provider.verifyWebhook(
-    { authorization: request.authorization, rawBody: request.rawBody },
+    {
+      authorization: request.authorization,
+      headers: request.headers,
+      rawBody: request.rawBody,
+    },
     secret,
   );
   if (!isAuthentic) {

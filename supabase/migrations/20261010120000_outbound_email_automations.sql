@@ -244,15 +244,21 @@ $$;
 -- An acceptance happens in the CUSTOMER's transaction (`quote_portal_accept`).
 -- Whatever goes wrong with a courtesy email must never undo it: the failure
 -- becomes a warning, the acceptance stands.
-create or replace function public.quotes_email_automation() returns trigger
+--
+-- On the VERSION, not on the quotation: `quote_portal_accept()` moves the
+-- status first and stamps `accepted_at` after, so a trigger on
+-- `quotes.status_key` would look for an accepted version before one exists.
+-- By the time the stamp lands the deal has already been moved too.
+create or replace function public.quote_versions_email_automation() returns trigger
     language plpgsql security definer
     set search_path to ''
 as $$
 begin
     begin
-        perform public.email_automation_quote_accepted(new.id);
+        perform public.email_automation_quote_accepted(new.quote_id);
     exception when others then
-        raise warning 'acceptance confirmation for quote % not queued: %', new.id, sqlerrm;
+        raise warning 'acceptance confirmation for quote % not queued: %',
+            new.quote_id, sqlerrm;
     end;
     return null;
 end;
@@ -327,6 +333,10 @@ $$;
 -- in-app notification, on the record the message was written from. The
 -- database writes the KEY and its parameters, never a sentence
 -- (`notificationText.ts` renders them in the reader's language).
+--
+-- The body is the message's subject -- data, not a sentence. An automation's
+-- subject is still its template (the dispatcher fills it), so for those the
+-- body is the quotation's number instead: nobody is shown `{{braces}}`.
 create or replace function public.email_messages_notify() returns trigger
     language plpgsql security definer
     set search_path to ''
@@ -348,9 +358,11 @@ begin
                now(),
                format('An email to %s %s', new.to_email,
                       case new.status when 'bounced' then 'bounced' else 'could not be sent' end),
-               new.subject,
+               case when new.origin = 'automation'
+                    then new.variables ->> 'quote_number'
+                    else new.subject end,
                'crm.notifications.email.' || new.status,
-               jsonb_build_object('to', new.to_email, 'subject', new.subject),
+               jsonb_build_object('to', new.to_email),
                format('email:%s:%s', new.id, new.status),
                'delivered', now(), now()
           from public.sales s
@@ -551,13 +563,13 @@ create or replace trigger email_automations_guard
     before update on public.email_automations
     for each row execute function public.email_automations_guard();
 
--- Named to fire AFTER `quotes_sync_deal` (same event, alphabetical order): the
--- confirmation looks at the stage the acceptance has just moved the deal to.
-create or replace trigger quotes_zz_email_automation
-    after update of status_key on public.quotes
+-- When the acceptance is STAMPED on the version, which is after the status
+-- moved and `quotes_sync_deal` moved the deal: the confirmation looks at both.
+create or replace trigger quote_versions_email_automation
+    after update of accepted_at on public.quote_versions
     for each row
-    when (new.status_key = 'accepted' and old.status_key is distinct from new.status_key)
-    execute function public.quotes_email_automation();
+    when (new.accepted_at is not null and old.accepted_at is null)
+    execute function public.quote_versions_email_automation();
 
 create or replace trigger email_messages_notify
     after update of status on public.email_messages
@@ -745,7 +757,12 @@ select
                        'to_name', m.to_name, 'subject', m.subject,
                        'status', m.status, 'error_code', m.error_code,
                        'quote_id', m.quote_id,
-                       'quote_version_id', m.quote_version_id)
+                       'quote_version_id', m.quote_version_id,
+                       -- An automation's subject is its template: what the
+                       -- client fills it with travels beside it.
+                       'origin', m.origin, 'language', m.language,
+                       'variables', case when m.origin = 'automation'
+                                         then m.variables end)
 from public.email_messages m
 where m.entity_type is not null
 
@@ -765,7 +782,10 @@ select
                        'to_name', m.to_name, 'subject', m.subject,
                        'status', m.status, 'error_code', m.error_code,
                        'quote_id', m.quote_id, 'quote_number', q.quote_number,
-                       'quote_version_id', m.quote_version_id)
+                       'quote_version_id', m.quote_version_id,
+                       'origin', m.origin, 'language', m.language,
+                       'variables', case when m.origin = 'automation'
+                                         then m.variables end)
 from public.email_messages m
     join public.quotes q on q.id = m.quote_id
 where q.deal_id is not null;
@@ -781,6 +801,8 @@ revoke all on function public.email_automation_enqueue(text, bigint, bigint, tex
 revoke all on function public.email_automation_quote_accepted(bigint) from public, anon, authenticated;
 revoke all on function public.email_automation_followups() from public, anon, authenticated;
 revoke all on function public.task_notification_worker_tick() from public, anon, authenticated;
+revoke all on function public.quote_versions_email_automation() from public, anon, authenticated;
+revoke all on function public.email_messages_notify() from public, anon, authenticated;
 grant execute on function public.email_automation_enqueue(text, bigint, bigint, text, text, integer, text, jsonb) to service_role;
 grant execute on function public.email_automation_quote_accepted(bigint) to service_role;
 grant execute on function public.email_automation_followups() to service_role;

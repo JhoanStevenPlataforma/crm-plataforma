@@ -1254,6 +1254,13 @@ $$;
 -- Idempotent: re-linking a record that is already attached promotes it instead
 -- of creating a duplicate, so a double click cannot corrupt the graph.
 --
+-- SECURITY DEFINER, like `transition_task()`: it writes the audit event through
+-- `emit_task_event()`, which no browser session may execute. As an invoker it
+-- was refused there (42501) after the task was already created, so every task
+-- added from a record's page was left attached to nothing. The authorisation is
+-- the `can_see_task()` check below -- the same rule the `task_links` policies
+-- apply, so running as the owner widens nothing.
+--
 create or replace function public.link_task_to_entity(
     p_task_id     bigint,
     p_entity_type public.task_entity,
@@ -1261,7 +1268,7 @@ create or replace function public.link_task_to_entity(
     p_label       text default null,
     p_primary     boolean default true
 ) returns public.task_links
-    language plpgsql security invoker
+    language plpgsql security definer
     set search_path to ''
 as $$
 declare
@@ -10695,15 +10702,21 @@ $$;
 -- An acceptance happens in the CUSTOMER's transaction (`quote_portal_accept`).
 -- Whatever goes wrong with a courtesy email must never undo it: the failure
 -- becomes a warning, the acceptance stands.
-create or replace function public.quotes_email_automation() returns trigger
+--
+-- On the VERSION, not on the quotation: `quote_portal_accept()` moves the
+-- status first and stamps `accepted_at` after, so a trigger on
+-- `quotes.status_key` would look for an accepted version before one exists.
+-- By the time the stamp lands the deal has already been moved too.
+create or replace function public.quote_versions_email_automation() returns trigger
     language plpgsql security definer
     set search_path to ''
 as $$
 begin
     begin
-        perform public.email_automation_quote_accepted(new.id);
+        perform public.email_automation_quote_accepted(new.quote_id);
     exception when others then
-        raise warning 'acceptance confirmation for quote % not queued: %', new.id, sqlerrm;
+        raise warning 'acceptance confirmation for quote % not queued: %',
+            new.quote_id, sqlerrm;
     end;
     return null;
 end;
@@ -10778,6 +10791,10 @@ $$;
 -- in-app notification, on the record the message was written from. The
 -- database writes the KEY and its parameters, never a sentence
 -- (`notificationText.ts` renders them in the reader's language).
+--
+-- The body is the message's subject -- data, not a sentence. An automation's
+-- subject is still its template (the dispatcher fills it), so for those the
+-- body is the quotation's number instead: nobody is shown `{{braces}}`.
 create or replace function public.email_messages_notify() returns trigger
     language plpgsql security definer
     set search_path to ''
@@ -10799,9 +10816,11 @@ begin
                now(),
                format('An email to %s %s', new.to_email,
                       case new.status when 'bounced' then 'bounced' else 'could not be sent' end),
-               new.subject,
+               case when new.origin = 'automation'
+                    then new.variables ->> 'quote_number'
+                    else new.subject end,
                'crm.notifications.email.' || new.status,
-               jsonb_build_object('to', new.to_email, 'subject', new.subject),
+               jsonb_build_object('to', new.to_email),
                format('email:%s:%s', new.id, new.status),
                'delivered', now(), now()
           from public.sales s

@@ -71,6 +71,17 @@ async function resetDb() {
       `Failed to reset email settings: ${emailSettingsError.message}`,
     );
   }
+  // Both automations back to how they are seeded: switched off, so no spec
+  // inherits a rule another one enabled and mails a customer by surprise.
+  const { error: emailAutomationsError } = await adminSupabase
+    .from("email_automations")
+    .update({ state: "disabled", max_sends: 1 })
+    .in("key", ["quote_accepted", "quote_followup"]);
+  if (emailAutomationsError) {
+    throw new Error(
+      `Failed to reset email automations: ${emailAutomationsError.message}`,
+    );
+  }
 
   // Quotes through their retention path too, for the same reason: issued
   // versions and the quote audit trail refuse a plain service-role DELETE, and

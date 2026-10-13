@@ -526,6 +526,7 @@ const sharedResources = (wrap: Wrap) => [
   <Resource key="email_settings" name="email_settings" />,
   <Resource key="email_message_events" name="email_message_events" />,
   <Resource key="email_suppressions" name="email_suppressions" />,
+  <Resource key="email_automations" name="email_automations" />,
   <Resource key="portal_templates" name="portal_templates" />,
   <Resource key="portal_slides" name="portal_slides" />,
   <Resource
