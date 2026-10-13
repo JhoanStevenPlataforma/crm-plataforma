@@ -1,9 +1,15 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
+import { emailProviders } from "../_shared/email/registry.ts";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { createErrorResponse } from "../_shared/utils.ts";
-import { readEmailConfig, sendEmail } from "./emailChannel.ts";
+import {
+  resolveEmailChannel,
+  sendEmail,
+  type EmailChannel,
+  type EmailSettingsRow,
+} from "./emailChannel.ts";
 import {
   buildDigestMessage,
   groupForDelivery,
@@ -53,7 +59,10 @@ type Settlement = {
  * the group, so a digest that failed does not leave part of its batch claiming
  * success.
  */
-const deliver = async (group: ClaimedNotification[]): Promise<Settlement> => {
+const deliver = async (
+  group: ClaimedNotification[],
+  emailChannel: EmailChannel,
+): Promise<Settlement> => {
   const [first] = group;
 
   if (!isSupportedChannel(first.channel)) {
@@ -63,13 +72,8 @@ const deliver = async (group: ClaimedNotification[]): Promise<Settlement> => {
     };
   }
 
-  const emailConfig = readEmailConfig((key) => Deno.env.get(key));
-  if (!emailConfig) {
-    return {
-      status: "skipped",
-      error:
-        "email is not configured (POSTMARK_SERVER_TOKEN / TASK_REMINDER_FROM_EMAIL)",
-    };
+  if (!emailChannel.ready) {
+    return { status: "skipped", error: emailChannel.reason };
   }
 
   let message;
@@ -84,10 +88,37 @@ const deliver = async (group: ClaimedNotification[]): Promise<Settlement> => {
     };
   }
 
-  const result = await sendEmail(message, emailConfig);
+  const result = await sendEmail(message, emailChannel, fetch);
   return result.ok
     ? { status: "sent", providerMessageId: result.providerMessageId }
     : { status: "failed", error: result.error };
+};
+
+/**
+ * The provider, sender and credential an administrator configured in
+ * Settings > Email. Read once per run, BEFORE anything is claimed: a database
+ * that cannot answer leaves the outbox untouched instead of skipping it.
+ */
+const loadEmailChannel = async (): Promise<EmailChannel> => {
+  const [settings, secret] = await Promise.all([
+    supabaseAdmin
+      .from("email_settings")
+      .select(
+        "provider_key, is_enabled, from_email, from_name, transactional_stream",
+      )
+      .eq("id", 1)
+      .maybeSingle(),
+    supabaseAdmin.rpc("get_email_provider_secret", { p_kind: "credentials" }),
+  ]);
+  if (settings.error || secret.error) {
+    throw new Error((settings.error ?? secret.error)?.message);
+  }
+
+  return resolveEmailChannel(
+    settings.data as EmailSettingsRow | null,
+    typeof secret.data === "string" && secret.data !== "" ? secret.data : null,
+    emailProviders,
+  );
 };
 
 Deno.serve(async (req) => {
@@ -101,6 +132,18 @@ Deno.serve(async (req) => {
   const authorization = req.headers.get("Authorization") ?? "";
   if (!SERVICE_ROLE_KEY || authorization !== `Bearer ${SERVICE_ROLE_KEY}`) {
     return createErrorResponse(401, "Unauthorized");
+  }
+
+  let emailChannel: EmailChannel;
+  try {
+    emailChannel = await loadEmailChannel();
+  } catch (error: unknown) {
+    return createErrorResponse(
+      500,
+      `Could not read the email settings: ${
+        error instanceof Error ? error.message : "unknown error"
+      }`,
+    );
   }
 
   const { data: claimed, error } = await supabaseAdmin.rpc(
@@ -124,7 +167,7 @@ Deno.serve(async (req) => {
   };
 
   for (const group of groupForDelivery(notifications)) {
-    const settlement = await deliver(group);
+    const settlement = await deliver(group, emailChannel);
     summary[settlement.status] += group.length;
 
     for (const notification of group) {
