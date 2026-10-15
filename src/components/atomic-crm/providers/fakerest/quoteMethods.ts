@@ -19,6 +19,13 @@
  */
 
 import { syncDealFromQuote } from "./dealQuoteSync";
+import { baseTotals, demoBaseCurrency } from "./fx";
+import {
+  copyLinesWithRates,
+  hasStaleRate,
+  lineSourceRate,
+  setDemoQuoteVersionRate,
+} from "./fxQuoteRates";
 import type { DataProvider, Identifier } from "ra-core";
 
 import { quoteAmounts } from "../../quotes/quoteMath";
@@ -189,9 +196,10 @@ const refreshTotals = async (
   version: QuoteVersion,
 ) => {
   const lines = await linesOf(dataProvider, version.id);
+  const totals = quoteAmounts(lines);
   const { data } = await dataProvider.update<QuoteVersion>("quote_versions", {
     id: version.id,
-    data: quoteAmounts(lines),
+    data: { ...totals, ...(await baseTotals(dataProvider, version, totals)) },
     previousData: version,
   });
   return data;
@@ -621,6 +629,25 @@ export const createDemoQuoteMethods = (
       );
     }
 
+    // The rate is frozen with the document: present, and not stale.
+    // A version in the base currency needs no rate (the migration backfills
+    // rate 1 on the real backend; demo rows written before it carry none).
+    if (
+      draft.exchange_rate == null &&
+      draft.currency !== (await demoBaseCurrency(dataProvider))
+    ) {
+      refuse(
+        QUOTE_ERROR.fxRateMissing,
+        `Quote ${quoteId} has no exchange rate for ${draft.currency}`,
+      );
+    }
+    if (await hasStaleRate(dataProvider, draft)) {
+      refuse(
+        QUOTE_ERROR.fxRateStale,
+        `The exchange rate of quote ${quoteId} is stale`,
+      );
+    }
+
     const gate = await computeQuoteDiscountGate(dataProvider, quoteId, salesId);
     let override = options.overrideReason?.trim() || null;
 
@@ -790,6 +817,20 @@ export const createDemoQuoteMethods = (
           valid_until: last.valid_until ?? null,
           terms: last.terms ?? null,
           discount_percent: last.discount_percent ?? null,
+          // The rate travels with the copy (`revise_quote()`).
+          base_currency: last.base_currency ?? null,
+          exchange_rate: last.exchange_rate ?? null,
+          rate_kind: last.rate_kind ?? null,
+          exchange_rate_id: last.exchange_rate_id ?? null,
+          rate_provider_key: last.rate_provider_key ?? null,
+          rate_effective_date: last.rate_effective_date ?? null,
+          rate_set_at: last.rate_set_at ?? null,
+          rate_set_by: last.rate_set_by ?? null,
+          rate_reason: last.rate_reason ?? null,
+          subtotal_base: last.subtotal_base ?? null,
+          discount_total_base: last.discount_total_base ?? null,
+          tax_total_base: last.tax_total_base ?? null,
+          total_base: last.total_base ?? null,
           subtotal: last.subtotal,
           discount_total: last.discount_total,
           tax_total: last.tax_total,
@@ -803,12 +844,16 @@ export const createDemoQuoteMethods = (
     const lines = (await linesOf(dataProvider, last.id)).sort(
       (a, b) => a.position - b.position,
     );
-    for (const line of lines) {
-      const { id: _dropped, ...columns } = line;
-      await dataProvider.create("quote_lines", {
-        data: { ...columns, version_id: draft.id, quote_id: quoteId },
-      });
-    }
+    // Each keeps the observation it was converted at (`revise_quote()`).
+    await copyLinesWithRates(
+      dataProvider,
+      draft.id,
+      lines.map(({ id: _dropped, ...columns }) => ({
+        ...columns,
+        version_id: draft.id,
+        quote_id: quoteId,
+      })),
+    );
 
     // The quotation's link is NOT revoked: it keeps showing the last issued
     // document, which cannot be answered while the quote is a draft.
@@ -841,6 +886,22 @@ export const createDemoQuoteMethods = (
    * callbacks like any other, and the read mark is the one change they let a
    * customer comment take.
    */
+  setQuoteVersionRate: async (versionId, kind, options = {}) => {
+    const dataProvider = getDataProvider();
+    const salesId = await getSalesId();
+    return setDemoQuoteVersionRate(
+      dataProvider,
+      salesId,
+      await roleOf(dataProvider, salesId),
+      versionId,
+      kind,
+      options,
+    );
+  },
+
+  getLineSourceRate: (versionId, sourceCurrency) =>
+    lineSourceRate(getDataProvider(), versionId, sourceCurrency),
+
   markQuoteCommentsRead: async (quoteId) => {
     const dataProvider = getDataProvider();
     await quoteOf(dataProvider, quoteId);

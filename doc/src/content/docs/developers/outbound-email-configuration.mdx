@@ -1,0 +1,173 @@
+---
+title: Outbound Email Configuration
+description: How to configure the provider, the sender domain (SPF, DKIM, DMARC) and the credentials Atomic CRM needs to send email to customers.
+---
+
+Atomic CRM can send email to customers from a contact, a lead, a company, a deal or a quotation, and can send a customer the link to an issued quotation. Every message is recorded on the record it was sent from, with the status of its delivery.
+
+Out of the box the mail provider is **Simulated**: messages are recorded, marked as simulated, and nothing leaves the CRM. This page explains how to switch to a real provider.
+
+> **Note**: Do not consider the integration ready for production until every step below is done and you have validated one real message, sent to an address you own.
+
+Atomic CRM sends email through [Postmark](https://postmarkapp.com/) or [Resend](https://resend.com/). This page describes Postmark first, which inbound email already uses (see [Inbound Email Configuration](../inbound-email-configuration/)); [Using Resend Instead of Postmark](#using-resend-instead-of-postmark) lists what differs.
+
+## Postmark Setup
+
+1. Go to your [Postmark account](https://account.postmarkapp.com/) and select your **server**.
+2. Keep the default **Transactional Stream** (its ID is `outbound`). It is used for one-to-one messages, such as a quotation.
+3. Go to **API Tokens** and copy the **Server API token**. You will need it in the last section.
+
+## Sender Domain: DKIM, SPF and DMARC
+
+Customers' mail servers accept or reject a message according to three DNS records of the domain it claims to come from. Without them your quotations land in spam.
+
+In Postmark, go to **Sender Signatures** > **Domains** > **Add Domain**, enter the domain of the address the CRM will send from (for `sales@example.com`, the domain is `example.com`), and publish the records Postmark shows in your DNS provider:
+
+1. **DKIM**: a `TXT` record at `<selector>._domainkey.example.com`, with the value Postmark gives you. It lets the recipient verify the message was not altered and was sent on behalf of your domain.
+2. **Return-Path**: a `CNAME` record `pm-bounces.example.com` pointing to `pm.mtasv.net`. This is what makes **SPF** pass *and align with your domain*: you do not need to add Postmark to your own SPF record.
+3. **DMARC**: a `TXT` record at `_dmarc.example.com`. Start with a policy that only reports:
+
+   ```
+   v=DMARC1; p=none; rua=mailto:dmarc-reports@example.com
+   ```
+
+   Once the reports show that your legitimate mail passes, tighten the policy to `p=quarantine` and then `p=reject`.
+
+Click **Verify** in Postmark until both DKIM and Return-Path show as verified. DNS changes can take a few hours.
+
+## Supabase Setup
+
+### Function environment
+
+The link to a quotation is built from the public address of the CRM. Set it as a secret of the edge functions:
+
+```sh
+npx supabase secrets set CRM_BASE_URL=https://crm.example.com
+```
+
+### Deploy
+
+```sh
+npx supabase db push
+npx supabase functions deploy email-dispatch
+npx supabase functions deploy email-webhook
+npx supabase functions deploy task-notification-worker
+```
+
+### Scheduled retries
+
+A message is sent the moment a user presses **Send**. A scheduled job, running every minute, retries the ones that failed temporarily. It needs to know where the dispatcher is and how to call it. Run this once in the SQL editor:
+
+```sql
+select vault.create_secret(
+  'https://<project_id>.supabase.co/functions/v1/email-dispatch',
+  'email_dispatch_url'
+);
+select vault.create_secret('<service role key>', 'email_dispatch_service_key');
+```
+
+Until both secrets exist the job does nothing: a message that failed temporarily then has to be retried by hand, from the message itself.
+
+> **Note**: An [automatic message](#automations) is sent by this job and by nothing else, because nobody presses **Send**. Without the two secrets it stays queued.
+
+## CRM Setup
+
+Sign in as an administrator and open **Email** in the settings group of the menu.
+
+1. Under **Provider and sender**, choose **Postmark**, enter the **sender address** (on the domain you verified) and the **sender name**, and save.
+2. Under **Credentials**, paste the **Server API token** and save. The token is stored encrypted on the server and is never shown again.
+3. The status line at the top should now read *The provider is configured*.
+4. Under **Test message**, send a message to an address you own.
+
+Then validate a real quotation: issue one, send it to yourself, and check that
+
+- the message arrives in the inbox, not in spam;
+- the link opens the quotation, in the mail clients your customers use;
+- the message headers show `spf=pass`, `dkim=pass` and `dmarc=pass`.
+
+## Delivery Webhook
+
+The provider accepting a message does not mean it was delivered. Postmark reports what became of each message through a webhook; without it, a sent message stays at *Accepted by the provider*.
+
+1. Choose a **user** and a **password** for the webhook. Postmark does not sign its webhooks: this pair is what authenticates them.
+2. In the CRM, open **Email** > **Provider** > **Credentials**, and store `user:password` (the two joined by a colon) as the **Delivery webhook secret**.
+3. In Postmark, select your server, the **Transactional Stream**, then **Webhooks** > **Add webhook**, with the URL:
+
+   ```
+   https://<user>:<password>@<project_id>.supabase.co/functions/v1/email-webhook
+   ```
+
+4. Tick **Delivery**, **Bounce** and **Spam Complaint**. Leave *Open* and *Link Click* unticked: the CRM does not track them.
+5. Use **Send test** in Postmark. The CRM answers `200`; with a wrong password it answers `401`.
+
+> **Note**: You can also restrict which addresses may call the webhook by setting the function secret `EMAIL_WEBHOOK_AUTHORIZED_IPS` to Postmark's webhook IP addresses, separated by commas.
+
+An address that bounces permanently, or whose owner reports a message as spam, is added to **Email** > **Suppressed addresses**, and the CRM stops writing to it. An administrator can take an address off that list, or add one by hand for a customer who asked not to be contacted.
+
+## Automations
+
+The CRM can send two messages by itself. Both are **switched off** until an administrator enables them, in **Email** > **Automations**.
+
+| Rule | What it sends |
+|---|---|
+| Acceptance confirmation | When a customer accepts a quotation, a confirmation to the address they signed with. If the quotation belongs to a deal, it is sent once the deal is in the stage an acceptance moves it to |
+| Quotation follow-up | A reminder to the address a quotation was sent to by mail, when the customer has not answered after the number of days you choose, at most as many times as you choose |
+
+A follow-up is never sent to somebody a person did not write to first, and never once the customer has answered or started negotiating, the quotation is being revised, the offer has lapsed, or the address is on the suppressed list. An automatic message is signed by the owner of the quotation: replies reach them, and they are notified in the CRM if it bounces.
+
+Each rule has three states:
+
+- **Off**: nothing is sent, and what was waiting to leave is canceled.
+- **Paused**: nothing is sent, and what was waiting keeps waiting until the rule is switched on again.
+- **On**: the rule runs.
+
+Before switching a rule on:
+
+1. Configure the [scheduled job](#scheduled-retries). Automatic messages are sent by it alone.
+2. Read the template the rule uses, in **Email** > **Templates**, in every language you write to customers in.
+3. For the follow-up, create a **Broadcast Stream** in Postmark and enter its ID as the commercial stream in **Email** > **Provider**. It keeps reminders apart from the reputation of your one-to-one mail.
+
+> **Note**: A follow-up is commercial mail. Check what your country requires of it (for instance a way to opt out) before enabling the rule. A customer who asks not to be contacted is added by hand to **Email** > **Suppressed addresses**.
+
+### Notification emails to the team
+
+Task reminders and quotation notices sent to your own team by email are dispatched by a second scheduled job, every five minutes. They leave through the provider, the sender address and the credentials configured in **Email** > **Provider**: there is nothing else to configure for them. While the provider is **Simulated**, or has no credentials, they are not sent and each one is recorded as skipped, with the reason.
+
+The job needs its own two secrets, once:
+
+```sql
+select vault.create_secret(
+  'https://<project_id>.supabase.co/functions/v1/task-notification-worker',
+  'task_worker_url'
+);
+select vault.create_secret('<service role key>', 'task_worker_service_key');
+```
+
+## Using Resend Instead of Postmark
+
+[Resend](https://resend.com/) is the second supported provider. Everything above applies, with these differences:
+
+1. **API key**: in Resend, go to **API Keys** > **Create API Key** with the *Sending access* permission. In the CRM, choose **Resend** as the provider and store the key as the **Provider API token**.
+2. **Sender domain**: in Resend, go to **Domains** > **Add Domain** and publish the records it shows (a DKIM `TXT` record at `resend._domainkey`, and an `MX` and an SPF `TXT` record on the `send` subdomain), then add the DMARC record described above. Until a domain is verified, Resend only sends from `onboarding@resend.dev` to the address of your own Resend account.
+3. **Tracking**: leave **Click tracking** and **Open tracking** switched off on the domain. Click tracking would route the customer's quotation link through Resend.
+4. **Streams**: Resend has none. The two stream fields are hidden and ignored.
+5. **Delivery webhook**: in Resend, go to **Webhooks** > **Add Webhook** with the URL `https://<project_id>.supabase.co/functions/v1/email-webhook`, and tick `email.delivered`, `email.bounced`, `email.complained` and `email.suppressed`. Copy the webhook's **Signing secret** (it starts with `whsec_`) and store it in the CRM as the **Delivery webhook secret**. Resend signs every call; no user and password go in the URL.
+
+## Statuses
+
+| Status | Meaning |
+|---|---|
+| Queued | Waiting to be sent, or waiting for a retry |
+| Sending | Being handed to the provider |
+| Accepted by the provider | The provider took the message. Delivery is not confirmed |
+| Delivered | The recipient's mail server confirmed the delivery |
+| Bounced | The recipient's mail server rejected the message |
+| Failed | The message could not be sent. It can be retried from the message |
+| Canceled | The quotation changed, the address was suppressed or the automation was switched off before the message left, so it was not sent |
+| Simulated, not sent | The provider is the simulated one. No email left the CRM |
+
+> **Note**: *Delivered* and *Bounced* are reported by the provider's delivery webhook. Until it is configured (see above), a message that was sent stays at *Accepted by the provider*.
+
+## Going Back
+
+Set the provider back to **Simulated** in the settings page. Messages queued while the provider is switched off or incomplete stay queued, and leave when it is configured again.

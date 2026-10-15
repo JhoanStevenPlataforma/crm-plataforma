@@ -1,7 +1,9 @@
 import {
   BarChart3,
+  BookOpenText,
   BriefcaseBusiness,
   Building2,
+  Coins,
   Contact,
   FileBarChart,
   FileSignature,
@@ -9,6 +11,7 @@ import {
   Import,
   LayoutDashboard,
   ListTodo,
+  Mail,
   Package,
   Percent,
   PieChart,
@@ -285,6 +288,17 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: Percent,
         access: { resource: "tax_rates", action: "edit" },
       },
+      // Financial settings: currencies and exchange rates. Everyone reads the
+      // rates a quotation will use; what each role may change is per tab.
+      {
+        key: "currencies",
+        labelKey: "crm.fx.navigation",
+        to: "/currencies",
+        match: "/currencies",
+        matchEnd: true,
+        icon: Coins,
+        access: { resource: "current_exchange_rates", action: "list" },
+      },
       // The slides a customer reads before every quotation. Admins edit them.
       {
         key: "portal",
@@ -294,6 +308,17 @@ export const NAV_SECTIONS: NavSection[] = [
         matchEnd: true,
         icon: Presentation,
         access: { resource: "portal_templates", action: "edit" },
+      },
+      // Outbound email: its history for managers; the provider, the sender,
+      // the credentials and the templates for admins.
+      {
+        key: "email",
+        labelKey: "crm.email.settings.nav",
+        to: "/email",
+        match: "/email",
+        matchEnd: true,
+        icon: Mail,
+        access: { resource: "email_history", action: "list" },
       },
       {
         key: "preferences",
@@ -309,6 +334,22 @@ export const NAV_SECTIONS: NavSection[] = [
         to: IMPORT_PATH,
         match: "/import/*",
         icon: Import,
+      },
+    ],
+  },
+  {
+    key: "help",
+    labelKey: "crm.navigation.groups.help",
+    icon: BookOpenText,
+    items: [
+      // Ungated: the manual is for whoever is signed in, a new rep first of
+      // all. What a rep must not see -- a draft -- is withheld by RLS.
+      {
+        key: "help",
+        labelKey: "crm.help.title",
+        to: "/help",
+        match: "/help/*",
+        icon: BookOpenText,
       },
     ],
   },

@@ -28,6 +28,7 @@
  *     lines and version are two reads that can land at different moments.
  */
 
+import type { QuoteExchangeInfo } from "../types";
 import type {
   Company,
   Contact,
@@ -91,6 +92,13 @@ export type QuoteDocumentData = {
   };
   lines: QuoteDocumentLine[];
   totals: QuoteAmounts;
+  /**
+   * The rate the document is priced at and its total in the base currency,
+   * when it is in another currency (multi-currency). Informative: the amounts
+   * above are the contract. Null in the base currency, or before rates
+   * existed.
+   */
+  exchange: QuoteExchangeInfo | null;
   terms: string | null;
   branding: { title: string; logo_url: string | null };
   acceptance: {
@@ -111,6 +119,8 @@ export type QuoteDocumentSource = {
    */
   live?: { company?: Company | null; contact?: Contact | null };
   branding: { title: string; logo_url?: string | null };
+  /** The provider's display name, for the rate line; the key otherwise. */
+  rateProviderName?: string | null;
 };
 
 /** A non-blank string, or null. Snapshot values are untyped jsonb. */
@@ -193,6 +203,7 @@ export const toQuoteDocument = ({
   lines,
   live,
   branding,
+  rateProviderName,
 }: QuoteDocumentSource): QuoteDocumentData => {
   const isIssued = version.issued_at != null;
   const snapshot = objectOf(version.party_snapshot);
@@ -246,6 +257,23 @@ export const toQuoteDocument = ({
           total: version.total,
         }
       : quoteAmounts(ordered),
+    exchange:
+      version.rate_kind != null &&
+      version.rate_kind !== "base" &&
+      version.exchange_rate != null &&
+      version.base_currency
+        ? {
+            base_currency: version.base_currency,
+            rate: Number(version.exchange_rate),
+            rate_kind: version.rate_kind,
+            provider_name:
+              rateProviderName ?? text(version.rate_provider_key) ?? null,
+            effective_date: version.rate_effective_date ?? null,
+            // The server's figure, refreshed with every line write.
+            total_base:
+              version.total_base == null ? null : Number(version.total_base),
+          }
+        : null,
     terms: text(version.terms),
     branding: {
       title: branding.title,
@@ -312,6 +340,16 @@ export const fromPortalPayload = (
       line_total: line.line_total,
     })),
     totals: { ...payload.totals },
+    exchange: payload.exchange
+      ? {
+          ...payload.exchange,
+          rate: Number(payload.exchange.rate),
+          total_base:
+            payload.exchange.total_base == null
+              ? null
+              : Number(payload.exchange.total_base),
+        }
+      : null,
     terms: text(payload.terms),
     branding:
       title != null || logoUrl != null

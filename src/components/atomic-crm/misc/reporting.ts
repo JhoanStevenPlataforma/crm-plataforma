@@ -48,6 +48,10 @@ export const formatMoneyExact = (
   value: number | null | undefined,
   currency: string,
   locale = "en-US",
+  // Only for a figure that is stored at that precision: a base-currency
+  // equivalent rounded to the currency's own decimals (multi-currency), never
+  // a document amount, which is always `numeric(14,2)`.
+  fractionDigits = 2,
 ) =>
   value == null
     ? "—"
@@ -55,8 +59,8 @@ export const formatMoneyExact = (
         style: "currency",
         currency,
         currencyDisplay: "narrowSymbol",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
       });
 
 /** `0.42` -> `"42%"`, and `null` -> an em dash rather than "0%". */

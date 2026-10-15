@@ -667,7 +667,8 @@ export const frenchCrmMessages = {
         any_status: "Tous les statuts",
       },
       helpers: {
-        price_list_id: "Fixe la devise du devis et les prix proposés",
+        price_list_id:
+          "Les prix proposés. Une liste dans une autre devise est convertie au taux de change du devis",
         valid_until:
           "Passée cette date, l’offre et tout lien vers elle sont caducs",
         terms: "Imprimées sur le document, sous les lignes",
@@ -1073,6 +1074,81 @@ export const frenchCrmMessages = {
           "Ce mouvement revient au client ou au système, pas à vous.",
         quote_approval_requires_manager:
           "Seul un manager peut approuver un devis — approuver le sien reviendrait à fixer sa propre limite.",
+        fx_rate_missing:
+          "Il n'y a pas encore de taux de change pour cette devise. Demandez à un manager d'en saisir un.",
+        fx_rate_stale:
+          "Le taux de change est périmé. Passez au taux du jour avant d'envoyer.",
+        fx_custom_rate_forbidden:
+          "Les taux de change personnalisés sont définis par les managers et les administrateurs.",
+        fx_custom_rate_out_of_tolerance:
+          "Ce taux s'écarte du taux officiel plus que vous n'y êtes autorisé.",
+        fx_reason_required: "Un taux personnalisé exige un motif écrit.",
+        fx_rate_invalid: "Le taux doit être un nombre positif.",
+        fx_rate_kind_invalid: "Ce type de taux ne s'applique pas à ce devis.",
+      },
+    },
+    help_categories: {
+      name: "Catégorie |||| Catégories",
+      forcedCaseName: "Catégorie",
+      fields: {
+        title: "Titre",
+        slug: "Nom du lien",
+        description: "Description",
+        icon: "Icône",
+        rank: "Ordre",
+      },
+      action: {
+        new: "Nouvelle catégorie",
+      },
+      errors: {
+        conflict: "Une autre catégorie utilise déjà ce nom de lien",
+        in_use:
+          "Cette catégorie contient encore des tutoriels. Déplacez-les ou supprimez-les d'abord.",
+      },
+    },
+    help_tutorials: {
+      name: "Tutoriel |||| Tutoriels",
+      forcedCaseName: "Tutoriel",
+      field_categories: {
+        content: "Contenu",
+        media: "Enregistrement",
+        publishing: "Publication",
+      },
+      fields: {
+        title: "Titre",
+        category_id: "Catégorie",
+        slug: "Nom du lien",
+        description: "Description",
+        steps: "Étapes",
+        video_path: "Enregistrement",
+        poster_path: "Vignette",
+        captions_path: "Sous-titres",
+        duration_seconds: "Durée (secondes)",
+        rank: "Ordre",
+        is_published: "Publié",
+        updated_at: "Mis à jour",
+      },
+      action: {
+        new: "Nouveau tutoriel",
+      },
+      helpers: {
+        slug: "Des mots en minuscules reliés par des tirets. C'est l'adresse du tutoriel : conservez-la quand vous remplacez l'enregistrement.",
+        steps:
+          "Une étape par ligne. Affichées en liste numérotée sous l'enregistrement.",
+        video_path:
+          "MP4 (H.264) ou WebM, jusqu'à 50 Mo. Un nouveau fichier remplace l'enregistrement ; l'ancien est conservé dans le stockage.",
+        poster_path:
+          "L'image affichée avant la lecture : WebP, JPG ou PNG, 16:9.",
+        captions_path: "Facultatif. Un fichier WebVTT (.vtt).",
+        duration_seconds:
+          "Renseignée à partir de l'enregistrement lors de l'envoi.",
+        is_published:
+          "Un brouillon n'est visible que des administrateurs. Un tutoriel a besoin d'un enregistrement pour être publié.",
+      },
+      errors: {
+        conflict: "Un autre tutoriel utilise déjà ce nom de lien",
+        publish_without_video:
+          "Joignez un enregistrement avant de publier ce tutoriel",
       },
     },
     tax_rates: {
@@ -1204,6 +1280,7 @@ export const frenchCrmMessages = {
         events: {
           quote_status_changed: "Statut du devis modifié",
           quote_commented: "Le client a répondu",
+          email_message: "E-mail au client",
           // Not a task event: the timeline is shared, and this is how a
           // deal's stage transition is labelled on it.
           deal_stage_changed: "Étape modifiée",
@@ -1593,6 +1670,641 @@ export const frenchCrmMessages = {
           "La diapositive n'a pas pu être enregistrée. Vérifiez votre connexion et réessayez.",
       },
     },
+    email: {
+      action: {
+        send: "Envoyer un e-mail",
+        send_quote: "Envoyer par e-mail",
+      },
+      demo_unavailable:
+        "Indisponible en mode démo : un onglet de navigateur n'a pas de coffre où garder un secret.",
+      status: {
+        pending: "En file d'attente",
+        processing: "Envoi en cours",
+        accepted: "Accepté par le fournisseur",
+        delivered: "Remis",
+        bounced: "Rejeté",
+        failed: "Échec",
+        canceled: "Annulé",
+        simulated: "Simulé, non envoyé",
+      },
+      result: {
+        pending: "Le message est en file d'attente et partira dans la minute.",
+        processing: "Le message est en cours d'envoi.",
+        accepted:
+          "Le fournisseur d'e-mail a accepté le message. La remise dans la boîte n'est pas encore confirmée.",
+        delivered: "Le serveur du destinataire a confirmé la remise.",
+        bounced: "Le serveur du destinataire a rejeté le message.",
+        failed: "Le message n'a pas pu être envoyé.",
+        canceled: "Le message a été annulé avant son envoi.",
+        simulated:
+          "Envoi simulé : le fournisseur d'e-mail n'est pas configuré, aucun e-mail n'a quitté le CRM.",
+      },
+      fields: {
+        to: "À",
+        subject: "Objet",
+        body: "Message",
+        template: "Modèle",
+      },
+      compose: {
+        title: "Envoyer un e-mail",
+        title_quote: "Envoyer le devis par e-mail",
+        description:
+          "Le message part de l'adresse de l'entreprise et reste dans l'historique de cette fiche.",
+        description_quote:
+          "Le client reçoit le lien vers la version %{version}, celle déjà émise. L'envoi n'émet pas et ne modifie pas le devis.",
+        write: "Rédiger",
+        preview: "Aperçu",
+        to_placeholder: "Choisir un destinataire",
+        other_address: "Autre adresse…",
+        address_placeholder: "nom@entreprise.com",
+        no_recipients:
+          "Cette fiche n'a aucune adresse e-mail. Ajoutez-en une au contact d'abord.",
+        related_only:
+          "Vous pouvez écrire aux adresses de cette fiche. Un manager peut utiliser une autre adresse.",
+        no_template: "Sans modèle",
+        body_hint:
+          "Texte brut. Il est placé dans la mise en page de l'entreprise à l'envoi.",
+        body_hint_quote:
+          "Texte brut. {{quote_link}} est remplacé par le lien du client à l'envoi.",
+        unresolved:
+          "Renseignez ou retirez ces variables avant l'envoi : %{variables}",
+        simulated_notice:
+          "Mode simulé : le fournisseur d'e-mail n'est pas configuré. Le message sera enregistré, mais aucun e-mail ne partira.",
+        not_ready:
+          "L'e-mail n'est pas prêt : un administrateur doit terminer la configuration du fournisseur.",
+        link_appended:
+          "Le message n'a pas le repère {{quote_link}} : le lien est ajouté après le texte.",
+        send: "Envoyer",
+        suppressed: "supprimée",
+        sending: "Envoi…",
+        send_anyway: "Envoyer quand même",
+      },
+      quote_block: {
+        quote_not_found: "Le devis n'existe plus.",
+        quote_not_issued:
+          "Ce devis n'a pas encore été émis. Émettez-le avant de l'envoyer.",
+        version_superseded:
+          "Une version plus récente a été émise. Envoyez celle-là : le lien l'ouvre.",
+        version_answered: "Le client a déjà répondu à cette version.",
+        quote_closed: "Le devis est clos (accepté, refusé, expiré ou annulé).",
+        quote_revision_open:
+          "Une révision est en cours. Émettez-la avant de renvoyer le devis.",
+        version_expired:
+          "La validité de l'offre est dépassée. Révisez le devis pour le renvoyer.",
+      },
+      errors: {
+        generic: "L'e-mail n'a pas pu être traité.",
+        email_forbidden: "Vous n'avez pas la permission de faire cela.",
+        email_entity_invalid:
+          "Les e-mails ne peuvent pas être envoyés depuis cette fiche.",
+        email_disabled: "L'envoi d'e-mails est désactivé.",
+        email_not_configured:
+          "Le fournisseur d'e-mail n'est pas configuré : il manque l'adresse d'expédition ou les identifiants.",
+        email_recipient_invalid: "L'adresse du destinataire n'est pas valide.",
+        email_recipient_not_allowed:
+          "Cette adresse n'est pas liée à cette fiche. Seul un manager ou un administrateur peut utiliser une autre adresse.",
+        email_recipient_suppressed:
+          "Cette adresse est sur la liste de suppression : rejet définitif ou message signalé comme spam.",
+        email_subject_invalid:
+          "L'objet est vide, trop long ou contient un saut de ligne.",
+        email_body_invalid: "Le message est vide ou trop long.",
+        email_unresolved_variable:
+          "Le message contient encore une variable non renseignée.",
+        email_template_invalid: "Ce modèle n'existe pas ou est inactif.",
+        email_rate_limited:
+          "Trop d'e-mails en peu de temps. Réessayez plus tard.",
+        email_duplicate_recent:
+          "Le même message a été envoyé à cette adresse il y a un instant. L'envoyer à nouveau ?",
+        email_quote_not_shareable:
+          "Ce devis ne peut pas être partagé pour le moment.",
+        email_not_retryable: "Seul un message en échec peut être relancé.",
+        email_idempotency_required: "Le message n'a pas pu être identifié.",
+        email_template_unknown_variable:
+          "Le modèle utilise une variable indisponible pour son type.",
+        email_template_locked:
+          "Un modèle système ne peut être ni supprimé ni renommé.",
+        email_settings_column_protected:
+          "Les identifiants s'enregistrent avec leur propre formulaire, pas avec les réglages.",
+      },
+      delivery_errors: {
+        provider_unauthorized:
+          "Le fournisseur d'e-mail a refusé les identifiants.",
+        provider_unavailable:
+          "Le fournisseur d'e-mail était momentanément indisponible.",
+        provider_unreachable: "Le fournisseur d'e-mail est injoignable.",
+        provider_rejected: "Le fournisseur d'e-mail a rejeté le message.",
+        recipient_inactive:
+          "Le fournisseur n'envoie plus à cette adresse (rejet ou plainte antérieurs).",
+        recipient_invalid: "Le fournisseur juge l'adresse invalide.",
+        email_not_configured:
+          "Le fournisseur n'a pas d'identifiants ou pas d'adresse d'expédition.",
+        email_subject_invalid: "L'objet n'est pas valide.",
+        email_provider_unknown:
+          "Le fournisseur configuré n'est pas disponible dans ce déploiement.",
+        email_base_url_missing:
+          "L'adresse publique du CRM n'est pas configurée : le lien n'a pas pu être construit.",
+        email_link_unavailable: "Le lien du client n'a pas pu être lu.",
+        email_quote_link_missing:
+          "Le devis n'a pas de lien client actif. Créez-le puis relancez.",
+        email_quote_not_shareable:
+          "Le devis a changé avant le départ du message : il n'a pas été envoyé.",
+        recipient_bounced: "Le serveur du destinataire a rejeté le message.",
+        email_recipient_suppressed:
+          "L'adresse a été ajoutée à la liste de suppression avant le départ du message.",
+        email_dispatch_interrupted:
+          "L'envoi a été interrompu et son issue est inconnue. Vérifiez auprès du client avant de relancer.",
+        email_automation_disabled:
+          "L'automatisation a été désactivée avant le départ du message : il n'a pas été envoyé.",
+      },
+      automations: {
+        description:
+          "Les e-mails que le CRM envoie de lui-même. Les deux règles sont livrées désactivées : rien n'est envoyé automatiquement tant qu'un administrateur n'en active pas une.",
+        load_error: "Les automatisations n'ont pas pu être chargées.",
+        saved: "L'automatisation a été enregistrée",
+        state: "État",
+        template: "Modèle",
+        delay_days: "Jours sans réponse avant de relancer",
+        max_sends: "Relances par devis, au maximum",
+        followup_invalid:
+          "L'attente doit être comprise entre %{min_days} et %{max_days} jours, et les relances entre %{min_sends} et %{max_sends}.",
+        states: {
+          disabled: "Désactivée",
+          paused: "En pause",
+          enabled: "Active",
+        },
+        state_help: {
+          disabled:
+            "Désactivée : rien n'est envoyé, et ce qui attendait de partir est annulé.",
+          paused:
+            "En pause : rien n'est envoyé, et ce qui attendait continue d'attendre jusqu'à la réactivation de la règle.",
+          enabled:
+            "Active : le CRM envoie ce message de lui-même, signé par le responsable du devis.",
+        },
+        rules: {
+          quote_accepted: {
+            title: "Confirmation d'acceptation",
+            description:
+              "Quand un client accepte un devis, il reçoit une confirmation à l'adresse avec laquelle il a signé.",
+          },
+          quote_followup: {
+            title: "Relance de devis",
+            description:
+              "Un rappel à l'adresse à laquelle le devis a été envoyé par e-mail, quand le client n'a pas répondu après quelques jours.",
+          },
+        },
+      },
+      history: {
+        title: "E-mails",
+        empty: "Aucun e-mail envoyé pour l'instant.",
+        load_error: "Les e-mails n'ont pas pu être chargés.",
+        quote_hint: "Envoyez au client le lien du devis émis.",
+        status: "Statut",
+        all_statuses: "Tous les statuts",
+        search: "Destinataire ou objet",
+        count: "%{shown} sur %{total} messages",
+        date: "Date",
+        sender: "Envoyé par",
+        problem: "Problème",
+        load_more: "Charger plus",
+        automatic: "Automatique",
+      },
+      message: {
+        title: "E-mail",
+        to: "À %{address}",
+        attempts: "%{count} tentatives",
+        retry: "Relancer",
+        retried: "Le message a été remis en file d'attente",
+        quote: "Devis",
+        quote_version: "%{number}, version %{version}",
+        provider_id: "ID du fournisseur",
+        moments: {
+          created: "Créé",
+          accepted: "Accepté",
+          delivered: "Remis",
+          bounced: "Rejeté",
+          failed: "Échec",
+        },
+      },
+      tabs: {
+        history: "Historique",
+        suppressions: "Adresses supprimées",
+        templates: "Modèles",
+        automations: "Automatisations",
+        settings: "Fournisseur",
+      },
+      events: {
+        title: "Ce que le fournisseur a signalé",
+        delivered: "Remis au serveur du destinataire",
+        bounced: "Rejeté",
+        complained: "Signalé comme spam",
+        permanent: "définitif",
+      },
+      suppressions: {
+        description:
+          "Adresses auxquelles le CRM n'écrit plus : rejet définitif, message signalé comme spam, ou ajout manuel.",
+        empty: "Aucune adresse n'est supprimée.",
+        load_error: "Les adresses supprimées n'ont pas pu être chargées.",
+        address: "Adresse",
+        reason: "Motif",
+        detail: "Détail",
+        since: "Depuis",
+        remove: "Retirer de la liste",
+        removed: "Cette adresse peut de nouveau recevoir des messages",
+        add_title: "Ajouter une adresse",
+        add_help:
+          "Pour un client qui a demandé à ne plus être contacté. Aucun message ne lui sera envoyé.",
+        add: "Ajouter",
+        added: "Adresse ajoutée à la liste",
+        reasons: {
+          hard_bounce: "Rejet définitif",
+          complaint: "Plainte pour spam",
+          manual: "Ajoutée à la main",
+        },
+      },
+      templates: {
+        description:
+          "Les messages proposés par la fenêtre d'envoi. Un modèle inactif est un brouillon visible des seuls administrateurs.",
+        new: "Nouveau modèle",
+        empty: "Il n'y a pas encore de modèle.",
+        load_error: "Les modèles n'ont pas pu être chargés.",
+        name: "Nom",
+        key: "Clé",
+        key_help:
+          "Minuscules, chiffres et tirets bas. Les automatisations désignent un modèle par sa clé.",
+        scope: "Utilisé sur",
+        language: "Langue",
+        category: "Type",
+        state: "État",
+        active: "Actif",
+        inactive: "Inactif",
+        system: "Système",
+        active_label: "Proposé dans la fenêtre d'envoi",
+        new_title: "Nouveau modèle",
+        edit_title: "Modifier le modèle",
+        dialog_help:
+          "Texte brut. Les variables s'écrivent entre doubles accolades et sont renseignées depuis la fiche.",
+        system_help:
+          "Modèle système : son texte peut être modifié, pas sa clé, sa portée ni sa langue, et il ne peut pas être supprimé.",
+        variables: "Variables disponibles : %{variables}",
+        unknown_variables:
+          "Ces variables n'existent pas pour ce type de fiche : %{variables}",
+        link_in_subject: "Le lien du devis ne peut pas figurer dans l'objet.",
+        saved: "Modèle enregistré",
+        deleted: "Modèle supprimé",
+        scopes: {
+          generic: "Toute fiche",
+          contact: "Contacts",
+          lead: "Prospects",
+          company: "Entreprises",
+          deal: "Opportunités",
+          quote: "Devis",
+        },
+        categories: {
+          transactional: "Message individuel",
+          commercial: "Relance commerciale",
+        },
+      },
+      settings: {
+        nav: "E-mail",
+        title: "E-mail",
+        description:
+          "Le fournisseur qui envoie les e-mails du CRM, l'adresse d'expédition et ses identifiants.",
+        load_error: "Les réglages d'e-mail n'ont pas pu être chargés.",
+        saved: "Réglages d'e-mail enregistrés",
+        state: {
+          disabled: "L'envoi d'e-mails est désactivé",
+          simulated: "Mode simulé : aucun e-mail ne quitte le CRM",
+          ready: "Le fournisseur est configuré",
+          incomplete: "Le fournisseur n'est pas entièrement configuré",
+        },
+        state_hint: {
+          disabled:
+            "Personne ne peut envoyer d'e-mails tant qu'il n'est pas activé.",
+          simulated:
+            "Les messages sont enregistrés comme simulés. Choisissez un vrai fournisseur pour envoyer.",
+          ready:
+            "Envoyez un message de test pour le confirmer. En production, le domaine d'expédition doit aussi être vérifié avec SPF, DKIM et DMARC.",
+          incomplete:
+            "Il manque l'adresse d'expédition ou les identifiants du fournisseur : rien ne peut être envoyé.",
+        },
+        provider_title: "Fournisseur et expéditeur",
+        provider_help:
+          "Tous les e-mails partent d'une adresse vérifiée. Les réponses peuvent revenir à la personne qui a envoyé le message.",
+        enabled: "Envoi d'e-mails activé",
+        provider: "Fournisseur",
+        providers: {
+          mock: "Simulé (n'envoie rien)",
+          postmark: "Postmark",
+          resend: "Resend",
+        },
+        from_email: "Adresse d'expédition",
+        from_name: "Nom de l'expéditeur",
+        from_help:
+          "L'adresse doit appartenir à un domaine vérifié chez le fournisseur.",
+        reply_to: "Les réponses vont à",
+        reply_to_modes: {
+          sender: "L'utilisateur qui a envoyé le message",
+          none: "L'adresse d'expédition",
+        },
+        transactional_stream: "Flux pour les messages individuels",
+        commercial_stream: "Flux pour les relances commerciales",
+        max_per_user_hour: "E-mails par utilisateur et par heure",
+        max_per_recipient_day: "E-mails par destinataire et par jour",
+        secrets_title: "Identifiants",
+        secrets_description:
+          "Stockés chiffrés sur le serveur. Ils ne sont plus jamais affichés, ni ici ni ailleurs.",
+        secrets: {
+          credentials: "Jeton d'API du fournisseur",
+          webhook: "Secret du webhook de remise",
+        },
+        secrets_help: {
+          credentials: "Le server token du serveur d'envoi du fournisseur.",
+          webhook:
+            "Ce que le fournisseur doit présenter lorsqu'il signale remises et rejets.",
+        },
+        secret_stored: "Enregistré",
+        secret_missing: "Non défini",
+        secret_saved: "Secret enregistré",
+        secret_cleared: "Secret supprimé",
+        secret_clear: "Retirer",
+        test_title: "Message de test",
+        test_help:
+          "Envoie un message avec la configuration ci-dessus, à l'adresse de votre choix.",
+        test_send: "Envoyer le test",
+        test_subject: "Message de test du CRM",
+        test_body:
+          "Ceci est un message de test du CRM. Si vous le lisez, l'envoi d'e-mails fonctionne.",
+      },
+    },
+    fx: {
+      title: "Devises et taux de change",
+      description:
+        "Les devises de l'entreprise, la provenance de leurs taux et le taux auquel chaque devis est valorisé.",
+      navigation: "Devises et taux",
+      demo_unavailable:
+        "Indisponible en mode démo : un onglet de navigateur ne peut pas interroger les fournisseurs de taux.",
+      tabs: {
+        overview: "Vue d'ensemble",
+        currencies: "Devises",
+        rates: "Taux",
+        providers: "Fournisseurs",
+        history: "Historique",
+        settings: "Paramètres",
+        health: "Santé des intégrations",
+      },
+      overview: {
+        base_currency: "Devise de référence",
+        base_help:
+          "Tous les taux y sont exprimés, et les affaires y sont comptées.",
+        last_update: "Dernière mise à jour des taux",
+        never: "Jamais",
+        active_provider: "Fournisseur actif",
+        none: "Aucun",
+        connection: "Connexion",
+        active_currencies: "Devises actives",
+        stale_warning:
+          "%{count} taux ont plus de %{days} jour(s). Ils restent affichés, avec leur date, mais un devis ne peut pas être émis à un taux officiel périmé.",
+        see_health: "Voir la santé des intégrations",
+      },
+      kinds: {
+        base: "Référence",
+        official: "Officiel",
+        commercial: "Commercial",
+        custom: "Personnalisé",
+      },
+      status: {
+        operational: "Opérationnel",
+        degraded: "Dégradé",
+        down: "En panne",
+        disabled: "Désactivé",
+        current: "À jour",
+        stale: "Périmé",
+        no_rate: "Aucun taux",
+        active: "Active",
+        inactive: "Inactive",
+        running: "En cours",
+        succeeded: "Réussie",
+        failed: "Échouée",
+      },
+      currencies: {
+        new: "Nouvelle devise",
+        edit: "Modifier la devise",
+        code: "Code ISO 4217",
+        code_help:
+          "Trois lettres majuscules, p. ex. USD. Il ne pourra plus changer.",
+        name: "Nom",
+        symbol: "Symbole",
+        decimals: "Décimales",
+        decimals_help:
+          "Comment les montants dans cette devise sont affichés et convertis (stockés avec 2 au plus).",
+        is_active: "Active",
+        is_quote_default: "Par défaut pour les nouveaux devis",
+        is_base: "Devise de référence",
+        make_base: "Définir comme devise de référence",
+        make_base_confirm:
+          "Faire de %{code} la devise de référence ? Tous les taux y sont exprimés : ce n'est possible que tant qu'aucun taux ni aucun devis dans une autre devise n'existe.",
+        empty: "Aucune devise pour l'instant.",
+        saved: "Devise enregistrée",
+      },
+      rates: {
+        currency: "Devise",
+        official: "Taux officiel",
+        commercial: "Taux commercial",
+        difference: "Écart",
+        source: "Source",
+        effective: "En vigueur depuis",
+        updated: "Récupéré",
+        state: "État",
+        actions: "Actions",
+        manual: "Manuel",
+        per_unit: "1 %{currency} = %{rate} %{base}",
+        set_commercial: "Définir le taux commercial",
+        enter_official: "Saisir le taux officiel",
+        empty: "Aucune devise étrangère n'est active.",
+        age: "il y a %{days} jour(s)",
+        valid_until: "jusqu'au %{date}",
+      },
+      manual: {
+        title_commercial: "Taux commercial pour %{currency}",
+        title_official: "Taux officiel pour %{currency}",
+        help_commercial:
+          "Le taux propre à l'entreprise. Il n'écrase pas le taux officiel : les deux sont conservés, et les nouveaux devis partent du taux commercial tant qu'il est en vigueur.",
+        help_official:
+          "À utiliser quand le fournisseur est injoignable. Il est enregistré comme une saisie manuelle, signée par vous, à côté des taux du fournisseur.",
+        rate: "Taux (%{base} pour 1 %{currency})",
+        effective_date: "En vigueur à partir du",
+        valid_until: "En vigueur jusqu'au (facultatif)",
+        note: "Motif",
+        note_placeholder: "Pourquoi ce taux, et d'où il vient",
+        reference: "Référence officielle : %{rate} (%{date})",
+        deviation: "%{percent} % d'écart avec le taux officiel",
+        saved: "Taux enregistré",
+        error: "Le taux n'a pas pu être enregistré",
+      },
+      providers: {
+        name: "Fournisseur",
+        enabled: "Activé",
+        priority: "Priorité",
+        priority_help:
+          "Le plus petit s'exécute en premier. Un fournisseur qui croise ses taux via un autre doit s'exécuter après lui.",
+        frequency: "Mettre à jour toutes les (minutes)",
+        currencies: "Devises demandées",
+        credentials: "Identifiants",
+        credentials_none: "Non requis",
+        credentials_set: "Enregistrés",
+        credentials_missing: "Manquants",
+        set_credentials: "Définir les identifiants",
+        credentials_title: "Identifiants de %{provider}",
+        credentials_help:
+          "Stockés chiffrés dans le coffre du serveur. Ils ne sont plus jamais affichés, ici ni ailleurs ; saisissez-les à nouveau pour les remplacer, ou laissez vide pour les supprimer.",
+        credentials_saved: "Identifiants enregistrés",
+        edit: "Configurer",
+        saved: "Fournisseur enregistré",
+        sync_now: "Synchroniser maintenant",
+        sync_all: "Tout synchroniser maintenant",
+      },
+      history: {
+        currency: "Devise",
+        from: "Du",
+        to: "Au",
+        provider: "Source",
+        kind: "Type",
+        all: "Tous",
+        manual: "Saisie manuelle",
+        rate: "Taux",
+        effective: "En vigueur depuis",
+        fetched: "Récupéré",
+        author: "Saisi par",
+        note: "Note",
+        derived: "via %{currency}",
+        chart_title: "Évolution de %{currency}",
+        chart_pick: "Choisissez une devise pour voir son évolution.",
+        empty: "Aucun taux ne correspond à ces filtres.",
+        chart: "Graphique",
+        table: "Tableau",
+      },
+      settings: {
+        default_kind: "Les nouveaux devis partent du",
+        default_kind_help:
+          "Le taux commercial se replie sur le taux officiel quand l'entreprise n'en a défini aucun.",
+        stale_after: "Un taux est périmé après (jours)",
+        stale_after_help:
+          "Les taux officiels plus anciens restent affichés, avec leur date, mais ne permettent pas d'émettre un devis.",
+        tolerance: "Tolérance des commerciaux pour les taux personnalisés (%)",
+        tolerance_help:
+          "De combien un commercial peut s'écarter du taux officiel. 0 réserve les taux personnalisés aux managers et administrateurs.",
+        alert_after: "Alerter les administrateurs après (échecs consécutifs)",
+        saved: "Paramètres enregistrés",
+      },
+      health: {
+        title: "Santé des intégrations",
+        description:
+          "Ce qu'ont fait les fournisseurs de taux, lu dans la base de données : ouvrir cette page ne les interroge jamais.",
+        last_attempt: "Dernière tentative de connexion",
+        last_success: "Dernière mise à jour réussie",
+        imported_last: "Taux importés (dernière exécution)",
+        imported_30d: "Taux importés (30 jours)",
+        errors: "Erreurs",
+        errors_value: "%{errors} en 30 jours · %{consecutive} d'affilée",
+        history_from: "Historique disponible depuis",
+        last_error: "Dernière erreur",
+        auto_sync: "Synchronisation automatique",
+        auto_active: "Active · %{schedule}",
+        auto_inactive: "Inactive",
+        auto_missing_job: "La tâche planifiée est absente.",
+        auto_missing_secrets:
+          "L'URL et la clé de la fonction ne sont pas stockées dans Vault (fx_sync_url, fx_sync_service_key).",
+        history: "Historique des taux",
+        history_value: "%{count} taux, du %{from} au %{to}",
+        history_none: "Aucun taux enregistré pour l'instant",
+        oldest: "Taux le plus ancien en usage",
+        oldest_value: "Taux %{kind} %{currency} du %{date}",
+        oldest_draft: "sur un devis en brouillon",
+        oldest_none: "Aucun",
+        without_rate: "Devises actives sans taux",
+        runs: "Exécutions récentes",
+        run_started: "Début",
+        run_duration: "Durée",
+        run_provider: "Fournisseur",
+        run_trigger: "Origine",
+        run_attempts: "Tentatives",
+        run_rates: "Taux",
+        run_error: "Erreur",
+        no_runs: "Aucune exécution enregistrée pour l'instant.",
+        never: "Jamais",
+        triggers: {
+          cron: "Planifiée",
+          manual: "Manuelle",
+          backfill: "Reprise d'historique",
+        },
+        sync_result:
+          "%{succeeded} fournisseur(s) mis à jour, %{failed} en échec, %{skipped} ignoré(s)",
+        sync_error: "Les taux n'ont pas pu être mis à jour",
+      },
+      quote: {
+        title: "Taux de change",
+        none_needed: "Coté dans la devise de référence : aucune conversion.",
+        missing:
+          "Aucun taux de change n'est disponible pour %{currency}. Demandez à un manager d'en saisir un avant d'ajouter des prix convertis ou d'envoyer le devis.",
+        rate_line: "1 %{currency} = %{rate} %{base}",
+        kind_source: "%{kind} · %{source}",
+        effective: "En vigueur depuis le %{date}",
+        stale:
+          "Ce taux date du %{date} et est périmé : mettez-le à jour avant d'envoyer le devis.",
+        official_now: "Officiel aujourd'hui : %{rate} (%{date})",
+        commercial_now: "Commercial aujourd'hui : %{rate}",
+        use_official: "Utiliser l'officiel",
+        use_commercial: "Utiliser le commercial",
+        refresh: "Passer au taux du jour",
+        custom: "Taux personnalisé",
+        custom_title: "Taux de change personnalisé",
+        custom_help:
+          "Utilisé pour ce devis seulement, avec votre motif enregistré. Les taux officiel et commercial ne changent pas.",
+        custom_rate: "Taux (%{base} pour 1 %{currency})",
+        custom_reason: "Motif",
+        custom_tolerance:
+          "En tant que commercial, vous pouvez vous écarter d'au plus %{percent} % du taux officiel.",
+        custom_forbidden:
+          "Les taux personnalisés sont définis par les managers et les administrateurs.",
+        frozen: "Figé avec la version lors de son émission.",
+        equivalent: "Équivalent en %{base}",
+        equivalent_note:
+          "À titre indicatif : les montants du devis sont en %{currency}.",
+        converted_from: "%{amount} selon la liste de prix",
+        saved: "Taux de change mis à jour",
+        currency: "Devise du devis",
+        currency_help:
+          "La liste de prix peut être dans une autre devise : ses prix sont convertis au taux du devis.",
+        source_title: "Prix de liste convertis",
+        source_unrecorded: "Converti avant l'enregistrement du taux",
+        source_stale:
+          "Une ligne a été convertie à un taux qui n'est plus en vigueur : mettez-le à jour au taux du jour avant l'envoi.",
+        source_refresh: "Mettre à jour les prix de liste au taux du jour",
+      },
+      document: {
+        rate_applied: "Taux de change appliqué",
+        rate_value: "1 %{currency} = %{rate} %{base}",
+        rate_reference: "%{source}, en vigueur le %{date}",
+        equivalent: "Équivalent en %{base} : %{amount}",
+        contractual:
+          "Les montants contractuels de ce devis sont ceux exprimés en %{currency} ; l'équivalent est donné à titre indicatif.",
+      },
+      errors: {
+        generic: "La modification n'a pas pu être enregistrée",
+        fx_forbidden: "Votre rôle ne permet pas de faire cela.",
+        fx_base_locked:
+          "La devise de référence est verrouillée : des taux ou des devis dans d'autres devises en dépendent déjà.",
+        fx_base_via_function:
+          "Utilisez « Définir comme devise de référence » pour la changer.",
+        fx_base_must_be_active:
+          "La devise de référence ne peut pas être désactivée.",
+        fx_currency_code_immutable: "Le code d'une devise ne peut pas changer.",
+        fx_currency_inactive: "Cette devise n'est pas active.",
+        fx_column_protected:
+          "Seuls les paramètres du fournisseur peuvent être modifiés ici.",
+        fx_provider_unknown: "Ce fournisseur n'existe pas.",
+      },
+    },
     notifications: {
       title: "Notifications",
       empty: "Vous êtes à jour",
@@ -1628,6 +2340,20 @@ export const frenchCrmMessages = {
         expired: {
           title: "%{number} a expiré",
           body: "L'offre a expiré sans réponse.",
+        },
+      },
+      email: {
+        bounced: {
+          title: "L'e-mail à %{to} a été rejeté",
+        },
+        failed: {
+          title: "L'e-mail à %{to} n'a pas pu être envoyé",
+        },
+      },
+      fx: {
+        sync_failed: {
+          title: "Taux de change : %{provider} est en échec",
+          body: "%{failures} mises à jour échouées d'affilée. Dernière erreur : %{error}",
         },
       },
       channels: {
@@ -1712,9 +2438,13 @@ export const frenchCrmMessages = {
         stay: "Rester connecté",
         sign_out: "Se déconnecter",
       },
-      welcome_title: "Bienvenue sur Atomic CRM",
+      welcome_title: "Bienvenue sur Hermes CRM",
     },
     form_section: {
+      help_content: "Ce que le tutoriel enseigne et où il est classé",
+      help_media: "Les fichiers lus par le lecteur",
+      help_publishing: "Où il apparaît et qui le voit",
+      help_category: "Un titre sous lequel les tutoriels sont classés",
       product: "Ce que c'est et comment il se vend",
       pricing: "Prix catalogue, devise et taxe",
       product_internal: "Notes pour l'équipe, et s'il est proposé",
@@ -2444,6 +3174,9 @@ export const frenchCrmMessages = {
       deals: {
         categories: "Catégories",
         currency: "Devise",
+        currency_managed:
+          "La devise de base, gérée dans Devises et taux de change. Les montants des affaires et les tableaux de bord y sont exprimés.",
+        currency_link: "Gérer les devises",
         pipeline_help:
           "Sélectionnez les étapes d'affaire à considérer comme des affaires dans le pipeline.",
         pipeline_statuses: "Statuts des pipelines",
@@ -2513,6 +3246,43 @@ export const frenchCrmMessages = {
           "Leads arrivés au cours des 12 derniers mois ; indépendant des filtres de la liste",
       },
     },
+    help: {
+      title: "Manuel",
+      description: "Apprenez à utiliser le CRM grâce à de courts tutoriels.",
+      manage: "Gérer",
+      view_manual: "Voir le manuel",
+      search: "Rechercher un tutoriel",
+      categories: "Catégories",
+      all_categories: "Toutes",
+      no_results: "Aucun tutoriel ne correspond à votre recherche.",
+      empty: "Il n'y a pas encore de tutoriels.",
+      empty_admin:
+        "Il n'y a pas encore de tutoriels. Utilisez Gérer pour ajouter le premier.",
+      draft: "Brouillon",
+      watch: "Voir le tutoriel",
+      no_video: "Ce tutoriel n'a pas encore d'enregistrement.",
+      captions: "Sous-titres",
+      steps: "Dans ce tutoriel",
+      updated_on: "Mis à jour le %{date}",
+      more_in_category: "Autres tutoriels de cette catégorie",
+      not_found: "Ce tutoriel n'existe pas ou n'est pas encore publié.",
+      back: "Retour au manuel",
+      media: {
+        upload: "Envoyer un fichier",
+        replace: "Remplacer le fichier",
+        attached: "Fichier joint",
+        remove: "Retirer le fichier",
+      },
+      errors: {
+        load_failed: "Le manuel n'a pas pu être chargé.",
+        upload_type: "Ce type de fichier ne peut pas être utilisé ici.",
+        upload_too_large: "Ce fichier est trop volumineux.",
+        upload_failed: "Le fichier n'a pas pu être envoyé.",
+        demo_upload:
+          "La démo n'a pas de stockage : aucun fichier ne peut être envoyé ici.",
+        slug: "Utilisez uniquement des minuscules, des chiffres et des tirets",
+      },
+    },
     navigation: {
       label: "Navigation CRM",
       more_pages: "Plus de pages",
@@ -2532,6 +3302,7 @@ export const frenchCrmMessages = {
         activities: "Activités",
         analytics: "Analyse",
         settings: "Configuration",
+        help: "Aide",
       },
     },
     profile: {

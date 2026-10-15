@@ -54,6 +54,11 @@ export default defineConfig({
           "import.meta.env.VITE_ATTACHMENTS_BUCKET": JSON.stringify(
             process.env.VITE_ATTACHMENTS_BUCKET,
           ),
+          // Optional: where the manual's recordings are served from, when
+          // that is not this project's own storage (a CDN, another bucket).
+          "import.meta.env.VITE_HELP_MEDIA_BASE_URL": JSON.stringify(
+            process.env.VITE_HELP_MEDIA_BASE_URL ?? "",
+          ),
         }
       : undefined,
   base: "./",

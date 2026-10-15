@@ -137,6 +137,12 @@ describe("notificationLink", () => {
     );
   });
 
+  it("points a failing rate provider at the integration health tab", () => {
+    expect(
+      notificationLink({ entity_type: "exchange_rate_provider", entity_id: 2 }),
+    ).toBe("/currencies?tab=health");
+  });
+
   it("gives a task reminder nowhere to go", () => {
     expect(notificationLink({ entity_type: null, entity_id: null })).toBeNull();
   });

@@ -21,8 +21,6 @@
   "permissions": {
     "allow": [],
     "deny": [
-      "Bash(npm install *)",
-      "Bash(npm i *)",
       "Bash(pnpm add *)",
       "Bash(yarn add *)",
       "mcp__github__merge_pull_request",

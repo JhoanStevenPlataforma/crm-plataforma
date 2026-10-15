@@ -522,3 +522,131 @@ create or replace trigger quotes_sync_deal
 create or replace trigger quote_portal_events_sync_deal
     after insert on public.quote_portal_events
     for each row execute function public.quote_portal_events_sync_deal();
+
+--
+-- Currencies & exchange rates
+--
+create or replace trigger currencies_guard
+    before insert or update on public.currencies
+    for each row execute function public.currencies_guard();
+
+create or replace trigger currencies_set_updated_at
+    before update on public.currencies
+    for each row execute function public.set_updated_at();
+
+create or replace trigger currencies_audit
+    after insert or update on public.currencies
+    for each row execute function public.fx_config_audit();
+
+create or replace trigger exchange_rate_providers_guard
+    before update on public.exchange_rate_providers
+    for each row execute function public.exchange_rate_providers_guard();
+
+create or replace trigger exchange_rate_providers_set_updated_at
+    before update on public.exchange_rate_providers
+    for each row execute function public.set_updated_at();
+
+create or replace trigger exchange_rate_providers_audit
+    after update on public.exchange_rate_providers
+    for each row execute function public.fx_config_audit();
+
+create or replace trigger exchange_rate_settings_set_updated_at
+    before update on public.exchange_rate_settings
+    for each row execute function public.set_updated_at();
+
+create or replace trigger exchange_rate_settings_audit
+    after update on public.exchange_rate_settings
+    for each row execute function public.fx_config_audit();
+
+create or replace trigger exchange_rates_before_insert
+    before insert on public.exchange_rates
+    for each row execute function public.exchange_rates_before_insert();
+
+create or replace trigger exchange_rates_audit
+    after insert on public.exchange_rates
+    for each row execute function public.exchange_rates_audit();
+
+create or replace trigger exchange_rates_immutable
+    before update or delete on public.exchange_rates
+    for each row execute function public.reject_quote_history_mutation();
+
+create or replace trigger exchange_rate_audit_logs_immutable
+    before update or delete on public.exchange_rate_audit_logs
+    for each row execute function public.reject_quote_history_mutation();
+
+create or replace trigger configuration_currency_is_base
+    before insert or update on public.configuration
+    for each row execute function public.configuration_currency_is_base();
+
+-- Named to fire after `quote_lines_freeze_guard` (triggers of one kind fire in
+-- name order): a frozen line is refused before anything is computed for it.
+create or replace trigger quote_lines_fx_convert
+    before insert or update on public.quote_lines
+    for each row execute function public.quote_lines_fx_convert();
+
+--
+-- Help centre: "updated on" is what the reader is shown, so the server keeps it.
+--
+create or replace trigger help_categories_set_updated_at
+    before update on public.help_categories
+    for each row execute function public.set_updated_at();
+
+create or replace trigger help_tutorials_set_updated_at
+    before update on public.help_tutorials
+    for each row execute function public.set_updated_at();
+
+--
+-- Outbound email
+--
+create or replace trigger email_settings_guard
+    before update on public.email_settings
+    for each row execute function public.email_settings_guard();
+
+create or replace trigger email_templates_guard
+    before insert or update or delete on public.email_templates
+    for each row execute function public.email_templates_guard();
+
+create or replace trigger email_templates_set_updated_at
+    before update on public.email_templates
+    for each row execute function public.set_updated_at();
+
+-- What a message said is frozen; a message is never deleted, except by the
+-- retention path (`purge_emails()`, `purge_quotes()`).
+create or replace trigger email_messages_guard
+    before update on public.email_messages
+    for each row execute function public.email_messages_guard();
+
+create or replace trigger email_messages_no_delete
+    before delete on public.email_messages
+    for each row execute function public.reject_quote_history_mutation();
+
+--
+-- Outbound email, delivery (phase 2)
+--
+-- What the provider reported is history.
+create or replace trigger email_message_events_immutable
+    before update or delete on public.email_message_events
+    for each row execute function public.reject_quote_history_mutation();
+
+create or replace trigger email_suppressions_guard
+    before insert on public.email_suppressions
+    for each row execute function public.email_suppressions_guard();
+
+--
+-- Outbound email, automations (phase 3)
+--
+create or replace trigger email_automations_guard
+    before update on public.email_automations
+    for each row execute function public.email_automations_guard();
+
+-- When the acceptance is STAMPED on the version, which is after the status
+-- moved and `quotes_sync_deal` moved the deal: the confirmation looks at both.
+create or replace trigger quote_versions_email_automation
+    after update of accepted_at on public.quote_versions
+    for each row
+    when (new.accepted_at is not null and old.accepted_at is null)
+    execute function public.quote_versions_email_automation();
+
+create or replace trigger email_messages_notify
+    after update of status on public.email_messages
+    for each row execute function public.email_messages_notify();

@@ -203,6 +203,9 @@ revoke all on function public.dispatch_due_reminders(integer) from public, anon,
 -- authenticated grant (from `alter default privileges` below, or the explicit
 -- grants above) intact; verified per-function. security_invariants.test.sql
 -- asserts anon executes zero SECURITY DEFINER function.
+-- A definer since 2026-10-12 (it must reach emit_task_event); it checks
+-- can_see_task() itself.
+revoke all on function public.link_task_to_entity(bigint, public.task_entity, bigint, text, boolean) from public, anon;
 revoke all on function public.can_manage_all() from public, anon;
 revoke all on function public.can_see_deal(bigint) from public, anon;
 revoke all on function public.can_see_task(bigint) from public, anon;
@@ -924,3 +927,233 @@ revoke all on function public.quote_portal_events_sync_deal() from public, anon,
 grant execute on function public.sync_deal_from_quote(bigint, text) to service_role;
 grant execute on function public.quotes_sync_deal() to service_role;
 grant execute on function public.quote_portal_events_sync_deal() to service_role;
+
+--
+-- Currencies & exchange rates
+--
+revoke all on table public.currencies from anon, authenticated;
+grant select, insert, update on table public.currencies to authenticated;
+grant all on table public.currencies to service_role;
+
+revoke all on table public.exchange_rate_providers from anon, authenticated;
+grant select, update on table public.exchange_rate_providers to authenticated;
+grant all on table public.exchange_rate_providers to service_role;
+
+revoke all on table public.exchange_rates from anon, authenticated;
+grant select, insert on table public.exchange_rates to authenticated;
+grant all on table public.exchange_rates to service_role;
+
+revoke all on table public.exchange_rate_settings from anon, authenticated;
+grant select, update on table public.exchange_rate_settings to authenticated;
+grant all on table public.exchange_rate_settings to service_role;
+
+revoke all on table public.exchange_rate_sync_runs from anon, authenticated;
+grant select on table public.exchange_rate_sync_runs to authenticated;
+grant all on table public.exchange_rate_sync_runs to service_role;
+
+revoke all on table public.exchange_rate_audit_logs from anon, authenticated;
+grant select on table public.exchange_rate_audit_logs to authenticated;
+grant all on table public.exchange_rate_audit_logs to service_role;
+
+revoke all on table public.current_exchange_rates from anon, authenticated;
+grant select on table public.current_exchange_rates to authenticated;
+grant select on table public.current_exchange_rates to service_role;
+
+-- `create or replace view` keeps the ACL, but restating it costs nothing and
+-- survives somebody turning the replace into a drop.
+revoke all on table public.quotes_summary from anon, authenticated;
+grant select on table public.quotes_summary to authenticated;
+grant select on table public.quotes_summary to service_role;
+
+revoke all on sequence public.exchange_rate_providers_id_seq from anon, authenticated;
+revoke all on sequence public.exchange_rates_id_seq from anon, authenticated;
+revoke all on sequence public.exchange_rate_sync_runs_id_seq from anon, authenticated;
+revoke all on sequence public.exchange_rate_audit_logs_id_seq from anon, authenticated;
+grant usage, select on sequence public.exchange_rates_id_seq to authenticated;
+grant all on sequence public.exchange_rate_providers_id_seq to service_role;
+grant all on sequence public.exchange_rates_id_seq to service_role;
+grant all on sequence public.exchange_rate_sync_runs_id_seq to service_role;
+grant all on sequence public.exchange_rate_audit_logs_id_seq to service_role;
+
+-- Trigger functions and internals: nobody calls them directly.
+revoke all on function public.exchange_rate_providers_guard() from public, anon, authenticated;
+revoke all on function public.currencies_guard() from public, anon, authenticated;
+revoke all on function public.fx_config_audit() from public, anon, authenticated;
+revoke all on function public.exchange_rates_before_insert() from public, anon, authenticated;
+revoke all on function public.exchange_rates_audit() from public, anon, authenticated;
+revoke all on function public.configuration_currency_is_base() from public, anon, authenticated;
+revoke all on function public.quote_lines_fx_convert() from public, anon, authenticated;
+revoke all on function public.notify_fx_sync_failure(bigint) from public, anon, authenticated;
+grant execute on function public.exchange_rate_providers_guard() to service_role;
+grant execute on function public.currencies_guard() to service_role;
+grant execute on function public.fx_config_audit() to service_role;
+grant execute on function public.exchange_rates_before_insert() to service_role;
+grant execute on function public.exchange_rates_audit() to service_role;
+grant execute on function public.configuration_currency_is_base() to service_role;
+grant execute on function public.quote_lines_fx_convert() to service_role;
+grant execute on function public.notify_fx_sync_failure(bigint) to service_role;
+
+-- The sync's own API: the edge function, holding the service role, only.
+revoke all on function public.fx_begin_sync_run(text, text, boolean, bigint) from public, anon, authenticated;
+revoke all on function public.fx_record_rates(bigint, jsonb) from public, anon, authenticated;
+revoke all on function public.fx_finish_sync_run(bigint, boolean, integer, text) from public, anon, authenticated;
+revoke all on function public.fx_reap_sync_runs() from public, anon, authenticated;
+revoke all on function public.get_fx_provider_secret(text) from public, anon, authenticated;
+grant execute on function public.fx_begin_sync_run(text, text, boolean, bigint) to service_role;
+grant execute on function public.fx_record_rates(bigint, jsonb) to service_role;
+grant execute on function public.fx_finish_sync_run(bigint, boolean, integer, text) to service_role;
+grant execute on function public.fx_reap_sync_runs() to service_role;
+grant execute on function public.get_fx_provider_secret(text) to service_role;
+
+-- Read helpers and the user-facing RPCs, which check the role themselves.
+revoke all on function public.fx_base_currency() from public, anon;
+revoke all on function public.fx_settings() from public, anon;
+revoke all on function public.fx_resolve_rate(character, public.fx_rate_kind, date) from public, anon;
+revoke all on function public.fx_rate_is_stale(text, date, date, date) from public, anon;
+-- Security invoker: the line picker's preview reads only what RLS shows it.
+revoke all on function public.fx_line_source_rate(bigint, character, boolean) from public, anon;
+revoke all on function public.fx_round(numeric, character) from public, anon;
+revoke all on function public.set_base_currency(character) from public, anon;
+revoke all on function public.set_fx_provider_secret(text, text) from public, anon;
+revoke all on function public.set_quote_version_rate(bigint, public.quote_rate_kind, numeric, text) from public, anon;
+revoke all on function public.fx_integration_health() from public, anon;
+grant execute on function public.fx_base_currency() to authenticated, service_role;
+grant execute on function public.fx_settings() to authenticated, service_role;
+grant execute on function public.fx_resolve_rate(character, public.fx_rate_kind, date) to authenticated, service_role;
+grant execute on function public.fx_rate_is_stale(text, date, date, date) to authenticated, service_role;
+grant execute on function public.fx_line_source_rate(bigint, character, boolean) to authenticated, service_role;
+grant execute on function public.fx_round(numeric, character) to authenticated, service_role;
+grant execute on function public.set_base_currency(character) to authenticated, service_role;
+grant execute on function public.set_fx_provider_secret(text, text) to authenticated, service_role;
+grant execute on function public.set_quote_version_rate(bigint, public.quote_rate_kind, numeric, text) to authenticated, service_role;
+grant execute on function public.fx_integration_health() to authenticated, service_role;
+revoke all on function public.fx_dispatch_sync() from public, anon, authenticated;
+grant execute on function public.fx_dispatch_sync() to service_role;
+revoke all on function public.purge_exchange_rates() from public, anon, authenticated;
+grant execute on function public.purge_exchange_rates() to service_role;
+
+--
+-- Help centre. No `anon` grant: the manual is for people signed in.
+--
+revoke all on table public.help_categories from anon, authenticated;
+grant select, insert, update, delete on table public.help_categories to authenticated;
+grant all on table public.help_categories to service_role;
+revoke all on sequence public.help_categories_id_seq from anon, authenticated;
+grant usage on sequence public.help_categories_id_seq to authenticated;
+grant all on sequence public.help_categories_id_seq to service_role;
+
+revoke all on table public.help_tutorials from anon, authenticated;
+grant select, insert, update, delete on table public.help_tutorials to authenticated;
+grant all on table public.help_tutorials to service_role;
+revoke all on sequence public.help_tutorials_id_seq from anon, authenticated;
+grant usage on sequence public.help_tutorials_id_seq to authenticated;
+grant all on sequence public.help_tutorials_id_seq to service_role;
+
+--
+-- Outbound email. No `anon` grant anywhere: a customer never reads these
+-- tables, they receive a message.
+--
+revoke all on table public.email_settings from anon, authenticated;
+grant select, update on table public.email_settings to authenticated;
+grant all on table public.email_settings to service_role;
+
+revoke all on table public.email_templates from anon, authenticated;
+grant select, insert, update, delete on table public.email_templates to authenticated;
+grant all on table public.email_templates to service_role;
+revoke all on sequence public.email_templates_id_seq from anon, authenticated;
+grant usage on sequence public.email_templates_id_seq to authenticated;
+grant all on sequence public.email_templates_id_seq to service_role;
+
+-- Read-only for users: every write goes through a function.
+revoke all on table public.email_messages from anon, authenticated;
+grant select on table public.email_messages to authenticated;
+grant all on table public.email_messages to service_role;
+revoke all on sequence public.email_messages_id_seq from anon, authenticated;
+grant all on sequence public.email_messages_id_seq to service_role;
+
+-- What a signed-in user may call. Each checks who is calling itself.
+revoke all on function public.email_status() from public, anon;
+revoke all on function public.email_context(text, bigint, text) from public, anon;
+revoke all on function public.queue_email(text, bigint, text, text, text, uuid, bigint, text, text, boolean) from public, anon;
+revoke all on function public.queue_quote_email(bigint, bigint, text, text, text, uuid, bigint, text, text, boolean, text) from public, anon;
+revoke all on function public.retry_email_message(bigint) from public, anon;
+revoke all on function public.set_email_provider_secret(text, text) from public, anon;
+revoke all on function public.can_see_email_entity(public.task_entity, bigint) from public, anon;
+grant execute on function public.email_status() to authenticated, service_role;
+grant execute on function public.email_context(text, bigint, text) to authenticated, service_role;
+grant execute on function public.queue_email(text, bigint, text, text, text, uuid, bigint, text, text, boolean) to authenticated, service_role;
+grant execute on function public.queue_quote_email(bigint, bigint, text, text, text, uuid, bigint, text, text, boolean, text) to authenticated, service_role;
+grant execute on function public.retry_email_message(bigint) to authenticated, service_role;
+grant execute on function public.set_email_provider_secret(text, text) to authenticated, service_role;
+grant execute on function public.can_see_email_entity(public.task_entity, bigint) to authenticated, service_role;
+
+-- Pure helpers: no data behind them.
+revoke all on function public.is_valid_email(text) from public, anon;
+revoke all on function public.email_template_variables(text) from public, anon;
+revoke all on function public.email_text_variables(text) from public, anon;
+revoke all on function public.email_safe_timezone(text) from public, anon;
+grant execute on function public.is_valid_email(text) to authenticated, service_role;
+grant execute on function public.email_template_variables(text) to authenticated, service_role;
+grant execute on function public.email_text_variables(text) to authenticated, service_role;
+grant execute on function public.email_safe_timezone(text) to authenticated, service_role;
+
+-- Internal, and the outbox: the dispatcher (service role) and the functions
+-- above, never a client.
+revoke all on function public.email_quote_share_block(bigint, bigint) from public, anon, authenticated;
+revoke all on function public.email_entity_recipients(public.task_entity, bigint) from public, anon, authenticated;
+revoke all on function public.email_entity_variables(public.task_entity, bigint, bigint, text) from public, anon, authenticated;
+revoke all on function public.email_enqueue(public.task_entity, bigint, bigint, text, text, text, text, bigint, text, uuid, boolean, text, text) from public, anon, authenticated;
+revoke all on function public.claim_email_messages(integer, bigint) from public, anon, authenticated;
+revoke all on function public.email_message_quote_token(bigint) from public, anon, authenticated;
+revoke all on function public.complete_email_message(bigint, text, text, text, text, boolean, integer) from public, anon, authenticated;
+revoke all on function public.fail_stale_email_messages(interval) from public, anon, authenticated;
+revoke all on function public.email_dispatch_tick() from public, anon, authenticated;
+revoke all on function public.get_email_provider_secret(text) from public, anon, authenticated;
+revoke all on function public.purge_emails() from public, anon, authenticated;
+grant execute on function public.email_quote_share_block(bigint, bigint) to service_role;
+grant execute on function public.email_entity_recipients(public.task_entity, bigint) to service_role;
+grant execute on function public.email_entity_variables(public.task_entity, bigint, bigint, text) to service_role;
+grant execute on function public.email_enqueue(public.task_entity, bigint, bigint, text, text, text, text, bigint, text, uuid, boolean, text, text) to service_role;
+grant execute on function public.claim_email_messages(integer, bigint) to service_role;
+grant execute on function public.email_message_quote_token(bigint) to service_role;
+grant execute on function public.complete_email_message(bigint, text, text, text, text, boolean, integer) to service_role;
+grant execute on function public.fail_stale_email_messages(interval) to service_role;
+grant execute on function public.email_dispatch_tick() to service_role;
+grant execute on function public.get_email_provider_secret(text) to service_role;
+grant execute on function public.purge_emails() to service_role;
+
+--
+-- Outbound email, delivery (phase 2). No `anon` grant.
+--
+revoke all on table public.email_message_events from anon, authenticated;
+grant select on table public.email_message_events to authenticated;
+grant all on table public.email_message_events to service_role;
+revoke all on sequence public.email_message_events_id_seq from anon, authenticated;
+grant all on sequence public.email_message_events_id_seq to service_role;
+
+revoke all on table public.email_suppressions from anon, authenticated;
+grant select, insert, delete on table public.email_suppressions to authenticated;
+grant all on table public.email_suppressions to service_role;
+
+revoke all on function public.email_is_suppressed(text) from public, anon, authenticated;
+revoke all on function public.record_email_event(text, text, text, text, timestamp with time zone, text, boolean, text) from public, anon, authenticated;
+grant execute on function public.email_is_suppressed(text) to service_role;
+grant execute on function public.record_email_event(text, text, text, text, timestamp with time zone, text, boolean, text) to service_role;
+
+--
+-- Outbound email, automations (phase 3). No `anon` grant.
+--
+revoke all on table public.email_automations from anon, authenticated;
+grant select, update on table public.email_automations to authenticated;
+grant all on table public.email_automations to service_role;
+
+revoke all on function public.email_automation_enqueue(text, bigint, bigint, text, text, integer, text, jsonb) from public, anon, authenticated;
+revoke all on function public.email_automation_quote_accepted(bigint) from public, anon, authenticated;
+revoke all on function public.email_automation_followups() from public, anon, authenticated;
+revoke all on function public.task_notification_worker_tick() from public, anon, authenticated;
+revoke all on function public.quote_versions_email_automation() from public, anon, authenticated;
+revoke all on function public.email_messages_notify() from public, anon, authenticated;
+grant execute on function public.email_automation_enqueue(text, bigint, bigint, text, text, integer, text, jsonb) to service_role;
+grant execute on function public.email_automation_quote_accepted(bigint) to service_role;
+grant execute on function public.email_automation_followups() to service_role;
+grant execute on function public.task_notification_worker_tick() to service_role;

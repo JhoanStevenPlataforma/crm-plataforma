@@ -1,86 +1,117 @@
+import type {
+  EmailProvider,
+  EmailProviderRegistry,
+  FetchLike,
+} from "../_shared/email/types.ts";
 import type { EmailMessage } from "./notificationMessage.ts";
 
 /**
- * Outbound email over Postmark (§9.4).
+ * Outbound email to the team (§9.4), through the provider an administrator
+ * configured for customer mail (docs/proposals/outbound-email.md).
  *
- * The repo already talks to Postmark for INBOUND mail (`functions/postmark`),
- * so outbound reuses the same account rather than introducing a second
- * provider — one set of credentials, one deliverability reputation.
+ * One provider, one sender address and one credential for everything the CRM
+ * sends: the worker reads `email_settings` and the Vault secret behind it, the
+ * same pair the customer-facing dispatcher uses. It has no configuration of
+ * its own, so switching the provider in Settings switches the reminders too.
  */
-
-const POSTMARK_ENDPOINT = "https://api.postmarkapp.com/email";
 
 export type SendResult =
   | { ok: true; providerMessageId: string | null }
   | { ok: false; error: string };
 
-export type EmailConfig = {
-  serverToken: string;
-  fromEmail: string;
-  messageStream: string;
-};
+/** The columns of `email_settings` the worker reads. */
+export interface EmailSettingsRow {
+  provider_key: string;
+  is_enabled: boolean;
+  from_email: string | null;
+  from_name: string | null;
+  transactional_stream: string | null;
+}
+
+export type EmailChannel =
+  | {
+      ready: true;
+      provider: EmailProvider;
+      credentials: string;
+      fromEmail: string;
+      fromName: string | null;
+      messageStream: string | null;
+    }
+  | { ready: false; reason: string };
+
+const notReady = (reason: string): EmailChannel => ({ ready: false, reason });
 
 /**
- * Reads the outbound configuration, or `null` when it is absent.
+ * What the worker may send through, or why it may not.
  *
- * A missing token is not a crash: the worker then settles email deliveries as
- * `skipped` with an explicit reason, which is visible in the timeline. Throwing
- * at boot instead would take the whole worker down and leave every other
- * channel stuck too.
+ * A channel that is not ready is not a crash: the worker settles email
+ * deliveries as `skipped` with this reason, which is visible in the timeline.
+ * The simulated provider is one of those reasons -- a reminder it "sent" would
+ * be recorded as sent while nothing left.
  */
-export const readEmailConfig = (
-  env: (key: string) => string | undefined,
-): EmailConfig | null => {
-  const serverToken = env("POSTMARK_SERVER_TOKEN");
-  const fromEmail = env("TASK_REMINDER_FROM_EMAIL");
-  if (!serverToken || !fromEmail) return null;
+export const resolveEmailChannel = (
+  settings: EmailSettingsRow | null,
+  credentials: string | null,
+  registry: EmailProviderRegistry,
+): EmailChannel => {
+  if (!settings || !settings.is_enabled) {
+    return notReady("outbound email is switched off");
+  }
+  const provider = registry[settings.provider_key];
+  if (!provider) {
+    return notReady(
+      `no provider '${settings.provider_key}' in this deployment`,
+    );
+  }
+  if (!provider.needsCredentials) {
+    return notReady("the mail provider is the simulated one: nothing is sent");
+  }
+  if (!credentials || !settings.from_email) {
+    return notReady(
+      "the mail provider has no credentials or no sender address",
+    );
+  }
 
   return {
-    serverToken,
-    fromEmail,
-    messageStream: env("POSTMARK_MESSAGE_STREAM") ?? "outbound",
+    ready: true,
+    provider,
+    credentials,
+    fromEmail: settings.from_email,
+    fromName: settings.from_name,
+    messageStream: settings.transactional_stream,
   };
 };
 
 export const sendEmail = async (
   message: EmailMessage,
-  config: EmailConfig,
+  channel: Extract<EmailChannel, { ready: true }>,
+  fetchImpl: FetchLike,
 ): Promise<SendResult> => {
+  // The reason is stored on the notification: never with the token in it.
+  const failed = (reason: string): SendResult => ({
+    ok: false,
+    error: reason.split(channel.credentials).join("[redacted]"),
+  });
+
   try {
-    const response = await fetch(POSTMARK_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "X-Postmark-Server-Token": config.serverToken,
+    const result = await channel.provider.send(
+      {
+        from: { email: channel.fromEmail, name: channel.fromName },
+        to: { email: message.to },
+        subject: message.subject,
+        textBody: message.textBody,
+        messageStream: channel.messageStream,
       },
-      body: JSON.stringify({
-        From: config.fromEmail,
-        To: message.to,
-        Subject: message.subject,
-        TextBody: message.textBody,
-        MessageStream: config.messageStream,
-      }),
-    });
+      channel.credentials,
+      fetchImpl,
+    );
 
-    const payload = (await response.json().catch(() => null)) as {
-      MessageID?: string;
-      Message?: string;
-      ErrorCode?: number;
-    } | null;
-
-    if (!response.ok || (payload?.ErrorCode ?? 0) !== 0) {
-      return {
-        ok: false,
-        error: payload?.Message ?? `postmark responded ${response.status}`,
-      };
-    }
-
-    return { ok: true, providerMessageId: payload?.MessageID ?? null };
+    return result.ok
+      ? { ok: true, providerMessageId: result.providerMessageId }
+      : failed(result.message);
   } catch (error: unknown) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "unknown send error",
-    };
+    return failed(
+      error instanceof Error ? error.message : "unknown send error",
+    );
   }
 };

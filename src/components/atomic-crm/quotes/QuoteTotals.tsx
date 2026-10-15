@@ -16,14 +16,28 @@ import type { QuoteAmounts } from "./quoteMath";
  * approval gate reads (§3.1), and a rep who cannot see it before issuing learns
  * the ceiling by being refused.
  */
+export type QuoteEquivalent = {
+  /** The base currency. */
+  currency: string;
+  amount: number | null;
+  decimals: number;
+};
+
 export const QuoteTotals = ({
   amounts,
   currency,
   effectiveDiscount,
+  equivalent,
 }: {
   amounts: QuoteAmounts;
   currency: string;
   effectiveDiscount?: number | null;
+  /**
+   * The total in the base currency, for a quotation in another one. Shown
+   * under the total and labelled for what it is: a reference, not the
+   * contractual figure (multi-currency).
+   */
+  equivalent?: QuoteEquivalent | null;
 }) => {
   const translate = useTranslate();
 
@@ -70,6 +84,26 @@ export const QuoteTotals = ({
           {formatMoneyExact(amounts.total, currency)}
         </dd>
       </div>
+      {equivalent ? (
+        <div className="quote-equivalent mt-1 flex flex-col text-xs text-muted-foreground">
+          <div className="flex justify-between">
+            <dt>
+              {translate("crm.fx.quote.equivalent", {
+                base: equivalent.currency,
+              })}
+            </dt>
+            <dd className="tabular-nums">
+              {formatMoneyExact(
+                equivalent.amount,
+                equivalent.currency,
+                undefined,
+                equivalent.decimals,
+              )}
+            </dd>
+          </div>
+          <span>{translate("crm.fx.quote.equivalent_note", { currency })}</span>
+        </div>
+      ) : null}
     </dl>
   );
 };

@@ -250,6 +250,50 @@ runs only in `layout/Layout.tsx`** — so any `noLayout` route renders with
 `defaultConfiguration`, whose currency is `USD`, and must get branding and
 currency from its server payload instead.
 
+#### Currencies & Exchange Rates (a quotation in any currency, priced from a list in another)
+
+**`docs/proposals/multi-currency-fx.md` is the reference** (migrations
+`20261001115000` to `20261001140000`, screens in `currencies/` at
+`/currencies`, the `exchange-rates-sync` edge function). A quotation's currency
+is independent of its price list's; converted line prices, the version's rate
+and its base-currency totals are computed by the server and frozen at issue.
+
+Rules that are easy to break from the outside:
+
+- **`rate` = units of the BASE currency per ONE unit of the currency** (base
+  COP: USD 4000 means 1 USD = 4000 COP). Converting X to Y is
+  `amount * rate_X / rate_Y`. Every table, function, provider and `fxMath.ts`
+  uses this one convention; a source quoting the other way is inverted at the
+  provider boundary.
+- **`current_exchange_rates` is the only "current rate"**, for the UI and the
+  server alike, and it never says "current" without `effective_date` and
+  `is_stale`. A stale rate is kept and reported, never hidden.
+  `fx_resolve_rate()` is its SQL counterpart. Opening a quotation never calls an
+  external API.
+- **`fxMath.ts` must agree with the SQL digit for digit**, the same discipline
+  as `quoteMath.ts`: converted price `fx_round(source * source_rate /
+  version_rate, quote currency)`, then the line arithmetic unchanged, then each
+  base total `fx_round(total * rate, base)` per TOTAL, never per line.
+- **`deals.amount` is the quotation's `total_base`**, and
+  `configuration.config.currency` is pinned to the base currency by a trigger
+  (Settings shows it read-only). The base cannot change once rates or foreign
+  quotations exist (`fx_base_locked`).
+- **`exchange_rates` is append-only**: a correction is a new row
+  (`supersedes_id`), and `purge_exchange_rates()` is the only way past it (the
+  e2e reset). Credentials live in Supabase Vault, never in a table a client
+  reads.
+- **One staleness rule, `fx_rate_is_stale()`** (mirrored by `rateIsStale` in
+  `fxMath.ts`): the resolver, the view, the issue gate and the panel all use
+  it. Never write a second "is this rate old" test.
+- **The rate a quotation LINE converts at is the server's**: one observation
+  per source currency per version (`quote_lines.source_exchange_rate_id`),
+  resolved on the version's rate day by `fx_line_source_rate()` -- which the
+  line picker's preview also calls -- and checked at issue. A client never
+  posts it; only `set_quote_version_rate()` and `revise_quote()` write it.
+- Refusals are recognised by `error.details`: the quotation-path keys are in
+  `QUOTE_ERROR` (`quoteRpc.ts`), the administration keys in `FX_ERROR`
+  (`fxRpc.ts`).
+
 #### Customer Portal Slides (what a customer sees before a quotation)
 
 **`docs/proposals/quote-portal-presentation.md` §7 is the reference** (the
@@ -290,6 +334,99 @@ Rules that are easy to break from the outside:
 - **The quotation is never a slide.** The portal renders it last.
 - The canvas autosaves the draft of the selected slide (`usePortalSlides`);
   there is no save button.
+
+#### Help Centre (the in-app manual of video tutorials)
+
+**`docs/proposals/help-center.md` is the reference** (migration
+`20261005120000_help_center.sql`, screens in `help/` at `/help` and
+`/help/:slug`, admin resources `help_tutorials` / `help_categories`, the
+recording pipeline in `tutorials/`). Everyone signed in reads the manual; only
+admins write it, and a tutorial that is not published is a draft RLS shows to
+admins alone.
+
+Rules that are easy to break from the outside:
+
+- **A file in `help-media` is never overwritten.** Every upload is a fresh
+  uuid and replacing a recording is a new `video_path`: the files are cached
+  for a year, so a path whose bytes changed keeps playing the old film.
+- **The bucket is public; the catalogue is not.** That is right only because a
+  tutorial is recorded over made-up data. Never record over real customer data.
+- **The folder / extension rules live in three places that must agree:** the
+  bucket's insert policy (`07_storage.sql`), the `*_path` checks on
+  `help_tutorials`, and `help/helpMedia.ts`.
+- **Build a file's address with `helpMediaUrl()`**, never by hand:
+  `VITE_HELP_MEDIA_BASE_URL` is how the recordings move to a CDN without
+  touching a row.
+- **`preload="none"` on the player is the bandwidth policy.** The index fetches
+  posters only; a recording is requested when play is pressed.
+- **The tutorials are recorded by scripts** (`npm run tutorials:record`), not
+  by hand. `tutorials/overlay.ts` is the visual standard and each
+  `*.tutorial.ts` is its own storyboard; when a screen a tutorial shows
+  changes, re-record it rather than leaving a film of the old screen.
+
+#### Outbound Email (mail to a customer, and the quotation link by mail)
+
+**`docs/proposals/outbound-email.md` is the reference** (migration
+`20261008120000_outbound_email.sql`, screens in `emails/`, settings at `/email`,
+the `email-dispatch` and `email-webhook` edge functions, the provider seam in
+`supabase/functions/_shared/email/`). The three phases are built, automations
+included (`20261010120000_outbound_email_automations.sql`); **the module is not
+production ready until a real provider and a verified sender domain are
+configured** — out of the box the provider is `mock`, nothing leaves, and both
+automations are switched off.
+
+Rules that are easy to break from the outside:
+
+- **`queue_email()` / `queue_quote_email()` only queue.** Nothing in SQL talks
+  to a provider; the `email-dispatch` function claims (`for update skip
+  locked`), sends and settles. A client never inserts into `email_messages`.
+- **Sharing a quotation changes nothing about it.** `queue_quote_email()` never
+  issues, transitions, re-prices or re-rates, and whether a version may be
+  shared is one function, `email_quote_share_block()`, read by the dialog, the
+  queue, a retry and the dispatcher's claim.
+- **`accepted` is not `delivered`, and `simulated` is neither.** The provider's
+  API taking a message is `accepted`; only its webhook writes `delivered` /
+  `bounced`; the `mock` provider's messages end `simulated`. No screen may show
+  one as another.
+- **The customer link is never stored**: the text carries `{{quote_link}}`, the
+  dispatcher resolves it while sending and redacts it from any error.
+- **`record_email_event()` is idempotent and only moves a status forward**
+  (`accepted → delivered → bounced`); a permanent bounce or a complaint adds
+  the address to `email_suppressions`, which the queue, the dialog's context
+  and the dispatcher's claim all consult. A row inserted there by anything else
+  is forced to `reason = 'manual'`.
+- **What a message said is frozen** (`email_messages_guard`); a retry reuses
+  the row, and a dispatcher that never answered FAILS the message instead of
+  sending it twice.
+- **The body is plain text**, escaped into the layout by `renderEmail.ts` —
+  which imports nothing, because the compose dialog previews with the same file.
+- **The address rule lives in three places that must agree**:
+  `public.is_valid_email()`, `_shared/email/emailAddress.ts`, and the demo
+  mirror (`providers/fakerest/email.ts`).
+- **A free recipient is a manager's or an admin's**, checked in SQL
+  (`email_entity_recipients()` + `can_manage_all()`); hiding the input is not
+  the rule.
+- **Automatic mail is two seeded rules in `email_automations`**
+  (`quote_accepted`, `quote_followup`), read by managers and switched by admins:
+  `disabled` cancels what was waiting, `paused` keeps it. A rule is never a row
+  somebody inserts, and `email_automation_enqueue()` is the one writer of
+  automatic mail (`origin = 'automation'`, signed by the quotation's owner,
+  told once by its `dedupe_key` alone).
+- **An automation's message is stored as its TEMPLATE**; the dispatcher fills it
+  with `_shared/email/fillTemplate.ts`, the file the compose dialog uses. So
+  **never show `email_messages.subject` / `body_text` raw** — read a message
+  through `emailMessageText()`, or the team sees `{{braces}}`.
+- **The acceptance confirmation's trigger is on `quote_versions.accepted_at`**,
+  not on `quotes.status_key`: `quote_portal_accept()` moves the status first and
+  stamps the version after, so a trigger on the status finds no accepted
+  version and silently sends nothing.
+- **An automatic message leaves only through the scheduler** (the Vault secrets
+  `email_dispatch_url` / `email_dispatch_service_key`): nobody presses Send.
+- **The compose dialog opens on `quote_share` by KEY**: every template an
+  automation sends is a quotation template too.
+- Credentials live in Supabase Vault (`set_email_provider_secret()`), never in
+  a table a client reads. Refusals are recognised by `error.details`
+  (`EMAIL_ERROR` in `emailRpc.ts`).
 
 #### Design System and Application Shell
 

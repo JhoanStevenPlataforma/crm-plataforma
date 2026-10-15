@@ -127,3 +127,21 @@ create policy "Portal media can be uploaded by admins"
         and (select public.is_admin())
         and name ~ '^slides/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|png|gif|avif|mp4|webm)$'
     );
+
+-- Help centre media. A PUBLIC bucket (`help-media`, created with its size and
+-- type limits by the migration), and deliberately so: a tutorial is a screen
+-- recording of made-up data, and a stable address is what lets the browser
+-- seek with range requests, cache the file for a year and, later, be served
+-- from a CDN by changing one variable. NEVER record a tutorial over real
+-- customer data -- nothing here would protect it. What needs a session is the
+-- catalogue (`help_tutorials`), not the files. Paths are
+-- `<video|poster|captions>/<uuid>.<ext>` and never overwritten (no update
+-- policy): a replaced recording is a new file, the old one stays as the way
+-- back.
+create policy "Help media can be uploaded by admins"
+    on storage.objects for insert to authenticated
+    with check (
+        bucket_id = 'help-media'
+        and (select public.is_admin())
+        and name ~ '^(video/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(mp4|webm)|poster/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|png)|captions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.vtt)$'
+    );

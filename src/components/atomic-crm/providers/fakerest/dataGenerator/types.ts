@@ -10,6 +10,8 @@ import type {
   Deal,
   DealNote,
   DealStageChange,
+  HelpCategory,
+  HelpTutorial,
   Lead,
   Sale,
   Tag,
@@ -46,6 +48,18 @@ import type {
   QuoteTransition,
   QuoteVersion,
   TaxRate,
+  Currency,
+  ExchangeRate,
+  ExchangeRateAuditLog,
+  ExchangeRateProvider,
+  ExchangeRateSettings,
+  ExchangeRateSyncRun,
+  EmailMessage,
+  EmailMessageEvent,
+  EmailSettings,
+  EmailAutomation,
+  EmailSuppression,
+  EmailTemplate,
 } from "../../../types";
 import type { ConfigurationContextValue } from "../../../root/ConfigurationContext";
 
@@ -138,4 +152,28 @@ export interface Db {
   configuration: Array<{ id: number; config: ConfigurationContextValue }>;
   portal_templates: PortalTemplate[];
   portal_slides: PortalSlide[];
+  help_categories: HelpCategory[];
+  help_tutorials: HelpTutorial[];
+  // Currencies & exchange rates, seeded as the migration seeds them. Rates,
+  // runs and the audit log start empty: each is a record of something that
+  // happened, and a demo inventing a rate would show a figure nobody published.
+  currencies: Currency[];
+  exchange_rate_providers: ExchangeRateProvider[];
+  exchange_rate_settings: ExchangeRateSettings[];
+  exchange_rates: ExchangeRate[];
+  exchange_rate_sync_runs: ExchangeRateSyncRun[];
+  exchange_rate_audit_logs: ExchangeRateAuditLog[];
+  // Outbound email. Templates are seeded as the migration seeds them; the
+  // messages start empty, because each is a record of something that
+  // happened -- and in a demo tab nothing is ever sent, only simulated.
+  email_settings: EmailSettings[];
+  email_templates: EmailTemplate[];
+  email_messages: EmailMessage[];
+  // What a provider reported, and the addresses it made unreachable: both
+  // empty, for a demo tab has no provider to report anything.
+  email_message_events: EmailMessageEvent[];
+  email_suppressions: EmailSuppression[];
+  // The two rules, switched off as the migration seeds them. A demo tab has
+  // no scheduler and no customer: the rows are there to be read and set.
+  email_automations: EmailAutomation[];
 }

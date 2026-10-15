@@ -45,6 +45,11 @@ const QUOTE_VIRTUAL_FIELDS = [
   "accepted_at",
   "rejected_at",
   "rejected_reason_code",
+  // Multi-currency: the current version's rate and base equivalent.
+  "total_base",
+  "base_currency",
+  "exchange_rate",
+  "rate_kind",
   "party_snapshot",
   "nb_issued_versions",
   "nb_lines",

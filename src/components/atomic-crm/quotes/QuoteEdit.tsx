@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { QuoteSummary } from "../types";
 import { QuoteActions } from "./QuoteActions";
 import { QuoteInputs } from "./QuoteInputs";
+import { QuoteExchangeRatePanel } from "./QuoteExchangeRatePanel";
 import { QuoteLines } from "./QuoteLines";
 import { QuoteLinksPanel } from "./QuoteLinksPanel";
 import { quoteShowPath } from "./quotePaths";
@@ -70,6 +71,7 @@ export const QuoteEdit = () => (
       <QuoteInputs />
     </SimpleForm>
     <div className="mt-6 flex flex-col gap-6">
+      <QuoteExchangeRatePanel />
       <QuoteLines />
       <QuoteLinksPanel />
     </div>

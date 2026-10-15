@@ -35,6 +35,9 @@ import { ReportsLibrary } from "../reports/ReportsLibrary";
 import { Dashboard } from "../dashboard/Dashboard";
 import { MobileDashboard } from "../dashboard/MobileDashboard";
 import deals from "../deals";
+import { helpCategories, helpTutorials } from "../help";
+import { HelpCenterPage } from "../help/HelpCenterPage";
+import { HelpTutorialPage } from "../help/HelpTutorialPage";
 import leads from "../leads";
 import { Layout } from "../layout/Layout";
 import { MobileLayout } from "../layout/MobileLayout";
@@ -52,6 +55,8 @@ import quotes from "../quotes";
 import { QuotePortalPage } from "../quotes/portal/QuotePortalPage";
 import { QuotePrintPage } from "../quotes/QuotePrintPage";
 import { PortalSlidesPage } from "../portal/PortalSlidesPage";
+import { CurrenciesPage } from "../currencies/CurrenciesPage";
+import { EmailSettingsPage } from "../emails/EmailSettingsPage";
 import { StandardPresentationPreview } from "../portal/StandardPresentationPreview";
 import sales from "../sales";
 import taxRates from "../taxRates";
@@ -361,7 +366,33 @@ const sharedRoutes = (wrap: Wrap) => [
     path={PortalSlidesPage.path}
     element={wrap(<PortalSlidesPage />)}
   />,
+  // Financial settings: currencies and exchange rates
+  // (docs/proposals/multi-currency-fx.md).
+  <Route
+    key="currencies"
+    path={CurrenciesPage.path}
+    element={wrap(<CurrenciesPage />)}
+  />,
+  // Outbound email: provider, sender and credentials
+  // (docs/proposals/outbound-email.md). The page gates itself to admins.
+  <Route
+    key="email"
+    path={EmailSettingsPage.path}
+    element={wrap(<EmailSettingsPage />)}
+  />,
   <Route key="import" path={ImportPage.path} element={wrap(<ImportPage />)} />,
+  // The manual (docs/proposals/help-center.md): what everybody reads. Its
+  // admin screens are the two `help_*` resources below.
+  <Route
+    key="help"
+    path={HelpCenterPage.path}
+    element={wrap(<HelpCenterPage />)}
+  />,
+  <Route
+    key="help-tutorial"
+    path={HelpTutorialPage.path}
+    element={wrap(<HelpTutorialPage />)}
+  />,
   // The analytics module. Four sibling routes rather than a nested layout:
   // `CustomRoutes` renders its children inside one `Routes`, and each page
   // composes `AnalyticsLayout` itself, so there is no `Outlet` to get wrong.
@@ -480,8 +511,34 @@ const sharedResources = (wrap: Wrap) => [
     name="quote_access_tokens_summary"
   />,
   <Resource key="price_book" name="price_book" />,
+  // Currencies & exchange rates. Their one screen is `/currencies`; these are
+  // registered so the screen's reads and writes have a resource to go through.
+  <Resource key="currencies" name="currencies" recordRepresentation="code" />,
+  <Resource key="current_exchange_rates" name="current_exchange_rates" />,
+  <Resource key="exchange_rates" name="exchange_rates" />,
+  <Resource key="exchange_rate_providers" name="exchange_rate_providers" />,
+  <Resource key="exchange_rate_settings" name="exchange_rate_settings" />,
+  <Resource key="exchange_rate_sync_runs" name="exchange_rate_sync_runs" />,
+  // Outbound email. Registered so the compose dialog, the history panels
+  // and the settings page have a resource to read through.
+  <Resource key="email_messages" name="email_messages" />,
+  <Resource key="email_templates" name="email_templates" />,
+  <Resource key="email_settings" name="email_settings" />,
+  <Resource key="email_message_events" name="email_message_events" />,
+  <Resource key="email_suppressions" name="email_suppressions" />,
+  <Resource key="email_automations" name="email_automations" />,
   <Resource key="portal_templates" name="portal_templates" />,
   <Resource key="portal_slides" name="portal_slides" />,
+  <Resource
+    key="help_categories"
+    name="help_categories"
+    {...wrapViews(helpCategories, wrap)}
+  />,
+  <Resource
+    key="help_tutorials"
+    name="help_tutorials"
+    {...wrapViews(helpTutorials, wrap)}
+  />,
 ];
 
 const MobileAdmin = (

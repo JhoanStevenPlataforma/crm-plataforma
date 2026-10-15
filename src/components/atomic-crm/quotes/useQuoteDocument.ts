@@ -8,6 +8,7 @@ import type {
   QuoteSummary,
   QuoteVersion,
 } from "../types";
+import { useRateProviders } from "../currencies/useFx";
 import { toQuoteDocument } from "./quoteDocumentData";
 
 /** A quotation is revised a handful of times, not a hundred (quotes §11). */
@@ -72,6 +73,7 @@ export const useQuoteDocument = (
   const needsCompany = isDraft && quote?.company_id != null;
   const needsContact = isDraft && quote?.contact_id != null;
 
+  const { providers } = useRateProviders();
   const companyQuery = useGetOne<Company>(
     "companies",
     { id: quote?.company_id ?? "" },
@@ -104,6 +106,10 @@ export const useQuoteDocument = (
           live: { company: companyQuery.data, contact: contactQuery.data },
           // Paper is a light surface, so the light logo.
           branding: { title, logo_url: lightModeLogo },
+          rateProviderName:
+            providers.find(
+              (provider) => provider.key === version.rate_provider_key,
+            )?.name ?? null,
         })
       : null;
 

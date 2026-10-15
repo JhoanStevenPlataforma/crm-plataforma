@@ -184,11 +184,13 @@ export const syncDealFromQuote = async (
       const issued = versions
         .filter((row) => row.issued_at != null && row.superseded_at == null)
         .sort((a, b) => b.version_number - a.version_number)[0];
-      if (issued) {
+      // In the BASE currency, as `sync_deal_from_quote()` writes it; a
+      // version with no rate moves no amount rather than a wrong one.
+      if (issued && issued.total_base != null) {
         const { data } = await dataProvider.update<Deal>("deals", {
           id: deal.id,
           data: {
-            amount: Math.round(issued.total),
+            amount: Math.round(Number(issued.total_base)),
             amount_source_quote_id: quoteId,
             updated_at: new Date().toISOString(),
           },

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import type { Sale, TaskEntityType, TimelineEvent } from "../types";
+import { EmailEventDetails } from "./EmailEventDetails";
 import { QuoteEventDetails } from "./QuoteEventDetails";
 import { StageChangeDetails } from "./StageChangeDetails";
 import { isDefaultVisible } from "./timelineEventCategory";
@@ -127,6 +128,9 @@ export const EntityTimeline = ({
             ) : null}
             {event.event_type.startsWith("quote.") ? (
               <QuoteEventDetails event={event} />
+            ) : null}
+            {event.event_type === "email.message" ? (
+              <EmailEventDetails event={event} />
             ) : null}
 
             <DateField

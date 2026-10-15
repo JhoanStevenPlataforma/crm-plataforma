@@ -63,6 +63,18 @@ export const payloadSchema = z.object({
     tax_total: z.number(),
     total: z.number(),
   }),
+  // The rate the document was priced at, frozen with it (multi-currency).
+  // Null in the base currency; absent from a payload cached before it existed.
+  exchange: z
+    .object({
+      base_currency: z.string(),
+      rate: z.number(),
+      rate_kind: z.enum(["base", "official", "commercial", "custom"]),
+      provider_name: nullableText.optional(),
+      effective_date: nullableText.optional(),
+      total_base: z.number().nullable().optional(),
+    })
+    .nullish(),
   terms: nullableText,
   // The shared thread, oldest first. No ids and no emails: the page prints a
   // name, a date and the words, and that is all the server discloses.

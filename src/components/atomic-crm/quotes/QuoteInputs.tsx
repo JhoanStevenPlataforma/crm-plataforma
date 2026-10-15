@@ -5,7 +5,7 @@ import {
   useRecordContext,
   useTranslate,
 } from "ra-core";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Link } from "react-router";
 
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { AutocompleteCompanyInput } from "../companies/AutocompleteCompanyInput";
 import { contactDisplayName } from "../contacts/contactName";
 import { contactOptionText } from "../misc/ContactOption";
+import { useCurrencies } from "../currencies/useFx";
 import type { PriceList, QuoteSummary } from "../types";
 
 /**
@@ -78,25 +79,40 @@ const notInThePast = (value: string | null | undefined) =>
     : undefined;
 
 /**
- * The quote's currency follows its price list, and is never typed.
+ * The currency of a NEW quotation (multi-currency,
+ * docs/proposals/multi-currency-fx.md).
  *
- * `quotes_price_list_currency_fkey` is a COMPOSITE key: a quote priced from a
- * list in another currency is unrepresentable, not merely discouraged. Deriving
- * the currency here means the refusal never has to be explained to anybody,
- * because the pair can only ever match.
+ * It follows the chosen price list -- the common case, quoting in the list's
+ * own currency -- until the rep picks another one, from then on it is theirs:
+ * a USD quotation priced from a COP list is converted by the server at the
+ * draft version's rate. With no list chosen yet it starts in the company's
+ * default quotation currency.
  */
-const CurrencyFromPriceList = ({ priceLists }: { priceLists: PriceList[] }) => {
+const DefaultQuoteCurrency = ({
+  priceLists,
+  fallback,
+}: {
+  priceLists: PriceList[];
+  fallback: string | null;
+}) => {
   const priceListId = useWatch({ name: "price_list_id" });
+  const chosen = useWatch({ name: "currency" });
   const { setValue } = useFormContext();
-  const currency = priceLists.find(
-    (list) => String(list.id) === String(priceListId),
-  )?.currency;
+  // The last value THIS component wrote; anything else came from the rep.
+  const lastAuto = useRef<string | null>(null);
+
+  const listCurrency =
+    priceLists.find((list) => String(list.id) === String(priceListId))
+      ?.currency ?? null;
+  const target = listCurrency ?? fallback;
 
   useEffect(() => {
-    if (currency) {
-      setValue("currency", currency, { shouldDirty: true });
+    const untouched = !chosen || chosen === lastAuto.current;
+    if (target && untouched && chosen !== target) {
+      lastAuto.current = target;
+      setValue("currency", target, { shouldDirty: true });
     }
-  }, [currency, setValue]);
+  }, [chosen, target, setValue]);
 
   return null;
 };
@@ -126,12 +142,15 @@ export const QuoteInputs = () => {
     pagination: CATALOGUE_PAGE,
   });
 
-  // On an existing quote the currency is fixed: it is carried by the versions,
-  // the lines and the composite key. Only lists in that currency are offered,
-  // so the choice cannot produce a refusal.
-  const choices = (priceLists ?? []).filter(
-    (list) => record == null || list.currency === record.currency,
-  );
+  // Any list, in any currency: its prices are converted at the quotation's
+  // rate. The quotation's own currency is fixed once created -- the versions
+  // and lines carry it -- and chosen from the active currencies on creation.
+  const choices = priceLists ?? [];
+  const { active: activeCurrencies } = useCurrencies();
+  const quoteDefault =
+    activeCurrencies.find((currency) => currency.is_quote_default)?.code ??
+    activeCurrencies.find((currency) => currency.is_base)?.code ??
+    null;
   const companyId = useWatch({ name: "company_id" });
 
   return (
@@ -195,15 +214,32 @@ export const QuoteInputs = () => {
           className="sm:flex-1"
           helperText="resources.quotes.helpers.price_list_id"
         />
-        <TextInput
-          source="currency"
-          readOnly
-          className="sm:w-28"
-          helperText={false}
-        />
+        {record == null ? (
+          <SelectInput
+            source="currency"
+            label="crm.fx.quote.currency"
+            choices={activeCurrencies.map((currency) => ({
+              id: currency.code,
+              name: `${currency.code} · ${currency.name}`,
+            }))}
+            validate={required()}
+            className="sm:w-56"
+            helperText="crm.fx.quote.currency_help"
+          />
+        ) : (
+          <TextInput
+            source="currency"
+            readOnly
+            className="sm:w-28"
+            helperText={false}
+          />
+        )}
       </div>
       {record == null ? (
-        <CurrencyFromPriceList priceLists={priceLists ?? []} />
+        <DefaultQuoteCurrency
+          priceLists={priceLists ?? []}
+          fallback={quoteDefault}
+        />
       ) : null}
 
       {isDraft ? (

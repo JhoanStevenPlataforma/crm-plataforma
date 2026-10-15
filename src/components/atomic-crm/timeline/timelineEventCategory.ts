@@ -19,6 +19,8 @@ const COMMUNICATION = new Set([
   "note.created",
   // The customer writing back on a quotation, shown on its deal.
   "quote.commented",
+  // A message sent to the customer from this record.
+  "email.message",
   "reminder.sent",
   "reminder.failed",
   "reminder.acknowledged",

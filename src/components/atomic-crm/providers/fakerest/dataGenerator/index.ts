@@ -1,4 +1,14 @@
+import {
+  DEMO_CURRENCIES,
+  DEMO_EXCHANGE_RATE_PROVIDERS,
+  DEMO_EXCHANGE_RATE_SETTINGS,
+} from "./currencies";
 import { DEMO_DEAL_QUOTE_STAGE_RULES } from "../dealQuoteSync";
+import {
+  DEMO_EMAIL_AUTOMATIONS,
+  DEMO_EMAIL_SETTINGS,
+  DEMO_EMAIL_TEMPLATES,
+} from "./emailTemplates";
 import { DEMO_PORTAL_SLIDES, DEMO_PORTAL_TEMPLATES } from "./portalTemplates";
 import { defaultTaskTypes } from "../../../root/defaultConfiguration";
 import { generateCompanies } from "./companies";
@@ -134,10 +144,29 @@ export default (): Db => {
   // cannot upload media, so new slides take text boxes only here.
   db.portal_templates = DEMO_PORTAL_TEMPLATES;
   db.portal_slides = DEMO_PORTAL_SLIDES;
+  // The help centre starts empty: the demo has no storage for a recording, and
+  // a card with nothing to play is worse than the empty state.
+  db.help_categories = [];
+  db.help_tutorials = [];
+  db.currencies = DEMO_CURRENCIES;
+  db.exchange_rate_providers = DEMO_EXCHANGE_RATE_PROVIDERS;
+  db.exchange_rate_settings = DEMO_EXCHANGE_RATE_SETTINGS;
+  db.exchange_rates = [];
+  db.exchange_rate_sync_runs = [];
+  db.exchange_rate_audit_logs = [];
+  // Outbound email: the seeded templates, and no message -- none was sent.
+  db.email_settings = [DEMO_EMAIL_SETTINGS];
+  db.email_templates = DEMO_EMAIL_TEMPLATES;
+  db.email_messages = [];
+  db.email_message_events = [];
+  db.email_suppressions = [];
+  db.email_automations = DEMO_EMAIL_AUTOMATIONS;
   db.configuration = [
     {
       id: 1,
-      config: {} as Db["configuration"][number]["config"],
+      // The deals' display currency is the base currency, as the database's
+      // `configuration_currency_is_base` trigger keeps it.
+      config: { currency: "COP" } as Db["configuration"][number]["config"],
     },
   ];
   finalize(db);

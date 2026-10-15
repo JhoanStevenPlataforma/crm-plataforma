@@ -12,6 +12,7 @@ import type {
   Deal,
   DealNote,
   DealStageGate,
+  EmailMessage,
   RAFile,
   ReportCatalog,
   ReportResult,
@@ -44,6 +45,10 @@ import {
 } from "../commons/taskAttachments";
 import { getIsInitialized } from "./authProvider";
 import { uploadPortalMedia } from "./portalMedia";
+import { uploadHelpMedia } from "./helpMedia";
+import type { HelpMediaKind } from "../../help/helpMedia";
+import { createEmailMethods, type EmailClient } from "./emailMethods";
+import { createFxMethods, type FxClient } from "./fxMethods";
 import { createQuoteMethods } from "./quoteMethods";
 import { subscribeToQuoteChanges, type Unsubscribe } from "./quoteRealtime";
 import { stripQuoteVirtuals, updateDraftVersionFields } from "./quoteWrites";
@@ -56,6 +61,14 @@ const getBaseDataProvider = () =>
     apiKey: import.meta.env.VITE_SB_PUBLISHABLE_KEY,
     supabaseClient: getSupabaseClient(),
     sortOrder: "asc,desc.nullslast" as any,
+    // A currency is keyed by its ISO code, not by a surrogate id.
+    primaryKeys: new Map([
+      ["currencies", ["code"]],
+      // The suppressed address IS the row (outbound-email.md).
+      ["email_suppressions", ["email"]],
+      // A rule is its key: there are exactly as many rows as rules.
+      ["email_automations", ["key"]],
+    ]),
   });
 
 /**
@@ -891,6 +904,15 @@ const getDataProviderWithCustomMethods = () => {
      * listed in two places is a method that drifts in one of them.
      */
     ...createQuoteMethods(getSupabaseClient),
+    /** Currencies & exchange rates (docs/proposals/multi-currency-fx.md). */
+    ...createFxMethods(() => getSupabaseClient() as unknown as FxClient),
+    /** Outbound email (docs/proposals/outbound-email.md). */
+    ...createEmailMethods(
+      () => getSupabaseClient() as unknown as EmailClient,
+      async (id) =>
+        (await baseDataProvider.getOne<EmailMessage>("email_messages", { id }))
+          .data,
+    ),
     /** Supabase Realtime, filtered to one quote (quotes §6.5). */
     subscribeToQuoteChanges: (
       quoteId: Identifier,
@@ -906,6 +928,9 @@ const getDataProviderWithCustomMethods = () => {
     /** A picture or video for a customer-portal slide; returns its path. */
     uploadPortalMedia: (file: File): Promise<string> =>
       uploadPortalMedia(getSupabaseClient(), file),
+    /** A tutorial's recording, poster or captions; returns its path. */
+    uploadHelpMedia: (kind: HelpMediaKind, file: File): Promise<string> =>
+      uploadHelpMedia(getSupabaseClient(), kind, file),
     /** Makes a portal template the one every quotation shows (admins). */
     activatePortalTemplate: async (templateId: Identifier): Promise<void> => {
       const { error } = await getSupabaseClient().rpc(

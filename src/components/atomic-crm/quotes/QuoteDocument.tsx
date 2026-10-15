@@ -1,8 +1,9 @@
-import { useTranslate } from "ra-core";
+import { useLocaleState, useTranslate } from "ra-core";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { formatDay, formatRate } from "../currencies/fxFormat";
 import { formatMoneyExact } from "../misc/reporting";
 import { QuoteTotals } from "./QuoteTotals";
 import {
@@ -262,6 +263,10 @@ export const QuoteDocument = ({
         <QuoteTotals amounts={totals} currency={currency} />
       </div>
 
+      {data.exchange ? (
+        <QuoteDocumentExchange exchange={data.exchange} currency={currency} />
+      ) : null}
+
       {terms ? (
         <section className="quote-print-keep flex flex-col gap-1">
           <SectionTitle>
@@ -298,5 +303,57 @@ export const QuoteDocument = ({
 
       {footer}
     </article>
+  );
+};
+
+/**
+ * The exchange rate a foreign-currency document was priced at, printed under
+ * the totals: the rate, where it came from and the day it applied, and the
+ * total's equivalent in the base currency -- explicitly NOT the contractual
+ * figure, which stays the one in the document's own currency.
+ */
+const QuoteDocumentExchange = ({
+  exchange,
+  currency,
+}: {
+  exchange: NonNullable<QuoteDocumentData["exchange"]>;
+  currency: string;
+}) => {
+  const translate = useTranslate();
+  const [locale] = useLocaleState();
+  const source =
+    exchange.provider_name ?? translate(`crm.fx.kinds.${exchange.rate_kind}`);
+  const totalBase = exchange.total_base;
+  return (
+    <section className="quote-print-keep quote-exchange flex flex-col gap-0.5 rounded-md border px-3 py-2 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground">
+        {translate("crm.fx.document.rate_applied")}:{" "}
+        {translate("crm.fx.document.rate_value", {
+          currency,
+          base: exchange.base_currency,
+          rate: formatRate(exchange.rate, locale),
+        })}
+      </span>
+      <span>
+        {translate("crm.fx.document.rate_reference", {
+          source,
+          date: formatDay(exchange.effective_date, locale),
+        })}
+      </span>
+      {totalBase != null ? (
+        <span>
+          {translate("crm.fx.document.equivalent", {
+            base: exchange.base_currency,
+            amount: formatMoneyExact(
+              totalBase,
+              exchange.base_currency,
+              undefined,
+              Number.isInteger(totalBase) ? 0 : 2,
+            ),
+          })}
+        </span>
+      ) : null}
+      <span>{translate("crm.fx.document.contractual", { currency })}</span>
+    </section>
   );
 };

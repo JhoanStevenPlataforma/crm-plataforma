@@ -122,6 +122,24 @@ describe("canAccess", () => {
     });
   });
 
+  describe("help centre", () => {
+    const roles: CrmRole[] = ["admin", "manager", "rep"];
+    const allowed = (action: string, resource: string) =>
+      roles.filter((role) => canAccess(role, { action, resource }));
+
+    test.each(["help_categories", "help_tutorials"])(
+      "everyone reads %s and only admins write it",
+      (resource) => {
+        for (const action of ["list", "show"]) {
+          expect(allowed(action, resource)).toEqual(roles);
+        }
+        for (const action of ["create", "edit", "delete"]) {
+          expect(allowed(action, resource)).toEqual(["admin"]);
+        }
+      },
+    );
+  });
+
   describe("quotations", () => {
     const roles: CrmRole[] = ["admin", "manager", "rep"];
     const allowed = (action: string, resource: string) =>
@@ -189,5 +207,121 @@ describe("canAccess", () => {
     );
 
     expect(allowed).toEqual(["admin"]);
+  });
+
+  describe("currencies and exchange rates", () => {
+    const roles: CrmRole[] = ["admin", "manager", "rep"];
+    const allowed = (action: string, resource: string) =>
+      roles.filter((role) => canAccess(role, { action, resource }));
+
+    test("everyone reads the currencies and the current rates, which every quote uses", () => {
+      for (const resource of [
+        "currencies",
+        "current_exchange_rates",
+        "exchange_rates",
+      ]) {
+        expect(allowed("list", resource)).toEqual(roles);
+      }
+    });
+
+    test("only admins configure currencies, providers and settings", () => {
+      for (const resource of [
+        "currencies",
+        "exchange_rate_providers",
+        "exchange_rate_settings",
+      ]) {
+        expect(allowed("edit", resource)).toEqual(["admin"]);
+      }
+      expect(allowed("create", "currencies")).toEqual(["admin"]);
+    });
+
+    test("managers and admins add manual rates; nobody edits or deletes one", () => {
+      expect(allowed("create", "exchange_rates")).toEqual(["admin", "manager"]);
+      expect(allowed("edit", "exchange_rates")).toEqual([]);
+      expect(allowed("delete", "exchange_rates")).toEqual([]);
+    });
+
+    test("nobody deletes a currency or creates a provider: those are deactivated or seeded", () => {
+      expect(allowed("delete", "currencies")).toEqual([]);
+      expect(allowed("create", "exchange_rate_providers")).toEqual([]);
+    });
+
+    test("the sync runs, the audit log and the health panel are not a rep's", () => {
+      expect(allowed("list", "exchange_rate_sync_runs")).toEqual([
+        "admin",
+        "manager",
+      ]);
+      expect(allowed("list", "exchange_rate_audit_logs")).toEqual([
+        "admin",
+        "manager",
+      ]);
+      expect(allowed("list", "fx_health")).toEqual(["admin", "manager"]);
+    });
+  });
+
+  describe("outbound email", () => {
+    const roles: CrmRole[] = ["admin", "manager", "rep"];
+    const allowed = (action: string, resource: string) =>
+      roles.filter((role) => canAccess(role, { action, resource }));
+
+    test("everybody reads the messages; nobody creates, edits or deletes one", () => {
+      expect(allowed("list", "email_messages")).toEqual([
+        "admin",
+        "manager",
+        "rep",
+      ]);
+      for (const action of ["create", "edit", "delete"]) {
+        expect(allowed(action, "email_messages")).toEqual([]);
+      }
+    });
+
+    test("the history page and the suppression list are for managers and admins", () => {
+      expect(allowed("list", "email_history")).toEqual(["admin", "manager"]);
+      expect(allowed("list", "email_suppressions")).toEqual([
+        "admin",
+        "manager",
+      ]);
+      for (const action of ["create", "delete"]) {
+        expect(allowed(action, "email_suppressions")).toEqual(["admin"]);
+      }
+      // An entry is added or removed, never edited -- by anybody.
+      expect(allowed("edit", "email_suppressions")).toEqual([]);
+    });
+
+    test("what a provider reported is read, never written", () => {
+      expect(allowed("list", "email_message_events")).toEqual([
+        "admin",
+        "manager",
+        "rep",
+      ]);
+      for (const action of ["create", "edit", "delete"]) {
+        expect(allowed(action, "email_message_events")).toEqual([]);
+      }
+    });
+
+    test("the automations are read by managers, switched by admins, and nobody adds or removes one", () => {
+      expect(allowed("list", "email_automations")).toEqual([
+        "admin",
+        "manager",
+      ]);
+      expect(allowed("edit", "email_automations")).toEqual(["admin"]);
+      for (const action of ["create", "delete"]) {
+        expect(allowed(action, "email_automations")).toEqual([]);
+      }
+    });
+
+    test("the provider settings and the templates are an admin's to write", () => {
+      for (const action of ["list", "edit"]) {
+        expect(allowed(action, "email_settings")).toEqual(["admin"]);
+      }
+      expect(allowed("list", "email_templates")).toEqual([
+        "admin",
+        "manager",
+        "rep",
+      ]);
+      for (const action of ["create", "edit", "delete"]) {
+        expect(allowed(action, "email_templates")).toEqual(["admin"]);
+      }
+    });
   });
 });

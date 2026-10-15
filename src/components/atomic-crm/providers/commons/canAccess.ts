@@ -48,6 +48,31 @@ const QUOTE_READONLY_RESOURCES = new Set([
   "quote_access_tokens_summary",
 ]);
 
+/** Currencies & exchange rates: what nobody may do, admins included. */
+const FX_IMMUTABLE = new Set([
+  "currencies:delete",
+  "exchange_rates:edit",
+  "exchange_rates:delete",
+  "exchange_rate_providers:create",
+  "exchange_rate_providers:delete",
+  "exchange_rate_settings:create",
+  "exchange_rate_settings:delete",
+]);
+
+/** Projections and logs: read-only; the logs are not a rep's to read. */
+const FX_READONLY_RESOURCES = new Set([
+  "current_exchange_rates",
+  "exchange_rate_sync_runs",
+  "exchange_rate_audit_logs",
+]);
+
+/** Configured by admins alone. */
+const FX_ADMIN_RESOURCES = new Set([
+  "currencies",
+  "exchange_rate_providers",
+  "exchange_rate_settings",
+]);
+
 /**
  * UI-level access control.
  *
@@ -94,8 +119,64 @@ export const canAccess = <
     return params.action === "list" || params.action === "show";
   }
 
+  // Outbound email (docs/proposals/outbound-email.md). A message is written by
+  // `queue_email()` / `queue_quote_email()` and settled by the dispatcher: no
+  // client creates, edits or deletes one, admins included, so it comes before
+  // the admin shortcut.
+  if (
+    params.resource === "email_messages" ||
+    params.resource === "email_message_events"
+  ) {
+    return params.action === "list" || params.action === "show";
+  }
+  // The rules the CRM sends mail by are seeded: a rule is behaviour, so nobody
+  // adds or removes one.
+  if (
+    params.resource === "email_automations" &&
+    (params.action === "create" || params.action === "delete")
+  ) {
+    return false;
+  }
+  // An address is added to the suppression list or taken off it; an entry
+  // is never edited.
+  if (params.resource === "email_suppressions" && params.action === "edit") {
+    return false;
+  }
+
+  // Currencies & exchange rates (docs/proposals/multi-currency-fx.md). These
+  // come before the admin shortcut because nobody may do them: a rate is
+  // history (a correction is a new row), a currency is deactivated rather than
+  // deleted, and the providers and the settings singleton are seeded by
+  // migrations.
+  if (FX_IMMUTABLE.has(`${params.resource}:${params.action}`)) {
+    return false;
+  }
+  if (FX_READONLY_RESOURCES.has(params.resource)) {
+    return (
+      (params.action === "list" || params.action === "show") &&
+      (params.resource === "current_exchange_rates" || role !== "rep")
+    );
+  }
+
   if (role === "admin") {
     return true;
+  }
+
+  // Everyone quotes, so everyone reads the catalogue and the rates; only an
+  // admin configures it. Manual (commercial) rates are a manager's call.
+  if (FX_ADMIN_RESOURCES.has(params.resource)) {
+    return params.action === "list" || params.action === "show";
+  }
+  if (params.resource === "exchange_rates") {
+    return (
+      params.action === "list" ||
+      params.action === "show" ||
+      (params.action === "create" && role === "manager")
+    );
+  }
+  // The integration health panel: managers read it, admins act on it.
+  if (params.resource === "fx_health") {
+    return role === "manager" && params.action === "list";
   }
 
   if (QUOTE_TUNABLE_RESOURCES.has(params.resource)) {
@@ -111,11 +192,45 @@ export const canAccess = <
     return params.action === "list" || params.action === "show";
   }
 
+  // The manual is read by everyone and written by admins (RLS says the same).
+  // Stated here because the fall-through below answers `true`.
+  if (
+    params.resource === "help_categories" ||
+    params.resource === "help_tutorials"
+  ) {
+    return params.action === "list" || params.action === "show";
+  }
+
   // Only admins manage users and application configuration. Managers still
   // resolve sales names through ReferenceField/ReferenceInput, which query the
   // data provider directly and do not go through canAccess.
   if (params.resource === "sales" || params.resource === "configuration") {
     return false;
+  }
+
+  // The mail provider, the sender and its credentials are an admin's; so is
+  // the wording of the templates everybody sends from.
+  if (params.resource === "email_settings") {
+    return false;
+  }
+  if (params.resource === "email_templates") {
+    return params.action === "list" || params.action === "show";
+  }
+  // The history of every message and the suppression list explain a refusal
+  // to a manager's team; a rep sees the messages of their own records on
+  // those records.
+  if (params.resource === "email_history") {
+    return role === "manager" && params.action === "list";
+  }
+  if (
+    params.resource === "email_suppressions" ||
+    // What the CRM sends by itself: a manager reads it, an admin switches it.
+    params.resource === "email_automations"
+  ) {
+    return (
+      role === "manager" &&
+      (params.action === "list" || params.action === "show")
+    );
   }
 
   // Teams decide who sees what through the task access rule (§7.3), so editing

@@ -657,7 +657,8 @@ export const englishCrmMessages = {
         any_status: "Any status",
       },
       helpers: {
-        price_list_id: "Sets the currency of the quote and the prices offered",
+        price_list_id:
+          "The prices offered. A list in another currency is converted at the quotation's exchange rate",
         valid_until: "After this date the offer, and any link to it, is dead",
         terms: "Printed on the document, below the lines",
         internal_notes: "For the sales team only. Never shown to a customer.",
@@ -1054,6 +1055,81 @@ export const englishCrmMessages = {
           "That move belongs to the customer or to the system, not to you.",
         quote_approval_requires_manager:
           "Only a manager can approve a quote — approving your own would be setting your own limit.",
+        fx_rate_missing:
+          "There is no exchange rate for this currency yet. Ask a manager to enter one.",
+        fx_rate_stale:
+          "The exchange rate is stale. Update it to today's rate before sending.",
+        fx_custom_rate_forbidden:
+          "Custom exchange rates are set by managers and administrators.",
+        fx_custom_rate_out_of_tolerance:
+          "That rate is further from the official one than you are allowed to go.",
+        fx_reason_required: "A custom rate needs a written reason.",
+        fx_rate_invalid: "The rate must be a positive number.",
+        fx_rate_kind_invalid:
+          "That kind of rate does not apply to this quotation.",
+      },
+    },
+    help_categories: {
+      name: "Category |||| Categories",
+      forcedCaseName: "Category",
+      fields: {
+        title: "Title",
+        slug: "Link name",
+        description: "Description",
+        icon: "Icon",
+        rank: "Order",
+      },
+      action: {
+        new: "New category",
+      },
+      errors: {
+        conflict: "Another category already uses this link name",
+        in_use:
+          "This category still holds tutorials. Move or delete them first.",
+      },
+    },
+    help_tutorials: {
+      name: "Tutorial |||| Tutorials",
+      forcedCaseName: "Tutorial",
+      field_categories: {
+        content: "Content",
+        media: "Recording",
+        publishing: "Publishing",
+      },
+      fields: {
+        title: "Title",
+        category_id: "Category",
+        slug: "Link name",
+        description: "Description",
+        steps: "Steps",
+        video_path: "Recording",
+        poster_path: "Poster",
+        captions_path: "Captions",
+        duration_seconds: "Duration (seconds)",
+        rank: "Order",
+        is_published: "Published",
+        updated_at: "Updated",
+      },
+      action: {
+        new: "New tutorial",
+      },
+      helpers: {
+        slug: "Lowercase words joined by dashes. It is the tutorial's address, so keep it when you replace the recording.",
+        steps:
+          "One step per line. Shown as a numbered list under the recording.",
+        video_path:
+          "MP4 (H.264) or WebM, up to 50 MB. Uploading a new file replaces the recording; the old one is kept in storage.",
+        poster_path:
+          "The picture shown before playing: WebP, JPG or PNG, 16:9.",
+        captions_path: "Optional. A WebVTT (.vtt) file.",
+        duration_seconds: "Filled in from the recording when you upload it.",
+        is_published:
+          "A draft is visible to admins only. A tutorial needs a recording to be published.",
+      },
+      errors: {
+        conflict: "Another tutorial already uses this link name",
+        publish_without_video:
+          "Attach a recording before publishing this tutorial",
       },
     },
     tax_rates: {
@@ -1185,6 +1261,7 @@ export const englishCrmMessages = {
         events: {
           quote_status_changed: "Quotation status changed",
           quote_commented: "The customer wrote back",
+          email_message: "Email to the customer",
           // Not a task event: the timeline is shared, and this is how a deal's
           // stage transition is labelled on it.
           deal_stage_changed: "Stage changed",
@@ -1573,6 +1650,632 @@ export const englishCrmMessages = {
           "The slide could not be saved. Check your connection and try again.",
       },
     },
+    email: {
+      action: {
+        send: "Send email",
+        send_quote: "Send by email",
+      },
+      demo_unavailable:
+        "Not available in demo mode: a browser tab has no vault to keep a secret in.",
+      status: {
+        pending: "Queued",
+        processing: "Sending",
+        accepted: "Accepted by the provider",
+        delivered: "Delivered",
+        bounced: "Bounced",
+        failed: "Failed",
+        canceled: "Canceled",
+        simulated: "Simulated, not sent",
+      },
+      result: {
+        pending: "The message is queued and will be sent in the next minute.",
+        processing: "The message is being sent.",
+        accepted:
+          "The mail provider accepted the message. Delivery to the mailbox is not confirmed yet.",
+        delivered: "The recipient's mail server confirmed the delivery.",
+        bounced: "The recipient's mail server rejected the message.",
+        failed: "The message could not be sent.",
+        canceled: "The message was canceled before it was sent.",
+        simulated:
+          "Simulated send: the mail provider is not configured, so no email left the CRM.",
+      },
+      fields: {
+        to: "To",
+        subject: "Subject",
+        body: "Message",
+        template: "Template",
+      },
+      compose: {
+        title: "Send email",
+        title_quote: "Send the quotation by email",
+        description:
+          "The message is sent from the company's address and is kept in this record's history.",
+        description_quote:
+          "The customer receives the link to version %{version}, the one already issued. Sending does not issue or change the quotation.",
+        write: "Write",
+        preview: "Preview",
+        to_placeholder: "Choose a recipient",
+        other_address: "Another address…",
+        address_placeholder: "name@company.com",
+        no_recipients:
+          "This record has no email address. Add one to the contact first.",
+        related_only:
+          "You can write to the addresses of this record. A manager can use another address.",
+        no_template: "No template",
+        body_hint:
+          "Plain text. It is placed in the company's layout when it is sent.",
+        body_hint_quote:
+          "Plain text. {{quote_link}} is replaced by the customer's link when it is sent.",
+        unresolved:
+          "Fill in or remove these variables before sending: %{variables}",
+        simulated_notice:
+          "Simulated mode: the mail provider is not configured. The message will be recorded, but no email will leave.",
+        not_ready:
+          "Email is not ready: an administrator has to finish configuring the provider.",
+        link_appended:
+          "The message has no {{quote_link}} marker: the link is added after the text.",
+        send: "Send",
+        suppressed: "suppressed",
+        sending: "Sending…",
+        send_anyway: "Send anyway",
+      },
+      quote_block: {
+        quote_not_found: "The quotation no longer exists.",
+        quote_not_issued:
+          "This quotation has not been issued yet. Issue it before sending it.",
+        version_superseded:
+          "A newer version was issued. Send that one: the link opens it.",
+        version_answered: "The customer already answered this version.",
+        quote_closed:
+          "The quotation is closed (accepted, rejected, expired or canceled).",
+        quote_revision_open:
+          "A revision is in progress. Issue it before sending the quotation again.",
+        version_expired:
+          "The offer's validity has passed. Revise the quotation to send it again.",
+      },
+      errors: {
+        generic: "The email could not be processed.",
+        email_forbidden: "You do not have permission to do that.",
+        email_entity_invalid: "Emails cannot be sent from this record.",
+        email_disabled: "Outbound email is switched off.",
+        email_not_configured:
+          "The mail provider is not configured: the sender address or the credentials are missing.",
+        email_recipient_invalid: "The recipient's address is not valid.",
+        email_recipient_not_allowed:
+          "That address is not related to this record. Only a manager or an administrator can use another address.",
+        email_recipient_suppressed:
+          "This address is on the suppression list: it bounced for good or reported a message as spam.",
+        email_subject_invalid:
+          "The subject is empty, too long or contains a line break.",
+        email_body_invalid: "The message is empty or too long.",
+        email_unresolved_variable:
+          "The message still contains a variable that was not filled in.",
+        email_template_invalid: "That template does not exist or is inactive.",
+        email_rate_limited: "Too many emails in a short time. Try again later.",
+        email_duplicate_recent:
+          "The same message was sent to this address a moment ago. Send it again?",
+        email_quote_not_shareable: "This quotation cannot be shared right now.",
+        email_not_retryable: "Only a failed message can be retried.",
+        email_idempotency_required: "The message could not be identified.",
+        email_template_unknown_variable:
+          "The template uses a variable that is not available for its type.",
+        email_template_locked:
+          "A system template cannot be deleted or re-keyed.",
+        email_settings_column_protected:
+          "Credentials are stored with their own form, not with the settings.",
+      },
+      delivery_errors: {
+        provider_unauthorized: "The mail provider rejected the credentials.",
+        provider_unavailable: "The mail provider was temporarily unavailable.",
+        provider_unreachable: "The mail provider could not be reached.",
+        provider_rejected: "The mail provider rejected the message.",
+        recipient_inactive:
+          "The provider no longer sends to this address (it bounced or complained before).",
+        recipient_invalid: "The provider considers the address invalid.",
+        email_not_configured:
+          "The provider has no credentials or no sender address.",
+        email_subject_invalid: "The subject is not valid.",
+        email_provider_unknown:
+          "The configured provider is not available in this deployment.",
+        email_base_url_missing:
+          "The CRM's public address is not configured, so the link could not be built.",
+        email_link_unavailable: "The customer link could not be read.",
+        email_quote_link_missing:
+          "The quotation has no active customer link. Create it and retry.",
+        email_quote_not_shareable:
+          "The quotation changed before the message left, so it was not sent.",
+        recipient_bounced: "The recipient's mail server rejected the message.",
+        email_recipient_suppressed:
+          "The address was added to the suppression list before the message left.",
+        email_dispatch_interrupted:
+          "The send was interrupted and its outcome is unknown. Check with the customer before retrying.",
+        email_automation_disabled:
+          "The automation was switched off before the message left, so it was not sent.",
+      },
+      automations: {
+        description:
+          "Mail the CRM sends by itself. Both rules ship switched off: nothing is sent automatically until an administrator enables one.",
+        load_error: "The automations could not be loaded.",
+        saved: "The automation was saved",
+        state: "State",
+        template: "Template",
+        delay_days: "Days without an answer before reminding",
+        max_sends: "Reminders per quotation, at most",
+        followup_invalid:
+          "The wait must be between %{min_days} and %{max_days} days, and the reminders between %{min_sends} and %{max_sends}.",
+        states: {
+          disabled: "Off",
+          paused: "Paused",
+          enabled: "On",
+        },
+        state_help: {
+          disabled:
+            "Off: nothing is sent, and whatever was waiting to leave is canceled.",
+          paused:
+            "Paused: nothing is sent, and what was waiting keeps waiting until the rule is switched on again.",
+          enabled:
+            "On: the CRM sends this message by itself, signed by the owner of the quotation.",
+        },
+        rules: {
+          quote_accepted: {
+            title: "Acceptance confirmation",
+            description:
+              "When a customer accepts a quotation, they receive a confirmation at the address they signed with.",
+          },
+          quote_followup: {
+            title: "Quotation follow-up",
+            description:
+              "A reminder to the address a quotation was sent to by mail, when the customer has not answered after some days.",
+          },
+        },
+      },
+      history: {
+        title: "Emails",
+        empty: "No emails sent yet.",
+        load_error: "The emails could not be loaded.",
+        quote_hint: "Send the customer the link to the issued quotation.",
+        status: "Status",
+        all_statuses: "All statuses",
+        search: "Recipient or subject",
+        count: "%{shown} of %{total} messages",
+        date: "Date",
+        sender: "Sent by",
+        problem: "Problem",
+        load_more: "Load more",
+        automatic: "Automatic",
+      },
+      message: {
+        title: "Email",
+        to: "To %{address}",
+        attempts: "%{count} attempts",
+        retry: "Retry",
+        retried: "The message was queued again",
+        quote: "Quotation",
+        quote_version: "%{number}, version %{version}",
+        provider_id: "Provider ID",
+        moments: {
+          created: "Created",
+          accepted: "Accepted",
+          delivered: "Delivered",
+          bounced: "Bounced",
+          failed: "Failed",
+        },
+      },
+      tabs: {
+        history: "History",
+        suppressions: "Suppressed addresses",
+        templates: "Templates",
+        automations: "Automations",
+        settings: "Provider",
+      },
+      events: {
+        title: "What the provider reported",
+        delivered: "Delivered to the recipient's server",
+        bounced: "Bounced",
+        complained: "Reported as spam",
+        permanent: "permanent",
+      },
+      suppressions: {
+        description:
+          "Addresses the CRM no longer writes to: they bounced for good, reported a message as spam, or were added here.",
+        empty: "No address is suppressed.",
+        load_error: "The suppressed addresses could not be loaded.",
+        address: "Address",
+        reason: "Reason",
+        detail: "Detail",
+        since: "Since",
+        remove: "Take off the list",
+        removed: "The address can be written to again",
+        add_title: "Add an address",
+        add_help:
+          "For a customer who asked not to be written to. No message will be sent to it.",
+        add: "Add",
+        added: "Address added to the list",
+        reasons: {
+          hard_bounce: "Permanent bounce",
+          complaint: "Spam complaint",
+          manual: "Added by hand",
+        },
+      },
+      templates: {
+        description:
+          "The messages the compose dialog offers. An inactive template is a draft only administrators see.",
+        new: "New template",
+        empty: "There are no templates yet.",
+        load_error: "The templates could not be loaded.",
+        name: "Name",
+        key: "Key",
+        key_help:
+          "Lowercase letters, digits and underscores. Automations refer to a template by its key.",
+        scope: "Used on",
+        language: "Language",
+        category: "Kind",
+        state: "State",
+        active: "Active",
+        inactive: "Inactive",
+        system: "System",
+        active_label: "Offered in the compose dialog",
+        new_title: "New template",
+        edit_title: "Edit template",
+        dialog_help:
+          "Plain text. Variables are written between double braces and are filled in from the record.",
+        system_help:
+          "A system template: its wording can be changed, its key, scope and language cannot, and it cannot be deleted.",
+        variables: "Available variables: %{variables}",
+        unknown_variables:
+          "These variables do not exist for this kind of record: %{variables}",
+        link_in_subject: "The quotation link cannot be used in the subject.",
+        saved: "Template saved",
+        deleted: "Template deleted",
+        scopes: {
+          generic: "Any record",
+          contact: "Contacts",
+          lead: "Leads",
+          company: "Companies",
+          deal: "Deals",
+          quote: "Quotations",
+        },
+        categories: {
+          transactional: "One-to-one message",
+          commercial: "Commercial follow-up",
+        },
+      },
+      settings: {
+        nav: "Email",
+        title: "Email",
+        description:
+          "The provider that sends the CRM's emails, the address they come from and its credentials.",
+        load_error: "The email settings could not be loaded.",
+        saved: "Email settings saved",
+        state: {
+          disabled: "Outbound email is switched off",
+          simulated: "Simulated mode: no email leaves the CRM",
+          ready: "The provider is configured",
+          incomplete: "The provider is not fully configured",
+        },
+        state_hint: {
+          disabled: "Nobody can send emails until it is switched on.",
+          simulated:
+            "Messages are recorded as simulated. Choose a real provider to send.",
+          ready: "Send a test message to confirm it.",
+          incomplete:
+            "The sender address or the provider's credentials are missing: nothing can be sent.",
+        },
+        provider_title: "Provider and sender",
+        provider_help:
+          "Every email leaves from one verified address. Replies can go to the person who sent it.",
+        enabled: "Outbound email enabled",
+        provider: "Provider",
+        providers: {
+          mock: "Simulated (sends nothing)",
+          postmark: "Postmark",
+          resend: "Resend",
+        },
+        from_email: "Sender address",
+        from_name: "Sender name",
+        from_help:
+          "The address must belong to a domain verified with the provider.",
+        reply_to: "Replies go to",
+        reply_to_modes: {
+          sender: "The user who sent the message",
+          none: "The sender address",
+        },
+        transactional_stream: "Stream for one-to-one messages",
+        commercial_stream: "Stream for commercial follow-ups",
+        max_per_user_hour: "Emails per user per hour",
+        max_per_recipient_day: "Emails per recipient per day",
+        secrets_title: "Credentials",
+        secrets_description:
+          "Stored encrypted on the server. They are never shown again, here or anywhere else.",
+        secrets: {
+          credentials: "Provider API token",
+          webhook: "Delivery webhook secret",
+        },
+        secrets_help: {
+          credentials: "The server token of the provider's sending server.",
+          webhook:
+            "What the provider must present when it reports deliveries and bounces.",
+        },
+        secret_stored: "Stored",
+        secret_missing: "Not set",
+        secret_saved: "Secret stored",
+        secret_cleared: "Secret removed",
+        secret_clear: "Remove",
+        test_title: "Test message",
+        test_help:
+          "Sends one message through the configuration above, to an address you choose.",
+        test_send: "Send test",
+        test_subject: "CRM test message",
+        test_body:
+          "This is a test message from the CRM. If you are reading it, outbound email works.",
+      },
+    },
+    fx: {
+      title: "Currencies and exchange rates",
+      description:
+        "The company's currencies, where their rates come from, and the rate every quotation is priced at.",
+      navigation: "Currencies and rates",
+      demo_unavailable:
+        "Not available in demo mode: a browser tab cannot reach the rate providers.",
+      tabs: {
+        overview: "Overview",
+        currencies: "Currencies",
+        rates: "Rates",
+        providers: "Providers",
+        history: "History",
+        settings: "Settings",
+        health: "Integration health",
+      },
+      overview: {
+        base_currency: "Base currency",
+        base_help:
+          "Every rate is expressed in it, and deals are counted in it.",
+        last_update: "Last rate update",
+        never: "Never",
+        active_provider: "Active provider",
+        none: "None",
+        connection: "Connection",
+        active_currencies: "Active currencies",
+        stale_warning:
+          "%{count} currency rate(s) are older than %{days} day(s). They are still shown, with their date, but a quotation cannot be issued at a stale official rate.",
+        see_health: "See integration health",
+      },
+      kinds: {
+        base: "Base",
+        official: "Official",
+        commercial: "Commercial",
+        custom: "Custom",
+      },
+      status: {
+        operational: "Operational",
+        degraded: "Degraded",
+        down: "Down",
+        disabled: "Disabled",
+        current: "Current",
+        stale: "Stale",
+        no_rate: "No rate",
+        active: "Active",
+        inactive: "Inactive",
+        running: "Running",
+        succeeded: "Succeeded",
+        failed: "Failed",
+      },
+      currencies: {
+        new: "New currency",
+        edit: "Edit currency",
+        code: "ISO 4217 code",
+        code_help: "Three capital letters, e.g. USD. It cannot change later.",
+        name: "Name",
+        symbol: "Symbol",
+        decimals: "Decimals",
+        decimals_help:
+          "How amounts in this currency are shown and converted (stored with at most 2).",
+        is_active: "Active",
+        is_quote_default: "Default for new quotations",
+        is_base: "Base currency",
+        make_base: "Make base currency",
+        make_base_confirm:
+          "Make %{code} the base currency? Every rate is expressed in the base, so this is only possible while no rate and no quotation in another currency exists.",
+        empty: "No currencies yet.",
+        saved: "Currency saved",
+      },
+      rates: {
+        currency: "Currency",
+        official: "Official rate",
+        commercial: "Commercial rate",
+        difference: "Difference",
+        source: "Source",
+        effective: "In force since",
+        updated: "Fetched",
+        state: "State",
+        actions: "Actions",
+        manual: "Manual",
+        per_unit: "1 %{currency} = %{rate} %{base}",
+        set_commercial: "Set commercial rate",
+        enter_official: "Enter official rate",
+        empty: "No foreign currency is active.",
+        age: "%{days} day(s) old",
+        valid_until: "until %{date}",
+      },
+      manual: {
+        title_commercial: "Commercial rate for %{currency}",
+        title_official: "Official rate for %{currency}",
+        help_commercial:
+          "The company's own rate. It does not overwrite the official one: both are kept, and new quotations start from the commercial rate while it is in force.",
+        help_official:
+          "Use it when the provider cannot be reached. It is stored as a manual entry, signed by you, beside the provider's rates.",
+        rate: "Rate (%{base} per 1 %{currency})",
+        effective_date: "In force from",
+        valid_until: "In force until (optional)",
+        note: "Reason",
+        note_placeholder: "Why this rate, and where it comes from",
+        reference: "Official reference: %{rate} (%{date})",
+        deviation: "%{percent}% from the official rate",
+        saved: "Rate saved",
+        error: "The rate could not be saved",
+      },
+      providers: {
+        name: "Provider",
+        enabled: "Enabled",
+        priority: "Priority",
+        priority_help:
+          "Lower runs first. A provider that crosses rates through another must run after it.",
+        frequency: "Update every (minutes)",
+        currencies: "Currencies requested",
+        credentials: "Credentials",
+        credentials_none: "Not needed",
+        credentials_set: "Stored",
+        credentials_missing: "Missing",
+        set_credentials: "Set credentials",
+        credentials_title: "Credentials for %{provider}",
+        credentials_help:
+          "Stored encrypted in the server's vault. They are never shown again, here or anywhere else; type them anew to replace them, or leave empty to remove them.",
+        credentials_saved: "Credentials saved",
+        edit: "Configure",
+        saved: "Provider saved",
+        sync_now: "Sync now",
+        sync_all: "Sync all now",
+      },
+      history: {
+        currency: "Currency",
+        from: "From",
+        to: "To",
+        provider: "Source",
+        kind: "Type",
+        all: "All",
+        manual: "Manual entry",
+        rate: "Rate",
+        effective: "In force since",
+        fetched: "Fetched",
+        author: "Entered by",
+        note: "Note",
+        derived: "via %{currency}",
+        chart_title: "Evolution of %{currency}",
+        chart_pick: "Choose a currency to see its evolution.",
+        empty: "No rate matches these filters.",
+        chart: "Chart",
+        table: "Table",
+      },
+      settings: {
+        default_kind: "New quotations start from",
+        default_kind_help:
+          "The commercial rate falls back to the official one when the company has set none.",
+        stale_after: "A rate is stale after (days)",
+        stale_after_help:
+          "Older official rates are still shown, with their date, but cannot be used to issue a quotation.",
+        tolerance: "Rep tolerance for custom rates (%)",
+        tolerance_help:
+          "How far from the official rate a sales rep may set a custom rate. 0 reserves custom rates to managers and administrators.",
+        alert_after: "Alert administrators after (consecutive failures)",
+        saved: "Settings saved",
+      },
+      health: {
+        title: "Integration health",
+        description:
+          "What the rate providers did, read from the database: opening this page never calls them.",
+        last_attempt: "Last connection attempt",
+        last_success: "Last successful update",
+        imported_last: "Rates imported (last run)",
+        imported_30d: "Rates imported (30 days)",
+        errors: "Errors",
+        errors_value: "%{errors} in 30 days · %{consecutive} in a row",
+        history_from: "History available from",
+        last_error: "Last error",
+        auto_sync: "Automatic sync",
+        auto_active: "Active · %{schedule}",
+        auto_inactive: "Inactive",
+        auto_missing_job: "The scheduled job is missing.",
+        auto_missing_secrets:
+          "The function's URL and key are not stored in Vault (fx_sync_url, fx_sync_service_key).",
+        history: "Rate history",
+        history_value: "%{count} rates, %{from} to %{to}",
+        history_none: "No rate stored yet",
+        oldest: "Oldest rate in use",
+        oldest_value: "%{currency} %{kind} rate from %{date}",
+        oldest_draft: "on a draft quotation",
+        oldest_none: "None",
+        without_rate: "Active currencies with no rate",
+        runs: "Recent runs",
+        run_started: "Started",
+        run_duration: "Duration",
+        run_provider: "Provider",
+        run_trigger: "Trigger",
+        run_attempts: "Attempts",
+        run_rates: "Rates",
+        run_error: "Error",
+        no_runs: "No run recorded yet.",
+        never: "Never",
+        triggers: {
+          cron: "Scheduled",
+          manual: "Manual",
+          backfill: "Backfill",
+        },
+        sync_result:
+          "%{succeeded} provider(s) updated, %{failed} failed, %{skipped} skipped",
+        sync_error: "The rates could not be updated",
+      },
+      quote: {
+        title: "Exchange rate",
+        none_needed: "Quoted in the base currency: no conversion.",
+        missing:
+          "No exchange rate is available for %{currency}. Ask a manager to enter one before adding converted prices or sending the quotation.",
+        rate_line: "1 %{currency} = %{rate} %{base}",
+        kind_source: "%{kind} · %{source}",
+        effective: "In force since %{date}",
+        stale:
+          "This rate is from %{date} and is stale: refresh it before sending the quotation.",
+        official_now: "Official today: %{rate} (%{date})",
+        commercial_now: "Commercial today: %{rate}",
+        use_official: "Use official",
+        use_commercial: "Use commercial",
+        refresh: "Update to today's rate",
+        custom: "Custom rate",
+        custom_title: "Custom exchange rate",
+        custom_help:
+          "Used for this quotation only, with your reason on record. The official and commercial rates are not changed.",
+        custom_rate: "Rate (%{base} per 1 %{currency})",
+        custom_reason: "Reason",
+        custom_tolerance:
+          "As a sales rep you may move at most %{percent}% from the official rate.",
+        custom_forbidden:
+          "Custom rates are set by managers and administrators.",
+        frozen: "Frozen with the version when it was issued.",
+        equivalent: "Equivalent in %{base}",
+        equivalent_note:
+          "For reference only: the quotation's amounts are in %{currency}.",
+        converted_from: "%{amount} from the price list",
+        saved: "Exchange rate updated",
+        currency: "Quotation currency",
+        currency_help:
+          "The price list may be in another currency: its prices are converted at the quotation's rate.",
+        source_title: "List prices converted",
+        source_unrecorded: "Converted before the rate was recorded",
+        source_stale:
+          "A line was converted at a rate that is no longer in force: update it to today's rate before sending.",
+        source_refresh: "Update list prices to today's rate",
+      },
+      document: {
+        rate_applied: "Exchange rate applied",
+        rate_value: "1 %{currency} = %{rate} %{base}",
+        rate_reference: "%{source}, in force on %{date}",
+        equivalent: "Equivalent in %{base}: %{amount}",
+        contractual:
+          "The contractual amounts of this quotation are those expressed in %{currency}; the equivalent is for reference only.",
+      },
+      errors: {
+        generic: "The change could not be saved",
+        fx_forbidden: "Your role cannot do this.",
+        fx_base_locked:
+          "The base currency is locked: rates or quotations in other currencies already depend on it.",
+        fx_base_via_function: 'Use "Make base currency" to change the base.',
+        fx_base_must_be_active: "The base currency cannot be deactivated.",
+        fx_currency_code_immutable: "A currency's code cannot change.",
+        fx_currency_inactive: "That currency is not active.",
+        fx_column_protected:
+          "Only the provider's settings can be changed here.",
+        fx_provider_unknown: "That provider does not exist.",
+      },
+    },
     notifications: {
       title: "Notifications",
       empty: "You are all caught up",
@@ -1608,6 +2311,24 @@ export const englishCrmMessages = {
         expired: {
           title: "%{number} has expired",
           body: "The offer lapsed without an answer.",
+        },
+      },
+      /**
+       * A message to a customer that bounced, or failed for good, told to
+       * whoever signed it. The body is data: the subject they wrote.
+       */
+      email: {
+        bounced: {
+          title: "The email to %{to} bounced",
+        },
+        failed: {
+          title: "The email to %{to} could not be sent",
+        },
+      },
+      fx: {
+        sync_failed: {
+          title: "Exchange rates: %{provider} is failing",
+          body: "%{failures} failed updates in a row. Last error: %{error}",
         },
       },
       channels: {
@@ -1691,9 +2412,13 @@ export const englishCrmMessages = {
         stay: "Stay signed in",
         sign_out: "Sign out",
       },
-      welcome_title: "Welcome to Atomic CRM",
+      welcome_title: "Welcome to Hermes CRM",
     },
     form_section: {
+      help_content: "What the tutorial teaches and where it is filed",
+      help_media: "The files the reader plays",
+      help_publishing: "Where it appears and who sees it",
+      help_category: "A heading tutorials are filed under",
       product: "What it is and how it is sold",
       pricing: "List price, currency and tax",
       product_internal: "Notes for the team, and whether it is offered",
@@ -2403,6 +3128,9 @@ export const englishCrmMessages = {
       deals: {
         categories: "Categories",
         currency: "Currency",
+        currency_managed:
+          "The base currency, managed in Currencies and exchange rates. Deal amounts and dashboards are expressed in it.",
+        currency_link: "Manage currencies",
         pipeline_help:
           "Select which deal stages should count as pipeline deals.",
         pipeline_statuses: "Pipeline Statuses",
@@ -2472,6 +3200,42 @@ export const englishCrmMessages = {
           "Leads that arrived in the last 12 months; not affected by the list filters below",
       },
     },
+    help: {
+      title: "Manual",
+      description: "Learn to use the CRM with quick tutorials.",
+      manage: "Manage",
+      view_manual: "View manual",
+      search: "Search tutorials",
+      categories: "Categories",
+      all_categories: "All",
+      no_results: "No tutorial matches your search.",
+      empty: "There are no tutorials yet.",
+      empty_admin:
+        "There are no tutorials yet. Use Manage to add the first one.",
+      draft: "Draft",
+      watch: "Watch tutorial",
+      no_video: "This tutorial has no recording yet.",
+      captions: "Captions",
+      steps: "In this tutorial",
+      updated_on: "Updated on %{date}",
+      more_in_category: "More tutorials in this category",
+      not_found: "This tutorial does not exist or is not published yet.",
+      back: "Back to the manual",
+      media: {
+        upload: "Upload file",
+        replace: "Replace file",
+        attached: "File attached",
+        remove: "Remove the file",
+      },
+      errors: {
+        load_failed: "The manual could not be loaded.",
+        upload_type: "This type of file cannot be used here.",
+        upload_too_large: "This file is too large.",
+        upload_failed: "The file could not be uploaded.",
+        demo_upload: "The demo has no storage: files cannot be uploaded here.",
+        slug: "Use lowercase letters, numbers and dashes only",
+      },
+    },
     navigation: {
       label: "CRM navigation",
       more_pages: "More pages",
@@ -2491,6 +3255,7 @@ export const englishCrmMessages = {
         activities: "Activities",
         analytics: "Analytics",
         settings: "Settings",
+        help: "Help",
       },
     },
     profile: {

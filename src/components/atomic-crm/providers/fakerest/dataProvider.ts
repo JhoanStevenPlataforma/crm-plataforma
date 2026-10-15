@@ -66,7 +66,13 @@ import {
   quoteLineCallbacks,
 } from "./quotes";
 import { quoteCommentCallbacks } from "./quoteCommentCallbacks";
+import { createDemoEmailMethods } from "./email";
 import { createDemoQuoteMethods, decorateQuoteTokens } from "./quoteMethods";
+import {
+  createDemoFxMethods,
+  exchangeRateCallbacks,
+  getCurrentExchangeRates,
+} from "./fx";
 import { taskChecklistCallbacks } from "./taskChecklistCallbacks";
 import { taskCommentCallbacks } from "./taskCommentCallbacks";
 import {
@@ -380,6 +386,14 @@ export const createDataProvider = ({
           data: decorateQuoteTokens(result.data),
         };
       }
+      // `current_exchange_rates` is a view: derived here, like `price_book`.
+      if (resource === "current_exchange_rates") {
+        const { pagination } = params;
+        const all = await getCurrentExchangeRates(baseDataProvider);
+        const { page, perPage } = pagination;
+        const start = (page - 1) * perPage;
+        return { data: all.slice(start, start + perPage), total: all.length };
+      }
       if (resource === "price_book") {
         const { filter = {}, pagination } = params;
         const all = await getPriceBook(baseDataProvider, filter);
@@ -390,6 +404,12 @@ export const createDataProvider = ({
       return baseDataProvider.getList(resource, params);
     },
     async getOne(resource: string, params: any) {
+      if (resource === "current_exchange_rates") {
+        const all = await getCurrentExchangeRates(baseDataProvider);
+        const row = all.find((rate) => rate.id === params.id);
+        if (!row) throw new Error(`No rate for ${params.id}`);
+        return { data: row };
+      }
       if (resource === "quotes") {
         const result = await baseDataProvider.getOne(resource, params);
         const [decorated] = await decorateQuotes(dataProvider, [result.data]);
@@ -495,6 +515,20 @@ export const createDataProvider = ({
      */
     subscribeToQuoteChanges: async () => () => {},
     /**
+     * Currencies & exchange rates, demo-side: the health report, the sync and
+     * the Vault refuse with `crm.fx.demo_unavailable` -- a tab cannot reach a
+     * provider, and a demo showing healthy providers would be a fabrication.
+     */
+    ...createDemoFxMethods(() => dataProvider),
+    /**
+     * Outbound email, demo-side: the server's decisions are mirrored and
+     * every message is recorded as `simulated` -- a tab sends nothing.
+     */
+    ...createDemoEmailMethods(
+      () => dataProvider,
+      async () => (await getIdentity())?.id ?? null,
+    ),
+    /**
      * Nothing to listen to either: a demo notification is written in this tab,
      * and the inbox reads it on its next fetch. Reaching for the Supabase
      * client here opened a socket to the demo's placeholder URL, retried
@@ -507,6 +541,10 @@ export const createDataProvider = ({
      */
     uploadPortalMedia: async (): Promise<string> => {
       throw new Error("crm.portal_slides.errors.demo_upload");
+    },
+    /** No storage behind the demo, for a tutorial's files either. */
+    uploadHelpMedia: async (): Promise<string> => {
+      throw new Error("crm.help.errors.demo_upload");
     },
     /** `activate_portal_template()`, demo-side: exactly one active. */
     activatePortalTemplate: async (templateId: Identifier): Promise<void> => {
@@ -1103,6 +1141,7 @@ export const createDataProvider = ({
       // insert, and the line snapshot, amounts and totals (quotes §2.4, D8).
       quoteCallbacks(),
       quoteLineCallbacks(),
+      exchangeRateCallbacks(async () => (await getIdentity())?.id ?? null),
       // ... and for the comment thread's (Phase 8): authorship, depth, the
       // clock, and the three changes a written comment still accepts.
       quoteCommentCallbacks(getIdentity),

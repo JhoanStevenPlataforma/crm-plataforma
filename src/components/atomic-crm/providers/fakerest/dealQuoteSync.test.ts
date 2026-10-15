@@ -42,6 +42,7 @@ const setup = () =>
           issued_at: "2026-09-01",
           superseded_at: null,
           total: 3703.8,
+          total_base: 3704,
         },
         {
           id: 200,
@@ -50,6 +51,7 @@ const setup = () =>
           issued_at: "2026-09-01",
           superseded_at: null,
           total: 999,
+          total_base: 999,
         },
       ],
       deal_stage_changes: [],
@@ -87,6 +89,45 @@ describe("syncDealFromQuote (demo mirror)", () => {
         sales_id: 5,
       }),
     ]);
+  });
+
+  it("counts the deal in the base currency: a USD quotation moves its COP equivalent", async () => {
+    // Arrange
+    const dataProvider = setup();
+    await dataProvider.update("quote_versions", {
+      id: 100,
+      data: {
+        currency: "USD",
+        total: 1000,
+        exchange_rate: 4000,
+        total_base: 4000000,
+      },
+      previousData: { id: 100 },
+    });
+
+    // Act
+    await syncDealFromQuote(dataProvider, 10, "sent", 5);
+
+    // Assert
+    expect(await dealOf(dataProvider, 1)).toMatchObject({ amount: 4000000 });
+  });
+
+  it("moves no amount for a version with no rate, rather than a wrong one", async () => {
+    const dataProvider = setup();
+    await dataProvider.update("quote_versions", {
+      id: 100,
+      data: {
+        currency: "USD",
+        total: 1000,
+        exchange_rate: null,
+        total_base: null,
+      },
+      previousData: { id: 100 },
+    });
+
+    await syncDealFromQuote(dataProvider, 10, "sent", 5);
+
+    expect(await dealOf(dataProvider, 1)).toMatchObject({ amount: 1 });
   });
 
   it("never reopens a closed deal, nor rewrites its amount", async () => {

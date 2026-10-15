@@ -868,7 +868,59 @@ select
 from public.quote_portal_events e
     join public.quotes q on q.id = e.quote_id
 where q.deal_id is not null
-  and e.event_type = 'commented';
+  and e.event_type = 'commented'
+
+union all
+
+-- A message sent to a customer, on the record it was written from. One event
+-- per message whatever became of it: how the delivery went travels in the
+-- payload, so a failed send is on the timeline too instead of looking like
+-- nothing was tried. No address book detail beyond the recipient, and never
+-- the text -- the message itself is opened from the event.
+select
+    'email_message:' || m.id, m.created_at, 'email.message',
+    'email_message',
+    null::bigint, m.sales_id,
+    -- An automatic message is signed by the quotation's owner, and was sent
+    -- by nobody: the timeline says which.
+    case when m.origin = 'automation' then 'automation' else 'user' end,
+    m.entity_type::text, m.entity_id,
+    jsonb_build_object('message_id', m.id, 'to_email', m.to_email,
+                       'to_name', m.to_name, 'subject', m.subject,
+                       'status', m.status, 'error_code', m.error_code,
+                       'quote_id', m.quote_id,
+                       'quote_version_id', m.quote_version_id,
+                       -- An automation's subject is its template: what the
+                       -- client fills it with travels beside it.
+                       'origin', m.origin, 'language', m.language,
+                       'variables', case when m.origin = 'automation'
+                                         then m.variables end)
+from public.email_messages m
+where m.entity_type is not null
+
+union all
+
+-- A quotation sent by mail, on the DEAL it was raised against: it is the step
+-- of the deal's story between "quoted" and "the customer opened it".
+select
+    'email_message:deal:' || m.id, m.created_at, 'email.message',
+    'email_message',
+    null::bigint, m.sales_id,
+    -- An automatic message is signed by the quotation's owner, and was sent
+    -- by nobody: the timeline says which.
+    case when m.origin = 'automation' then 'automation' else 'user' end,
+    'deal', q.deal_id,
+    jsonb_build_object('message_id', m.id, 'to_email', m.to_email,
+                       'to_name', m.to_name, 'subject', m.subject,
+                       'status', m.status, 'error_code', m.error_code,
+                       'quote_id', m.quote_id, 'quote_number', q.quote_number,
+                       'quote_version_id', m.quote_version_id,
+                       'origin', m.origin, 'language', m.language,
+                       'variables', case when m.origin = 'automation'
+                                         then m.variables end)
+from public.email_messages m
+    join public.quotes q on q.id = m.quote_id
+where q.deal_id is not null;
 
 create or replace view public.init_state with (security_invoker = off) as
 select count(sub.id) as is_initialized
@@ -994,7 +1046,14 @@ select
     -- the version; it is the code that groups a pipeline by loss reason, and
     -- PostgREST asks this view for `select=*` on every list page.
     cv.rejected_at,
-    cv.rejected_reason_code
+    cv.rejected_reason_code,
+
+    -- Multi-currency (2026-10-01): the current version's total in the base
+    -- currency and the rate it was reached with.
+    cv.total_base,
+    cv.base_currency,
+    cv.exchange_rate,
+    cv.rate_kind
 from public.quotes q
     left join public.companies c on c.id = q.company_id
     left join public.deals d on d.id = q.deal_id
@@ -1003,7 +1062,8 @@ from public.quotes q
     left join lateral (
         select v.id, v.version_number, v.issued_at, v.subtotal, v.discount_total,
                v.tax_total, v.total, v.accepted_at, v.party_snapshot,
-               v.rejected_at, v.rejected_reason_code
+               v.rejected_at, v.rejected_reason_code,
+               v.total_base, v.base_currency, v.exchange_rate, v.rate_kind
           from public.quote_versions v
          where v.quote_id = q.id
          order by v.version_number desc
@@ -1051,3 +1111,43 @@ from public.price_lists pl
 where p.is_active
   and pl.is_active
   and (pli.id is not null or pl.currency = p.currency);
+
+--
+-- Currencies & exchange rates
+--
+-- The ONE place a "current rate" is read from by the screens. Never a bare
+-- figure: each rate comes with its date, its source and whether it is stale.
+create or replace view public.current_exchange_rates with (security_invoker = on) as
+select
+    c.code             as id,
+    c.code             as currency_code,
+    c.name,
+    c.symbol,
+    c.decimals,
+    c.is_active,
+    c.is_quote_default,
+    (select b.code from public.currencies b where b.is_base) as base_currency_code,
+    o.rate             as official_rate,
+    o.exchange_rate_id as official_rate_id,
+    o.provider_key     as official_provider_key,
+    (select p.name from public.exchange_rate_providers p where p.key = o.provider_key)
+                       as official_provider_name,
+    o.effective_date   as official_effective_date,
+    o.valid_until      as official_valid_until,
+    (select e.fetched_at from public.exchange_rates e where e.id = o.exchange_rate_id)
+                       as official_fetched_at,
+    current_date - o.effective_date as official_age_days,
+    o.is_stale         as official_is_stale,
+    cm.rate            as commercial_rate,
+    cm.exchange_rate_id as commercial_rate_id,
+    cm.effective_date  as commercial_effective_date,
+    cm.valid_until     as commercial_valid_until,
+    case when cm.rate is not null and o.rate is not null
+         then round((cm.rate / o.rate - 1) * 100, 4) end as commercial_diff_percent
+from public.currencies c
+    left join lateral public.fx_resolve_rate(c.code, 'official') o on true
+    left join lateral (
+        select r.* from public.fx_resolve_rate(c.code, 'commercial') r
+         where r.kind = 'commercial'
+    ) cm on true
+where not c.is_base;

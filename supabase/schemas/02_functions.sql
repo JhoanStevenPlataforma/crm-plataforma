@@ -1254,6 +1254,13 @@ $$;
 -- Idempotent: re-linking a record that is already attached promotes it instead
 -- of creating a duplicate, so a double click cannot corrupt the graph.
 --
+-- SECURITY DEFINER, like `transition_task()`: it writes the audit event through
+-- `emit_task_event()`, which no browser session may execute. As an invoker it
+-- was refused there (42501) after the task was already created, so every task
+-- added from a record's page was left attached to nothing. The authorisation is
+-- the `can_see_task()` check below -- the same rule the `task_links` policies
+-- apply, so running as the owner widens nothing.
+--
 create or replace function public.link_task_to_entity(
     p_task_id     bigint,
     p_entity_type public.task_entity,
@@ -1261,7 +1268,7 @@ create or replace function public.link_task_to_entity(
     p_label       text default null,
     p_primary     boolean default true
 ) returns public.task_links
-    language plpgsql security invoker
+    language plpgsql security definer
     set search_path to ''
 as $$
 declare
@@ -4628,6 +4635,8 @@ create or replace function public.quote_versions_before_insert() returns trigger
     language plpgsql security definer
     set search_path to ''
 as $$
+declare
+    v_rate record;
 begin
     if new.currency is null then
         select q.currency into new.currency
@@ -4637,6 +4646,35 @@ begin
     if new.version_number is null then
         select coalesce(max(v.version_number), 0) + 1 into new.version_number
           from public.quote_versions v where v.quote_id = new.quote_id;
+    end if;
+
+    new.base_currency := coalesce(new.base_currency, public.fx_base_currency());
+
+    -- A version inserted WITH a rate (a revision copying its predecessor's)
+    -- keeps it. Otherwise: rate 1 in the base, else the configured default
+    -- kind. No rate available leaves the draft without one, which is allowed
+    -- until it is issued.
+    if new.rate_kind is null then
+        if new.currency = new.base_currency then
+            new.rate_kind := 'base';
+            new.exchange_rate := 1;
+            new.rate_effective_date := current_date;
+        else
+            select * into v_rate
+              from public.fx_resolve_rate(
+                       new.currency,
+                       (select s.quote_rate_kind_default
+                          from public.exchange_rate_settings s where s.id = 1));
+            if v_rate.rate is not null then
+                new.rate_kind           := v_rate.kind::public.quote_rate_kind;
+                new.exchange_rate       := v_rate.rate;
+                new.exchange_rate_id    := v_rate.exchange_rate_id;
+                new.rate_provider_key   := v_rate.provider_key;
+                new.rate_effective_date := v_rate.effective_date;
+            end if;
+        end if;
+        new.rate_set_at := now();
+        new.rate_set_by := public.current_sale_id();
     end if;
 
     return new;
@@ -4889,15 +4927,17 @@ returns void
     set search_path to ''
 as $$
 begin
-    -- The totals are system-owned columns (see `quote_versions_freeze_guard`);
-    -- this is the function that owns them.
     perform set_config('app.quote_version_system_write', p_version_id::text, true);
 
     update public.quote_versions v
        set subtotal       = coalesce(t.gross, 0),
            discount_total = coalesce(t.disc, 0),
            tax_total      = coalesce(t.tax, 0),
-           total          = coalesce(t.total, 0)
+           total          = coalesce(t.total, 0),
+           subtotal_base       = public.fx_round(coalesce(t.gross, 0) * v.exchange_rate, v.base_currency),
+           discount_total_base = public.fx_round(coalesce(t.disc, 0)  * v.exchange_rate, v.base_currency),
+           tax_total_base      = public.fx_round(coalesce(t.tax, 0)   * v.exchange_rate, v.base_currency),
+           total_base          = public.fx_round(coalesce(t.total, 0) * v.exchange_rate, v.base_currency)
       from (
         select sum(l.line_gross)    as gross,
                sum(l.line_discount) as disc,
@@ -5754,6 +5794,8 @@ declare
     v_override text := nullif(btrim(coalesce(p_override_reason, '')), '');
     v_reason   text := nullif(btrim(coalesce(p_reason, '')), '');
     v_link     jsonb;
+    v_stale    boolean;
+    v_line     record;
 begin
     select * into v_quote from public.quotes where id = p_quote_id for update;
     if not found then
@@ -5794,6 +5836,45 @@ begin
     if v_version.valid_until < current_date then
         raise exception 'the offer in quote % expired on %', p_quote_id, v_version.valid_until
             using errcode = 'check_violation', detail = 'quote_validity_elapsed';
+    end if;
+
+    -- The rate is frozen with the document, so it has to be one worth
+    -- freezing: present, and not stale. A rep whose draft carries last week's
+    -- rate refreshes it (`set_quote_version_rate()`) before sending; an
+    -- official rate that cannot be refreshed because the provider is down is
+    -- exactly the rate that must not be printed as today's.
+    if v_version.exchange_rate is null then
+        raise exception 'quote % has no exchange rate for %', p_quote_id, v_version.currency
+            using errcode = 'check_violation', detail = 'fx_rate_missing';
+    end if;
+    -- One rule (`fx_rate_is_stale()`), the resolver's and the view's, for the
+    -- version's own rate...
+    v_stale := coalesce(
+        (select public.fx_rate_is_stale(v_version.rate_kind::text, r.effective_date, r.valid_until)
+           from public.exchange_rates r where r.id = v_version.exchange_rate_id),
+        public.fx_rate_is_stale(v_version.rate_kind::text, v_version.rate_effective_date, null),
+        false);
+    if v_stale then
+        raise exception 'the exchange rate of quote % is from % and stale', p_quote_id, v_version.rate_effective_date
+            using errcode = 'check_violation', detail = 'fx_rate_stale';
+    end if;
+    -- ...and for every rate a line was converted at, whatever the
+    -- quotation's currency (a COP quotation priced from a USD list has rate
+    -- 1 and USD lines). A rate carried with no recorded observation (copied
+    -- from before they were recorded) cannot be vouched for: refreshed first.
+    select l.source_currency, r.effective_date into v_line
+      from public.quote_lines l
+      left join public.exchange_rates r on r.id = l.source_exchange_rate_id
+     where l.version_id = v_version.id
+       and l.source_exchange_rate is not null
+       and l.source_currency is distinct from v_version.base_currency
+       and coalesce(public.fx_rate_is_stale(r.kind::text, r.effective_date, r.valid_until), true)
+     order by l."position", l.id
+     limit 1;
+    if found then
+        raise exception 'quote % has a line priced at a stale % rate (%)', p_quote_id,
+                v_line.source_currency, coalesce(v_line.effective_date::text, 'unrecorded')
+            using errcode = 'check_violation', detail = 'fx_rate_stale';
     end if;
 
     -- Evaluated inside the row lock taken above, so two concurrent issues
@@ -5943,23 +6024,39 @@ begin
     perform public.apply_quote_status(
         p_quote_id, 'draft', p_reason, 'internal', v_actor, null, null);
 
+    -- The rate travels with the copy: the revision starts from the figures
+    -- the customer last saw, and the rep refreshes the rate on purpose
+    -- (`set_quote_version_rate()`) rather than by accident. A version issued
+    -- before rates existed carries none, and gets the default one instead.
     insert into public.quote_versions
-        (quote_id, currency, version_number, valid_until, terms, discount_percent)
+        (quote_id, currency, version_number, valid_until, terms, discount_percent,
+         base_currency, exchange_rate, rate_kind, exchange_rate_id,
+         rate_provider_key, rate_effective_date, rate_set_at, rate_set_by,
+         rate_reason)
     select v.quote_id, v.currency, v.version_number + 1,
-           v.valid_until, v.terms, v.discount_percent
+           v.valid_until, v.terms, v.discount_percent,
+           v.base_currency, v.exchange_rate, v.rate_kind, v.exchange_rate_id,
+           v.rate_provider_key, v.rate_effective_date, v.rate_set_at,
+           v.rate_set_by, v.rate_reason
       from public.quote_versions v where v.id = v_last.id
     returning * into v_new;
 
+    -- The lines keep the observation they were converted at, through the
+    -- hatch `quote_lines_fx_convert` honours for the new version only.
+    perform set_config('app.fx_line_rate_write', v_new.id::text, true);
     insert into public.quote_lines
         (version_id, quote_id, product_id, sku, name, description, unit,
          quantity, unit_price, discount_percent, tax_rate_id, tax_rate_percent,
-         "position")
+         "position", source_currency, source_unit_price, source_exchange_rate,
+         source_exchange_rate_id)
     select v_new.id, l.quote_id, l.product_id, l.sku, l.name, l.description,
            l.unit, l.quantity, l.unit_price, l.discount_percent, l.tax_rate_id,
-           l.tax_rate_percent, l."position"
+           l.tax_rate_percent, l."position", l.source_currency,
+           l.source_unit_price, l.source_exchange_rate, l.source_exchange_rate_id
       from public.quote_lines l
      where l.version_id = v_last.id
      order by l."position", l.id;
+    perform set_config('app.fx_line_rate_write', '', true);
 
     -- The links are NOT revoked (they were, until links became the quote's).
     -- The customer keeps reading the last issued document while this draft is
@@ -6552,6 +6649,20 @@ as $$
             'discount_total', v.discount_total,
             'tax_total',      v.tax_total,
             'total',          v.total),
+        -- The rate the document was priced at, frozen with it, and the
+        -- equivalent of its total in the base currency. Informative: the
+        -- amounts above are the contract. Null for a document in the base
+        -- currency or issued before rates existed.
+        'exchange', case when v.rate_kind is null or v.rate_kind = 'base' then null
+            else jsonb_build_object(
+                'base_currency',  v.base_currency,
+                'rate',           v.exchange_rate,
+                'rate_kind',      v.rate_kind,
+                'provider_name',  (select p.name from public.exchange_rate_providers p
+                                    where p.key = v.rate_provider_key),
+                'effective_date', v.rate_effective_date,
+                'total_base',     v.total_base)
+            end,
         'terms', v.terms,
         -- The shared thread of the QUOTE, every version's, oldest first (§2.5):
         -- a negotiation outlives the version it started on. Never an internal
@@ -7696,7 +7807,11 @@ begin
                and q.id <> p_quote_id
                and st.counts_as_won);
         if not v_is_fixed then
-            select v.total into v_total
+            -- In the BASE currency (2026-10-01): a deal is counted in the
+            -- company's currency, and a USD quotation's total is not a COP
+            -- amount. A version with no rate (issued before rates existed,
+            -- in another currency) moves no amount rather than a wrong one.
+            select v.total_base into v_total
               from public.quote_versions v
              where v.quote_id = p_quote_id
                and v.issued_at is not null
@@ -7778,5 +7893,3000 @@ begin
         perform public.sync_deal_from_quote(new.quote_id, 'commented');
     end if;
     return null;
+end;
+$$;
+
+--
+-- Currencies & exchange rates (docs/proposals/multi-currency-fx.md)
+--
+
+-- The base currency's code. Stable within a statement.
+create or replace function public.fx_base_currency() returns character(3)
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select c.code from public.currencies c where c.is_base;
+$$;
+
+create or replace function public.fx_settings() returns public.exchange_rate_settings
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select s.* from public.exchange_rate_settings s where s.id = 1;
+$$;
+
+-- Whether a rate is stale on a day: THE rule, for the resolver (and so the
+-- `current_exchange_rates` view), the issue gate on a version's rate and on
+-- every line's, and -- mirrored digit for digit in `fxMath.ts` -- the screens.
+--
+--   official, with a validity the source states (the TRM covers weekends and
+--   Colombian holidays in one row): stale once `valid_until` has passed;
+--   official, with none (the ECB publishes on TARGET days only): stale once
+--   older than `stale_after_days` CALENDAR days. A four-day Easter closure
+--   makes Thursday's fixing stale on Easter Monday on purpose: it is four days
+--   old, and the threshold is the company's to raise;
+--   commercial: stale once its own expiry has passed (none: never);
+--   custom and base: never -- a custom rate is a written, audited agreement,
+--   and the base is 1.
+create or replace function public.fx_rate_is_stale(
+    p_kind           text,
+    p_effective_date date,
+    p_valid_until    date,
+    p_on             date default current_date
+) returns boolean
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select case p_kind
+        when 'official' then
+            coalesce(p_valid_until < p_on,
+                     p_on - p_effective_date
+                         > coalesce((select s.stale_after_days
+                                       from public.exchange_rate_settings s
+                                      where s.id = 1), 3))
+        when 'commercial' then coalesce(p_valid_until < p_on, false)
+        else false
+    end;
+$$;
+
+-- The rate of one currency, of one kind, on one day.
+--
+-- Official: the newest official row whose `effective_date` is on or before the
+-- day, whatever its age -- the last valid rate is kept and REPORTED stale
+-- (`fx_rate_is_stale()`), never hidden and never presented as current. Ties on
+-- a day go to a manual row, then to the provider with the lowest priority.
+--
+-- Commercial: the newest commercial row in force on the day; none, or only
+-- expired ones, falls back to the official rate (and says so in `kind`).
+--
+-- The base currency resolves to 1. No row at all returns no row: the caller
+-- decides whether that is an error. Never a row from after the day.
+create or replace function public.fx_resolve_rate(
+    p_currency character(3),
+    p_kind     public.fx_rate_kind default 'official',
+    p_on       date default current_date
+) returns table (
+    rate             numeric,
+    exchange_rate_id bigint,
+    kind             text,
+    provider_key     text,
+    effective_date   date,
+    valid_until      date,
+    is_stale         boolean
+)
+    language plpgsql stable security invoker
+    set search_path to ''
+as $$
+begin
+    if p_currency = public.fx_base_currency() then
+        return query select 1::numeric, null::bigint, 'base'::text, null::text,
+                            p_on, null::date, false;
+        return;
+    end if;
+
+    if p_kind = 'commercial' then
+        return query
+            select r.rate, r.id, 'commercial'::text, null::text,
+                   r.effective_date, r.valid_until,
+                   public.fx_rate_is_stale('commercial', r.effective_date, r.valid_until, p_on)
+              from public.exchange_rates r
+             where r.currency_code = p_currency
+               and r.kind = 'commercial'
+               and r.effective_date <= p_on
+               and (r.valid_until is null or r.valid_until >= p_on)
+             order by r.effective_date desc, r.id desc
+             limit 1;
+        if found then
+            return;
+        end if;
+    end if;
+
+    return query
+        select r.rate, r.id, 'official'::text, p.key,
+               r.effective_date, r.valid_until,
+               public.fx_rate_is_stale('official', r.effective_date, r.valid_until, p_on)
+          from public.exchange_rates r
+          left join public.exchange_rate_providers p on p.id = r.provider_id
+         where r.currency_code = p_currency
+           and r.kind = 'official'
+           and r.effective_date <= p_on
+         order by r.effective_date desc,
+                  coalesce(p.priority, -1),
+                  r.id desc
+         limit 1;
+end;
+$$;
+
+-- Rounds an amount the way a currency is converted into: to the currency's
+-- decimals, capped at the two every amount column stores.
+create or replace function public.fx_round(p_amount numeric, p_currency character(3))
+returns numeric
+    language sql stable security invoker
+    set search_path to ''
+as $$
+    select round(p_amount,
+                 least(coalesce((select c.decimals from public.currencies c
+                                  where c.code = p_currency), 2), 2)::integer);
+$$;
+
+-- BEFORE INSERT/UPDATE on exchange_rate_providers, currencies and
+-- exchange_rate_settings: `updated_at`.
+-- (`public.set_updated_at()` is reused.)
+
+-- BEFORE UPDATE on exchange_rate_providers: the status columns and the secret
+-- reference belong to the sync and credential functions. Compared as values,
+-- because react-admin posts the whole record back.
+create or replace function public.exchange_rate_providers_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.fx_system_write', true), '') <> 'on'
+       and (new.key                   is distinct from old.key
+            or new.requires_credentials  is distinct from old.requires_credentials
+            or new.credentials_secret_id is distinct from old.credentials_secret_id
+            or new.last_attempt_at       is distinct from old.last_attempt_at
+            or new.last_success_at       is distinct from old.last_success_at
+            or new.last_error_at         is distinct from old.last_error_at
+            or new.last_error            is distinct from old.last_error
+            or new.consecutive_failures  is distinct from old.consecutive_failures
+            or new.created_at            is distinct from old.created_at) then
+        raise exception 'only name, description, is_enabled, priority, refresh_interval_minutes and currencies of a rate provider are editable'
+            using errcode = 'check_violation', detail = 'fx_column_protected';
+    end if;
+    return new;
+end;
+$$;
+
+-- BEFORE INSERT/UPDATE on currencies.
+create or replace function public.currencies_guard() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if tg_op = 'INSERT' then
+        -- The base is switched by `set_base_currency()`, never posted.
+        if new.is_base and coalesce(current_setting('app.fx_base_switch', true), '') <> 'on' then
+            raise exception 'the base currency is set through set_base_currency()'
+                using errcode = 'check_violation', detail = 'fx_base_via_function';
+        end if;
+    else
+        if new.code is distinct from old.code then
+            raise exception 'a currency code cannot change'
+                using errcode = 'check_violation', detail = 'fx_currency_code_immutable';
+        end if;
+        if new.is_base is distinct from old.is_base
+           and coalesce(current_setting('app.fx_base_switch', true), '') <> 'on' then
+            raise exception 'the base currency is set through set_base_currency()'
+                using errcode = 'check_violation', detail = 'fx_base_via_function';
+        end if;
+        if new.is_base and not new.is_active then
+            raise exception 'the base currency cannot be deactivated'
+                using errcode = 'check_violation', detail = 'fx_base_must_be_active';
+        end if;
+    end if;
+
+    -- One quotation default: choosing a new one releases the old one, so the
+    -- partial unique index never fires on an ordinary choice.
+    if new.is_quote_default and (tg_op = 'INSERT' or not old.is_quote_default) then
+        update public.currencies c
+           set is_quote_default = false
+         where c.is_quote_default and c.code <> new.code;
+    end if;
+
+    return new;
+end;
+$$;
+
+-- AFTER INSERT/UPDATE on currencies, exchange_rate_providers and
+-- exchange_rate_settings: one audit row per changed field. System columns
+-- (timestamps, sync status) are not configuration and are not logged.
+create or replace function public.fx_config_audit() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_actor  bigint := public.current_sale_id();
+    v_entity text;
+    v_key    text;
+    v_old    jsonb := case when tg_op = 'UPDATE' then to_jsonb(old) else '{}'::jsonb end;
+    v_new    jsonb := to_jsonb(new);
+    v_skip   text[] := array['created_at', 'updated_at', 'last_attempt_at', 'last_success_at',
+                             'last_error_at', 'last_error', 'consecutive_failures',
+                             'credentials_secret_id', 'id'];
+    v_field  text;
+begin
+    v_entity := case tg_table_name
+                    when 'currencies' then 'currency'
+                    when 'exchange_rate_providers' then 'provider'
+                    else 'settings' end;
+    v_key := case tg_table_name
+                 when 'currencies' then (v_new ->> 'code')
+                 when 'exchange_rate_providers' then (v_new ->> 'key')
+                 else 'settings' end;
+
+    for v_field in select jsonb_object_keys(v_new) loop
+        continue when v_field = any (v_skip);
+        if tg_op = 'INSERT' or (v_old -> v_field) is distinct from (v_new -> v_field) then
+            insert into public.exchange_rate_audit_logs
+                (sales_id, entity, entity_key, action, field, old_value, new_value)
+            values (v_actor, v_entity, v_key,
+                    case when tg_op = 'INSERT' then 'created' else 'updated' end,
+                    v_field, v_old -> v_field, v_new -> v_field);
+        end if;
+    end loop;
+
+    return null;
+end;
+$$;
+
+-- BEFORE INSERT on exchange_rates: what the server decides.
+create or replace function public.exchange_rates_before_insert() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    -- Every rate is in today's base; a rate posted against another base would
+    -- be read with the wrong unit by every conversion.
+    new.base_currency_code := public.fx_base_currency();
+    new.fetched_at := now();
+    new.created_at := now();
+
+    if new.provider_id is null then
+        -- A person's rate is signed by the session, never by the request.
+        new.created_by := public.current_sale_id();
+        new.source_payload := null;
+        new.derived_via := null;
+    end if;
+
+    return new;
+end;
+$$;
+
+-- AFTER INSERT on exchange_rates: a manual rate is a manual act and is logged
+-- as one. Provider rows are logged by their sync run instead.
+create or replace function public.exchange_rates_audit() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if new.provider_id is null then
+        insert into public.exchange_rate_audit_logs
+            (sales_id, entity, entity_key, action, new_value, note)
+        values (new.created_by, 'rate', new.currency_code::text,
+                'rate.' || new.kind::text || '.created',
+                jsonb_build_object('id', new.id, 'rate', new.rate,
+                                   'effective_date', new.effective_date,
+                                   'valid_until', new.valid_until,
+                                   'supersedes_id', new.supersedes_id),
+                new.note);
+    end if;
+    return null;
+end;
+$$;
+
+-- BEFORE INSERT/UPDATE on configuration: the deals' display currency IS the
+-- base currency. The settings form posts the whole configuration back, so a
+-- stale value is normalised rather than refused.
+create or replace function public.configuration_currency_is_base() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_base character(3) := public.fx_base_currency();
+begin
+    if v_base is not null then
+        new.config := jsonb_set(coalesce(new.config, '{}'::jsonb), '{currency}',
+                                to_jsonb(v_base::text));
+    end if;
+    return new;
+end;
+$$;
+
+-- The base currency, switched. Refused once any rate or any quotation in
+-- another currency exists: every stored rate is relative to the base, and a
+-- switch would silently change the meaning of all of them.
+create or replace function public.set_base_currency(p_code character(3))
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_base character(3) := public.fx_base_currency();
+begin
+    if not (select public.is_admin()) then
+        raise exception 'only an administrator can change the base currency'
+            using errcode = 'insufficient_privilege', detail = 'fx_forbidden';
+    end if;
+
+    if p_code = v_base then
+        return;
+    end if;
+
+    if not exists (select 1 from public.currencies c where c.code = p_code and c.is_active) then
+        raise exception 'currency % is not an active currency', p_code
+            using errcode = 'check_violation', detail = 'fx_currency_inactive';
+    end if;
+
+    if exists (select 1 from public.exchange_rates)
+       or exists (select 1 from public.quotes q where q.currency <> v_base) then
+        raise exception 'the base currency is locked: rates or quotations in other currencies exist'
+            using errcode = 'check_violation', detail = 'fx_base_locked';
+    end if;
+
+    perform set_config('app.fx_base_switch', 'on', true);
+    update public.currencies set is_base = false where is_base;
+    update public.currencies set is_base = true where code = p_code;
+    perform set_config('app.fx_base_switch', '', true);
+
+    -- The trigger rewrites the currency.
+    update public.configuration set config = config where id = 1;
+end;
+$$;
+
+--
+-- Sync runs (called by the `exchange-rates-sync` edge function, service role)
+--
+
+-- Claims a run of one provider. Returns `{run_id, provider_id, currencies}`,
+-- or `{skipped: <reason>}` when the provider is disabled, not due, or already
+-- running. "Due" is the cache: a provider fetched successfully less than
+-- `refresh_interval_minutes` ago is not called again. After a failure it is
+-- retried sooner, on a doubling backoff from 15 minutes capped at the interval.
+create or replace function public.fx_begin_sync_run(
+    p_provider_key  text,
+    p_triggered_by  text default 'cron',
+    p_force         boolean default false,
+    p_sales_id      bigint default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_provider public.exchange_rate_providers;
+    v_backoff  interval;
+    v_run_id   bigint;
+begin
+    select * into v_provider from public.exchange_rate_providers p
+     where p.key = p_provider_key
+     for update;
+    if not found then
+        raise exception 'unknown rate provider %', p_provider_key
+            using errcode = 'no_data_found', detail = 'fx_provider_unknown';
+    end if;
+
+    if not v_provider.is_enabled then
+        return jsonb_build_object('skipped', 'disabled');
+    end if;
+
+    if not p_force then
+        if v_provider.last_success_at is not null
+           and now() - v_provider.last_success_at
+               < make_interval(mins => v_provider.refresh_interval_minutes) then
+            return jsonb_build_object('skipped', 'not_due');
+        end if;
+
+        if v_provider.consecutive_failures > 0 and v_provider.last_attempt_at is not null then
+            v_backoff := least(
+                make_interval(mins => v_provider.refresh_interval_minutes),
+                make_interval(mins => 15 * power(2, least(v_provider.consecutive_failures - 1, 10))::integer));
+            if now() - v_provider.last_attempt_at < v_backoff then
+                return jsonb_build_object('skipped', 'backoff');
+            end if;
+        end if;
+    end if;
+
+    begin
+        insert into public.exchange_rate_sync_runs
+            (provider_id, triggered_by, triggered_by_sales_id)
+        values (v_provider.id, p_triggered_by, p_sales_id)
+        returning id into v_run_id;
+    exception when unique_violation then
+        return jsonb_build_object('skipped', 'already_running');
+    end;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    update public.exchange_rate_providers set last_attempt_at = now() where id = v_provider.id;
+    perform set_config('app.fx_system_write', '', true);
+
+    return jsonb_build_object(
+        'run_id',      v_run_id,
+        'provider_id', v_provider.id,
+        'currencies',  to_jsonb(v_provider.currencies),
+        'base',        public.fx_base_currency());
+end;
+$$;
+
+-- Stores what a provider returned. Each item says "1 `currency` = `rate`
+-- `quote_currency`", exactly as the source quoted it; this function turns it
+-- into the base convention, so the arithmetic is in one place and pgTAP pins it:
+--
+--   * quote_currency is the base  -> the currency's rate, as is (the TRM);
+--   * currency is the base        -> the quote currency's rate is 1 / rate;
+--   * neither                     -> crossed through whichever side already has
+--     an official rate IN FORCE on that very day (`derived_via`). Never through
+--     a pivot of another day: a cross of two different days is a rate that
+--     never existed.
+--
+-- Invalid items are counted and described, never stored.
+create or replace function public.fx_record_rates(p_run_id bigint, p_items jsonb)
+returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_run       public.exchange_rate_sync_runs;
+    v_base      character(3) := public.fx_base_currency();
+    v_item      jsonb;
+    v_ccy       text;
+    v_qccy      text;
+    v_value     numeric;
+    v_eff       date;
+    v_until     date;
+    v_target    character(3);
+    v_rate      numeric;
+    v_pivot     numeric;
+    v_via       character(3);
+    v_received  integer := 0;
+    v_inserted  integer := 0;
+    v_rejected  jsonb := '[]'::jsonb;
+    v_rows      integer;
+begin
+    select * into v_run from public.exchange_rate_sync_runs r where r.id = p_run_id;
+    if not found or v_run.status <> 'running' then
+        raise exception 'sync run % is not running', p_run_id
+            using errcode = 'check_violation', detail = 'fx_run_not_running';
+    end if;
+
+    -- Items are processed in date order with the direct ones first, so a cross
+    -- rate finds the pivot this same batch brought in.
+    for v_item in
+        select e.value
+          from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) e
+         order by e.value ->> 'effective_date',
+                  ((e.value ->> 'quote_currency') = v_base
+                   or (e.value ->> 'currency') = v_base) desc
+    loop
+        v_received := v_received + 1;
+        v_ccy  := upper(btrim(v_item ->> 'currency'));
+        v_qccy := upper(btrim(v_item ->> 'quote_currency'));
+        v_via  := null;
+
+        begin
+            v_value := (v_item ->> 'rate')::numeric;
+            v_eff   := (v_item ->> 'effective_date')::date;
+            v_until := nullif(v_item ->> 'valid_until', '')::date;
+        exception when others then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'unparseable');
+            continue;
+        end;
+
+        if v_value is null or v_value <= 0 then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'rate_not_positive');
+            continue;
+        end if;
+        if v_eff is null or v_eff > current_date + 4 then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'effective_date_invalid');
+            continue;
+        end if;
+        if v_until is not null and v_until < v_eff then
+            v_until := null;
+        end if;
+        if v_ccy = v_qccy
+           or not exists (select 1 from public.currencies c where c.code = v_ccy)
+           or not exists (select 1 from public.currencies c where c.code = v_qccy) then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'currency_unknown');
+            continue;
+        end if;
+
+        if v_qccy = v_base then
+            v_target := v_ccy;
+            v_rate   := v_value;
+        elsif v_ccy = v_base then
+            v_target := v_qccy;
+            v_rate   := 1 / v_value;
+        else
+            -- Pivot on the currency side: 1 C = value Q, and C is known in base.
+            select r.rate into v_pivot
+              from public.exchange_rates r
+             where r.currency_code = v_ccy and r.kind = 'official'
+               and r.effective_date <= v_eff
+               and coalesce(r.valid_until, r.effective_date) >= v_eff
+             order by r.effective_date desc, r.id desc
+             limit 1;
+            if v_pivot is not null then
+                v_target := v_qccy;
+                v_rate   := v_pivot / v_value;
+                v_via    := v_ccy;
+            else
+                select r.rate into v_pivot
+                  from public.exchange_rates r
+                 where r.currency_code = v_qccy and r.kind = 'official'
+                   and r.effective_date <= v_eff
+                   and coalesce(r.valid_until, r.effective_date) >= v_eff
+                 order by r.effective_date desc, r.id desc
+                 limit 1;
+                if v_pivot is null then
+                    v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'pivot_missing');
+                    continue;
+                end if;
+                v_target := v_ccy;
+                v_rate   := v_pivot * v_value;
+                v_via    := v_qccy;
+            end if;
+        end if;
+
+        v_rate := round(v_rate, 10);
+        if v_rate <= 0 then
+            v_rejected := v_rejected || jsonb_build_object('item', v_item, 'reason', 'rate_not_positive');
+            continue;
+        end if;
+
+        insert into public.exchange_rates
+            (currency_code, base_currency_code, rate, kind, provider_id,
+             effective_date, valid_until, derived_via, source_payload)
+        values (v_target, v_base, v_rate, 'official', v_run.provider_id,
+                v_eff, v_until, v_via, v_item -> 'raw')
+        on conflict (currency_code, base_currency_code, provider_id, effective_date)
+            where provider_id is not null
+            do nothing;
+        get diagnostics v_rows = row_count;
+        v_inserted := v_inserted + v_rows;
+    end loop;
+
+    update public.exchange_rate_sync_runs r
+       set rates_received = r.rates_received + v_received,
+           rates_inserted = r.rates_inserted + v_inserted,
+           rates_rejected = r.rates_rejected + jsonb_array_length(v_rejected),
+           details = case when jsonb_array_length(v_rejected) > 0
+                          then coalesce(r.details, '{}'::jsonb)
+                               || jsonb_build_object('rejected', v_rejected)
+                          else r.details end
+     where r.id = p_run_id;
+
+    return jsonb_build_object('received', v_received,
+                              'inserted', v_inserted,
+                              'rejected', v_rejected);
+end;
+$$;
+
+-- Closes a run and moves the provider's status. A failure leaves every stored
+-- rate alone: the last valid one keeps being served, reported stale once it
+-- ages past the threshold. Reaching `failure_alert_threshold` consecutive
+-- failures tells every active admin, once per provider and day.
+create or replace function public.fx_finish_sync_run(
+    p_run_id   bigint,
+    p_ok       boolean,
+    p_attempts integer default 1,
+    p_error    text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_run      public.exchange_rate_sync_runs;
+    v_provider public.exchange_rate_providers;
+    v_notified integer := 0;
+begin
+    update public.exchange_rate_sync_runs r
+       set status      = case when p_ok then 'succeeded' else 'failed' end,
+           finished_at = now(),
+           attempts    = greatest(coalesce(p_attempts, 1), 0),
+           error       = case when p_ok then null else left(coalesce(p_error, 'unknown error'), 2000) end
+     where r.id = p_run_id and r.status = 'running'
+    returning * into v_run;
+    if not found then
+        raise exception 'sync run % is not running', p_run_id
+            using errcode = 'check_violation', detail = 'fx_run_not_running';
+    end if;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    if p_ok then
+        update public.exchange_rate_providers p
+           set last_success_at = now(), consecutive_failures = 0
+         where p.id = v_run.provider_id
+        returning * into v_provider;
+    else
+        update public.exchange_rate_providers p
+           set last_error_at = now(),
+               last_error = v_run.error,
+               consecutive_failures = p.consecutive_failures + 1
+         where p.id = v_run.provider_id
+        returning * into v_provider;
+    end if;
+    perform set_config('app.fx_system_write', '', true);
+
+    if not p_ok
+       and v_provider.consecutive_failures
+           >= (select s.failure_alert_threshold from public.exchange_rate_settings s where s.id = 1) then
+        v_notified := public.notify_fx_sync_failure(v_provider.id);
+    end if;
+
+    return jsonb_build_object('run_id', p_run_id, 'status', v_run.status,
+                              'consecutive_failures', v_provider.consecutive_failures,
+                              'notified', v_notified);
+end;
+$$;
+
+-- In-app notification to every active admin. Idempotent per provider and day
+-- through the outbox's `dedupe_key`; an explicit mute of the in-app channel is
+-- honoured and leaves a `skipped` row, as everywhere else.
+create or replace function public.notify_fx_sync_failure(p_provider_id bigint)
+returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_provider public.exchange_rate_providers;
+    v_admin    bigint;
+    v_prefs    public.notification_preferences;
+    v_muted    boolean;
+    v_written  integer := 0;
+begin
+    select * into v_provider from public.exchange_rate_providers p where p.id = p_provider_id;
+    if not found then
+        return 0;
+    end if;
+
+    for v_admin in
+        select s.id from public.sales s
+         where s.role = 'admin' and s.disabled is not true
+    loop
+        v_prefs := public.notification_prefs_for(v_admin);
+        v_muted := 'in_app'::public.reminder_channel = any (v_prefs.muted_channels);
+
+        insert into public.task_notifications (
+            task_id, entity_type, entity_id, recipient_id, channel, scheduled_for,
+            title, body, message_key, message_params, dedupe_key,
+            status, sent_at, delivered_at, error)
+        values (
+            null, 'exchange_rate_provider', v_provider.id, v_admin, 'in_app', now(),
+            format('Exchange rates: %s is failing', v_provider.name),
+            format('%s consecutive failed updates. Last error: %s',
+                   v_provider.consecutive_failures, coalesce(v_provider.last_error, '-')),
+            'crm.notifications.fx.sync_failed',
+            jsonb_build_object('provider', v_provider.name,
+                               'failures', v_provider.consecutive_failures,
+                               'error', coalesce(v_provider.last_error, '')),
+            format('fx:%s:%s:%s:in_app', v_provider.key, current_date, v_admin),
+            case when v_muted then 'skipped' else 'delivered' end,
+            case when v_muted then null else now() end,
+            case when v_muted then null else now() end,
+            case when v_muted then 'channel in_app muted by recipient' end)
+        on conflict (dedupe_key) do nothing;
+
+        if found then
+            v_written := v_written + 1;
+        end if;
+    end loop;
+
+    return v_written;
+end;
+$$;
+
+-- Runs left `running` by a function that died (timeout, deploy) would hold the
+-- provider's lock forever. Scheduled every 15 minutes.
+create or replace function public.fx_reap_sync_runs() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_run   bigint;
+    v_count integer := 0;
+begin
+    for v_run in
+        select r.id from public.exchange_rate_sync_runs r
+         where r.status = 'running'
+           and r.started_at < now() - interval '10 minutes'
+    loop
+        perform public.fx_finish_sync_run(v_run, false, 0, 'run abandoned: no result after 10 minutes');
+        v_count := v_count + 1;
+    end loop;
+    return v_count;
+end;
+$$;
+
+--
+-- Credentials (Supabase Vault). The secret never reaches a table a client can
+-- read: the provider row holds the Vault id only.
+--
+create or replace function public.set_fx_provider_secret(p_provider_key text, p_secret text)
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_provider public.exchange_rate_providers;
+    v_secret   text := nullif(btrim(coalesce(p_secret, '')), '');
+    v_id       uuid;
+begin
+    if not (select public.is_admin()) then
+        raise exception 'only an administrator can set provider credentials'
+            using errcode = 'insufficient_privilege', detail = 'fx_forbidden';
+    end if;
+
+    select * into v_provider from public.exchange_rate_providers p
+     where p.key = p_provider_key for update;
+    if not found then
+        raise exception 'unknown rate provider %', p_provider_key
+            using errcode = 'no_data_found', detail = 'fx_provider_unknown';
+    end if;
+
+    v_id := v_provider.credentials_secret_id;
+
+    if v_secret is null then
+        if v_id is not null then
+            delete from vault.secrets s where s.id = v_id;
+        end if;
+        v_id := null;
+    elsif v_id is null then
+        v_id := vault.create_secret(v_secret, 'fx_provider_' || v_provider.key,
+                                    'Credentials of exchange rate provider ' || v_provider.key);
+    else
+        perform vault.update_secret(v_id, v_secret);
+    end if;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    update public.exchange_rate_providers set credentials_secret_id = v_id where id = v_provider.id;
+    perform set_config('app.fx_system_write', '', true);
+
+    -- Logged as a fact, never with the value.
+    insert into public.exchange_rate_audit_logs (sales_id, entity, entity_key, action)
+    values (public.current_sale_id(), 'provider', v_provider.key,
+            case when v_secret is null then 'credentials.cleared' else 'credentials.set' end);
+end;
+$$;
+
+create or replace function public.get_fx_provider_secret(p_provider_key text)
+returns text
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select d.decrypted_secret
+      from public.exchange_rate_providers p
+      join vault.decrypted_secrets d on d.id = p.credentials_secret_id
+     where p.key = p_provider_key;
+$$;
+
+--
+-- Quotations
+--
+
+-- The rate a line priced in another currency converts at, and WHICH
+-- observation that is. One implementation, called by `quote_lines_fx_convert`,
+-- by `set_quote_version_rate()` and, read-only, by the line picker's preview,
+-- so what the rep is shown is what will be stored.
+--
+--   * the version's base resolves to 1;
+--   * one observation per source currency per version: a line reuses the one
+--     another line of the same currency already carries (`p_reuse => false` is
+--     how a re-pricing asks for a fresh one);
+--   * otherwise the newest observation ON OR BEFORE the version's rate day --
+--     the day its official rate was observed, or the day a commercial, custom
+--     or base rate was set -- so a cross conversion never pairs one day's EUR
+--     with another day's USD. Never a later one: with none, no row, and the
+--     caller refuses (`fx_rate_missing`);
+--   * `is_stale` is `fx_rate_is_stale()` today, the issue gate's question. A
+--     rate carried with no recorded observation cannot be vouched for.
+--
+-- Security invoker: a preview reads only a version RLS lets the caller read.
+create or replace function public.fx_line_source_rate(
+    p_version_id      bigint,
+    p_source_currency character(3),
+    p_reuse           boolean default true
+) returns table (
+    rate             numeric,
+    exchange_rate_id bigint,
+    kind             text,
+    effective_date   date,
+    valid_until      date,
+    is_stale         boolean
+)
+    language plpgsql stable security invoker
+    set search_path to ''
+as $$
+declare
+    v_version public.quote_versions;
+    v_kind    public.fx_rate_kind;
+    v_on      date;
+begin
+    select * into v_version from public.quote_versions v where v.id = p_version_id;
+    if not found or p_source_currency is null
+       or p_source_currency = v_version.currency then
+        return;
+    end if;
+
+    if p_source_currency = v_version.base_currency then
+        return query select 1::numeric, null::bigint, 'base'::text,
+                            null::date, null::date, false;
+        return;
+    end if;
+
+    if p_reuse then
+        return query
+            select l.source_exchange_rate, l.source_exchange_rate_id,
+                   r.kind::text, r.effective_date, r.valid_until,
+                   coalesce(public.fx_rate_is_stale(r.kind::text, r.effective_date, r.valid_until), true)
+              from public.quote_lines l
+              left join public.exchange_rates r on r.id = l.source_exchange_rate_id
+             where l.version_id = p_version_id
+               and l.source_currency = p_source_currency
+               and l.source_exchange_rate is not null
+             order by l.id
+             limit 1;
+        if found then
+            return;
+        end if;
+    end if;
+
+    if v_version.rate_kind = 'official' then
+        v_kind := 'official';
+        v_on := v_version.rate_effective_date;
+    elsif v_version.rate_kind = 'commercial' then
+        v_kind := 'commercial';
+        v_on := v_version.rate_set_at::date;
+    else
+        v_kind := (select s.quote_rate_kind_default
+                     from public.exchange_rate_settings s where s.id = 1);
+        v_on := v_version.rate_set_at::date;
+    end if;
+
+    return query
+        select r.rate, r.exchange_rate_id, r.kind, r.effective_date, r.valid_until,
+               public.fx_rate_is_stale(r.kind, r.effective_date, r.valid_until)
+          from public.fx_resolve_rate(p_source_currency, v_kind,
+                                      coalesce(v_on, current_date)) r;
+end;
+$$;
+
+-- BEFORE INSERT/UPDATE on quote_lines: a converted price, and the rate it is
+-- converted at, are the server's.
+--
+--     unit_price = round(source_unit_price * source_rate / version_rate,
+--                        least(decimals of the quote currency, 2))
+--
+-- `source_exchange_rate` / `source_exchange_rate_id` are never taken from the
+-- client: an inserted line gets them from `fx_line_source_rate()`, and an
+-- updated one keeps the observation it has while its source currency stays.
+-- Only `set_quote_version_rate()` and `revise_quote()` write them, through the
+-- `app.fx_line_rate_write` hatch scoped to one version. A price typed by hand
+-- arrives with no source and is the negotiated figure (§13.2).
+create or replace function public.quote_lines_fx_convert() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_version public.quote_versions;
+    v_source  record;
+    v_trusted boolean;
+begin
+    if new.source_currency is null then
+        new.source_unit_price := null;
+        new.source_exchange_rate := null;
+        new.source_exchange_rate_id := null;
+        return new;
+    end if;
+
+    select * into v_version from public.quote_versions v where v.id = new.version_id;
+
+    if new.source_currency = v_version.currency then
+        new.source_exchange_rate := null;
+        new.source_exchange_rate_id := null;
+        new.unit_price := new.source_unit_price;
+        return new;
+    end if;
+
+    if v_version.exchange_rate is null then
+        raise exception 'quote version % has no exchange rate for %',
+                new.version_id, v_version.currency
+            using errcode = 'check_violation', detail = 'fx_rate_missing';
+    end if;
+
+    v_trusted := current_setting('app.fx_line_rate_write', true) = new.version_id::text;
+
+    if v_trusted and new.source_exchange_rate is not null then
+        null;
+    elsif tg_op = 'UPDATE'
+          and new.source_currency is not distinct from old.source_currency
+          and old.source_exchange_rate is not null then
+        new.source_exchange_rate := old.source_exchange_rate;
+        new.source_exchange_rate_id := old.source_exchange_rate_id;
+    else
+        select * into v_source
+          from public.fx_line_source_rate(new.version_id, new.source_currency);
+        if v_source.rate is null then
+            raise exception 'no exchange rate for % on or before the rate day of quote version %',
+                    new.source_currency, new.version_id
+                using errcode = 'check_violation', detail = 'fx_rate_missing';
+        end if;
+        new.source_exchange_rate := v_source.rate;
+        new.source_exchange_rate_id := v_source.exchange_rate_id;
+    end if;
+
+    new.unit_price := public.fx_round(
+        new.source_unit_price * new.source_exchange_rate / v_version.exchange_rate,
+        v_version.currency);
+
+    return new;
+end;
+$$;
+
+-- The rate of a DRAFT version, chosen. Official and commercial resolve the
+-- rate in force today; custom takes the figure given, with a written reason,
+-- from a manager or admin -- or from a rep within the configured tolerance of
+-- the official rate; base (a quotation in the base currency) stays at 1.
+-- Every converted line is re-priced at one fresh observation per source
+-- currency -- for a base quotation that is its whole "update to today's
+-- rate" -- and the totals follow. Logged in the module's audit trail.
+create or replace function public.set_quote_version_rate(
+    p_version_id bigint,
+    p_kind       public.quote_rate_kind,
+    p_rate       numeric default null,
+    p_reason     text default null
+) returns public.quote_versions
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_actor    bigint := public.current_sale_id();
+    v_role     public.sales_role := public.current_sales_role();
+    v_version  public.quote_versions;
+    v_quote    public.quotes;
+    v_kind     public.quote_rate_kind;
+    v_rate     numeric;
+    v_rate_id  bigint;
+    v_provider text;
+    v_eff      date;
+    v_official numeric;
+    v_tol      numeric;
+    v_reason   text := nullif(btrim(coalesce(p_reason, '')), '');
+    v_new      public.quote_versions;
+    v_src      record;
+    v_line     record;
+begin
+    select * into v_version from public.quote_versions v where v.id = p_version_id for update;
+    if not found then
+        raise exception 'quote version % not found', p_version_id
+            using errcode = 'no_data_found';
+    end if;
+
+    select * into v_quote from public.quotes q where q.id = v_version.quote_id for update;
+
+    if not (select public.can_manage_all())
+       and v_quote.sales_id is distinct from v_actor then
+        raise exception 'no permission to change the rate of quote %', v_quote.id
+            using errcode = 'insufficient_privilege';
+    end if;
+
+    if v_version.issued_at is not null then
+        raise exception 'quote version % is issued and immutable', p_version_id
+            using errcode = 'check_violation', detail = 'quote_version_frozen';
+    end if;
+    if v_quote.status_key is distinct from 'draft' then
+        raise exception 'the rate is editable only while the quote is a draft (it is %)', v_quote.status_key
+            using errcode = 'check_violation', detail = 'quote_not_draft';
+    end if;
+
+    if v_version.currency = v_version.base_currency then
+        if p_kind <> 'base' then
+            raise exception 'a quotation in the base currency has no exchange rate'
+                using errcode = 'check_violation', detail = 'fx_rate_kind_invalid';
+        end if;
+        -- Rate 1, and "update to today's rate" re-prices the lines a
+        -- list in another currency priced (below).
+    elsif p_kind = 'base' then
+        raise exception 'quote % is not in the base currency', v_quote.id
+            using errcode = 'check_violation', detail = 'fx_rate_kind_invalid';
+    end if;
+
+    if p_kind in ('official', 'commercial') then
+        select r.kind::public.quote_rate_kind, r.rate, r.exchange_rate_id,
+               r.provider_key, r.effective_date
+          into v_kind, v_rate, v_rate_id, v_provider, v_eff
+          from public.fx_resolve_rate(v_version.currency, p_kind::text::public.fx_rate_kind) r;
+        if v_rate is null then
+            raise exception 'no exchange rate is available for %', v_version.currency
+                using errcode = 'check_violation', detail = 'fx_rate_missing';
+        end if;
+    elsif p_kind = 'custom' then
+        if p_rate is null or p_rate <= 0 then
+            raise exception 'a custom rate must be a positive number'
+                using errcode = 'check_violation', detail = 'fx_rate_invalid';
+        end if;
+        if v_reason is null then
+            raise exception 'a custom rate needs a written reason'
+                using errcode = 'check_violation', detail = 'fx_reason_required';
+        end if;
+        if v_role is distinct from 'admin' and v_role is distinct from 'manager' then
+            v_tol := (select s.rep_custom_rate_tolerance_percent
+                        from public.exchange_rate_settings s where s.id = 1);
+            if coalesce(v_tol, 0) = 0 then
+                raise exception 'custom exchange rates are reserved to managers and administrators'
+                    using errcode = 'insufficient_privilege', detail = 'fx_custom_rate_forbidden';
+            end if;
+            select r.rate into v_official
+              from public.fx_resolve_rate(v_version.currency, 'official') r;
+            if v_official is null
+               or abs(p_rate / v_official - 1) * 100 > v_tol then
+                raise exception 'the custom rate is more than % percent away from the official rate', v_tol
+                    using errcode = 'check_violation', detail = 'fx_custom_rate_out_of_tolerance',
+                          hint = jsonb_build_object('official', v_official, 'tolerance', v_tol)::text;
+            end if;
+        end if;
+    end if;
+
+    if p_kind = 'custom' then
+        v_kind     := 'custom';
+        v_rate     := round(p_rate, 10);
+        v_rate_id  := null;
+        v_provider := null;
+        v_eff      := current_date;
+    end if;
+
+    if p_kind = 'base' then
+        v_kind     := 'base';
+        v_rate     := 1;
+        v_rate_id  := null;
+        v_provider := null;
+        v_eff      := current_date;
+    end if;
+
+    perform set_config('app.quote_version_system_write', p_version_id::text, true);
+    update public.quote_versions v
+       set rate_kind           = v_kind,
+           exchange_rate       = v_rate,
+           exchange_rate_id    = v_rate_id,
+           rate_provider_key   = v_provider,
+           rate_effective_date = v_eff,
+           rate_reason         = case when p_kind = 'custom' then v_reason end,
+           rate_set_at         = now(),
+           rate_set_by         = v_actor
+     where v.id = p_version_id
+    returning * into v_new;
+    perform set_config('app.quote_version_system_write', '', true);
+
+    -- Re-price every converted line: ONE fresh observation per source
+    -- currency, on the new rate's day (`fx_line_source_rate()`, the
+    -- resolution the trigger and the preview use), written through the
+    -- hatch `quote_lines_fx_convert` honours for this version only.
+    for v_src in
+        select distinct l.source_currency
+          from public.quote_lines l
+         where l.version_id = p_version_id
+           and l.source_currency is not null
+           and l.source_currency <> v_new.currency
+    loop
+        select * into v_line
+          from public.fx_line_source_rate(p_version_id, v_src.source_currency, false);
+        if v_line.rate is null then
+            raise exception 'no exchange rate is available for %', v_src.source_currency
+                using errcode = 'check_violation', detail = 'fx_rate_missing';
+        end if;
+        perform set_config('app.fx_line_rate_write', p_version_id::text, true);
+        update public.quote_lines l
+           set source_exchange_rate    = v_line.rate,
+               source_exchange_rate_id = v_line.exchange_rate_id
+         where l.version_id = p_version_id
+           and l.source_currency = v_src.source_currency;
+        perform set_config('app.fx_line_rate_write', '', true);
+    end loop;
+
+    perform public.refresh_quote_version_totals(p_version_id);
+
+    insert into public.exchange_rate_audit_logs
+        (sales_id, entity, entity_key, action, old_value, new_value, note)
+    values (v_actor, 'quote_version', p_version_id::text, 'rate.set',
+            jsonb_build_object('kind', v_version.rate_kind, 'rate', v_version.exchange_rate,
+                               'effective_date', v_version.rate_effective_date),
+            jsonb_build_object('kind', v_new.rate_kind, 'rate', v_new.exchange_rate,
+                               'effective_date', v_new.rate_effective_date),
+            v_reason);
+
+    select * into v_new from public.quote_versions v where v.id = p_version_id;
+    return v_new;
+end;
+$$;
+
+--
+-- What the integration looks like right now, for the health panel. One
+-- function so the status rule has one definition, pinned by pgTAP. SECURITY
+-- DEFINER because it reads `cron.job` and the Vault catalogue, neither of
+-- which an API role can read; it returns presence and status, never a value.
+--
+create or replace function public.fx_integration_health() returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_settings  public.exchange_rate_settings;
+    v_auto      jsonb;
+    v_job_active   boolean;
+    v_job_schedule text;
+    v_secrets   boolean := false;
+    v_providers jsonb;
+    v_oldest    jsonb;
+begin
+    if not (select public.can_manage_all()) then
+        raise exception 'the integration health is reserved to managers and administrators'
+            using errcode = 'insufficient_privilege', detail = 'fx_forbidden';
+    end if;
+
+    select * into v_settings from public.exchange_rate_settings s where s.id = 1;
+
+    begin
+        select j.active, j.schedule into v_job_active, v_job_schedule
+          from cron.job j where j.jobname = 'fx-rates-sync';
+    exception when others then
+        v_job_active := null;
+        v_job_schedule := null;
+    end;
+
+    begin
+        select count(*) = 2 into v_secrets
+          from vault.secrets s where s.name in ('fx_sync_url', 'fx_sync_service_key');
+    exception when others then
+        v_secrets := false;
+    end;
+
+    v_auto := jsonb_build_object(
+        'job_exists',         v_job_schedule is not null,
+        'job_active',         coalesce(v_job_active, false),
+        'schedule',           v_job_schedule,
+        'secrets_configured', v_secrets,
+        'active',             coalesce(v_job_active, false) and v_secrets);
+
+    select coalesce(jsonb_agg(to_jsonb(x) order by x.priority, x.key), '[]'::jsonb)
+      into v_providers
+      from (
+        select p.key, p.name, p.is_enabled, p.priority, p.refresh_interval_minutes,
+               p.currencies, p.requires_credentials,
+               p.credentials_secret_id is not null as has_credentials,
+               p.last_attempt_at, p.last_success_at, p.last_error_at, p.last_error,
+               p.consecutive_failures,
+               (select r.rates_inserted from public.exchange_rate_sync_runs r
+                 where r.provider_id = p.id and r.status <> 'running'
+                 order by r.started_at desc limit 1) as rates_imported_last_run,
+               (select coalesce(sum(r.rates_inserted), 0) from public.exchange_rate_sync_runs r
+                 where r.provider_id = p.id and r.started_at > now() - interval '30 days')
+                   as rates_imported_30d,
+               (select count(*) from public.exchange_rate_sync_runs r
+                 where r.provider_id = p.id and r.status = 'failed'
+                   and r.started_at > now() - interval '30 days') as errors_30d,
+               (select min(e.effective_date) from public.exchange_rates e
+                 where e.provider_id = p.id) as history_from,
+               exists (select 1 from public.exchange_rate_sync_runs r
+                        where r.provider_id = p.id and r.status = 'running') as is_running,
+               case
+                   when not p.is_enabled then 'disabled'
+                   when p.consecutive_failures >= v_settings.failure_alert_threshold
+                     or p.last_success_at is null
+                     or p.last_success_at < now() - make_interval(days => greatest(v_settings.stale_after_days, 1))
+                       then 'down'
+                   when p.consecutive_failures > 0
+                     or p.last_success_at < now() - make_interval(mins => 2 * p.refresh_interval_minutes)
+                       then 'degraded'
+                   else 'operational'
+               end as status
+          from public.exchange_rate_providers p
+      ) x;
+
+    -- The oldest rate anything is still priced with: the rate in force for
+    -- each active currency, and the rate of every open DRAFT. An issued
+    -- version is frozen on purpose and is not "in use" in this sense.
+    select jsonb_build_object('effective_date', u.effective_date,
+                              'currency',       u.currency,
+                              'kind',           u.kind,
+                              'source',         u.source,
+                              'quote_id',       u.quote_id,
+                              'is_stale',       current_date - u.effective_date > v_settings.stale_after_days)
+      into v_oldest
+      from (
+        select r.effective_date, c.code::text as currency, r.kind, 'current_rate'::text as source,
+               null::bigint as quote_id
+          from public.currencies c
+         cross join lateral public.fx_resolve_rate(c.code, 'official') r
+         where c.is_active and not c.is_base
+        union all
+        select v.rate_effective_date, v.currency::text, v.rate_kind::text, 'draft_quote'::text, v.quote_id
+          from public.quote_versions v
+         where v.issued_at is null
+           and v.rate_kind in ('official', 'commercial', 'custom')
+      ) u
+     where u.effective_date is not null
+     order by u.effective_date, u.currency
+     limit 1;
+
+    return jsonb_build_object(
+        'checked_at', now(),
+        'base_currency', public.fx_base_currency(),
+        'stale_after_days', v_settings.stale_after_days,
+        'auto_sync', v_auto,
+        'providers', v_providers,
+        'history', (select jsonb_build_object('available', count(*) > 0,
+                                              'rates', count(*),
+                                              'from', min(e.effective_date),
+                                              'to', max(e.effective_date))
+                      from public.exchange_rates e),
+        'oldest_rate_in_use', v_oldest,
+        'active_currencies', (select count(*) from public.currencies c where c.is_active),
+        'currencies_without_rate', (
+            select coalesce(jsonb_agg(c.code order by c.code), '[]'::jsonb)
+              from public.currencies c
+             where c.is_active and not c.is_base
+               and not exists (select 1 from public.exchange_rates e
+                                where e.currency_code = c.code)));
+end;
+$$;
+
+-- The scheduled tick (`fx-rates-sync`, 20261001130000): posts to the
+-- `exchange-rates-sync` edge function with the URL and key held in Vault; a
+-- no-op until both exist.
+create or replace function public.fx_dispatch_sync() returns bigint
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_url text;
+    v_key text;
+begin
+    select d.decrypted_secret into v_url
+      from vault.decrypted_secrets d where d.name = 'fx_sync_url';
+    select d.decrypted_secret into v_key
+      from vault.decrypted_secrets d where d.name = 'fx_sync_service_key';
+
+    if v_url is null or v_key is null then
+        return null;
+    end if;
+
+    -- pg_net is asynchronous: this queues the request and returns its id. The
+    -- outcome is recorded by the function itself, in `exchange_rate_sync_runs`.
+    return net.http_post(
+        url                  := v_url,
+        body                 := jsonb_build_object('trigger', 'cron'),
+        headers              := jsonb_build_object(
+                                    'Content-Type', 'application/json',
+                                    'Authorization', 'Bearer ' || v_key),
+        timeout_milliseconds := 60000);
+end;
+$$;
+
+-- The retention path of the rate history (`20261001140000_fx_purge`):
+-- service_role only, through the `app.quote_purge` hatch.
+create or replace function public.purge_exchange_rates() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_count integer;
+begin
+    perform set_config('app.quote_purge', 'on', true);
+
+    delete from public.exchange_rate_sync_runs where id is not null;
+    delete from public.exchange_rate_audit_logs where id is not null;
+    -- Corrections point at the rows they supersede: those go first.
+    delete from public.exchange_rates where supersedes_id is not null;
+    delete from public.exchange_rates where id is not null;
+    get diagnostics v_count = row_count;
+
+    perform set_config('app.fx_system_write', 'on', true);
+    update public.exchange_rate_providers
+       set last_attempt_at = null, last_success_at = null, last_error_at = null,
+           last_error = null, consecutive_failures = 0
+     where id is not null;
+    perform set_config('app.fx_system_write', '', true);
+
+    perform set_config('app.quote_purge', '', true);
+    return v_count;
+end;
+$$;
+
+-- ===========================================================================
+-- Outbound email (docs/proposals/outbound-email.md)
+-- ===========================================================================
+
+-- Who may attach a message to a record, and who may read the ones attached to
+-- it. The same answer the record's own select policy gives; SECURITY DEFINER
+-- because a policy cannot join a table the reader may not read.
+--
+-- A company is readable by everybody, so anybody may write FROM its page --
+-- which is why the read policy on `email_messages` does not use this function
+-- for a company: that would show every rep each other's mail.
+create or replace function public.can_see_email_entity(
+    p_entity_type public.task_entity,
+    p_entity_id   bigint
+) returns boolean
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select case p_entity_type
+        when 'quote' then (select public.can_see_quote(p_entity_id))
+        when 'deal' then (select public.can_see_deal(p_entity_id))
+        when 'contact' then exists (
+            select 1 from public.contacts c
+             where c.id = p_entity_id
+               and ((select public.can_manage_all())
+                    or c.sales_id = (select public.current_sale_id())))
+        when 'lead' then exists (
+            select 1 from public.leads l
+             where l.id = p_entity_id
+               and ((select public.can_manage_all())
+                    or l.sales_id = (select public.current_sale_id())))
+        when 'company' then (select public.current_sale_id()) is not null
+            and exists (select 1 from public.companies c where c.id = p_entity_id)
+        else false
+    end;
+$$;
+
+-- Which `{{variables}}` a template of each scope may name. The ONE list: the
+-- template guard reads it, `email_context()` returns it, and the client's
+-- variable picker shows what it returns.
+create or replace function public.email_template_variables(p_scope text)
+returns text[]
+    language sql immutable
+    set search_path to ''
+as $$
+    select array['issuer_name', 'sender_name', 'sender_email',
+                 'customer_name', 'customer_company']
+        || case p_scope
+               when 'deal' then array['deal_name']
+               when 'quote' then array['quote_number', 'quote_title', 'quote_version',
+                                       'issue_date', 'valid_until', 'total',
+                                       'currency', 'quote_link']
+               else array[]::text[]
+           end;
+$$;
+
+-- Every `{{name}}` a text mentions.
+create or replace function public.email_text_variables(p_text text)
+returns text[]
+    language sql immutable
+    set search_path to ''
+as $$
+    select coalesce(array_agg(distinct m[1]), array[]::text[])
+      from regexp_matches(coalesce(p_text, ''), '\{\{\s*([A-Za-z0-9_]+)\s*\}\}', 'g') as m;
+$$;
+
+create or replace function public.email_templates_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+declare
+    v_unknown text;
+begin
+    if tg_op = 'DELETE' then
+        if old.is_system then
+            raise exception 'a system email template cannot be deleted'
+                using errcode = 'check_violation', detail = 'email_template_locked';
+        end if;
+        return old;
+    end if;
+
+    if tg_op = 'UPDATE' and old.is_system
+       and (new.key is distinct from old.key
+            or new.scope is distinct from old.scope
+            or new.language is distinct from old.language
+            or new.is_system is distinct from old.is_system) then
+        raise exception 'the key, scope and language of a system email template are fixed'
+            using errcode = 'check_violation', detail = 'email_template_locked';
+    end if;
+
+    -- Only the seed marks a template as the system's.
+    if tg_op = 'INSERT' and new.is_system
+       and coalesce(current_setting('app.email_system_write', true), '') <> 'on' then
+        new.is_system := false;
+    end if;
+
+    select v into v_unknown
+      from unnest(public.email_text_variables(new.subject || ' ' || new.body)) as v
+     where v <> all (public.email_template_variables(new.scope))
+     limit 1;
+    if v_unknown is not null then
+        raise exception 'unknown variable {{%}} for a % template', v_unknown, new.scope
+            using errcode = 'check_violation', detail = 'email_template_unknown_variable';
+    end if;
+
+    -- The link belongs in the text: a subject line is not clickable, and a
+    -- token in a subject is a token in every mail client's notification.
+    if 'quote_link' = any (public.email_text_variables(new.subject)) then
+        raise exception 'the quotation link cannot be used in a subject'
+            using errcode = 'check_violation', detail = 'email_template_unknown_variable';
+    end if;
+
+    return new;
+end;
+$$;
+
+-- The secrets are written by `set_email_provider_secret()` alone. Compared,
+-- not merely "posted": the admin screen sends the whole record back.
+create or replace function public.email_settings_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.email_system_write', true), '') <> 'on'
+       and (new.credentials_secret_id is distinct from old.credentials_secret_id
+            or new.webhook_secret_id is distinct from old.webhook_secret_id) then
+        raise exception 'email credentials are set through set_email_provider_secret()'
+            using errcode = 'check_violation', detail = 'email_settings_column_protected';
+    end if;
+
+    new.updated_at := now();
+    new.updated_by := public.current_sale_id();
+    return new;
+end;
+$$;
+
+-- What a message SAID never changes; how its delivery went does.
+create or replace function public.email_messages_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if coalesce(current_setting('app.quote_purge', true), '') = 'on' then
+        return new;
+    end if;
+
+    if new.sales_id is distinct from old.sales_id
+       or new.origin is distinct from old.origin
+       or new.automation_key is distinct from old.automation_key
+       or new.category is distinct from old.category
+       or new.language is distinct from old.language
+       or new.to_email is distinct from old.to_email
+       or new.to_name is distinct from old.to_name
+       or new.subject is distinct from old.subject
+       or new.body_text is distinct from old.body_text
+       or new.template_key is distinct from old.template_key
+       or new.variables is distinct from old.variables
+       or new.entity_type is distinct from old.entity_type
+       or new.entity_id is distinct from old.entity_id
+       or new.quote_id is distinct from old.quote_id
+       or new.quote_version_id is distinct from old.quote_version_id
+       or new.idempotency_key is distinct from old.idempotency_key
+       or new.dedupe_key is distinct from old.dedupe_key
+       or new.created_at is distinct from old.created_at then
+        raise exception 'the content of email message % is frozen', old.id
+            using errcode = 'check_violation', detail = 'email_message_frozen';
+    end if;
+
+    return new;
+end;
+$$;
+
+-- May this issued version be sent to the customer today? NULL when it may,
+-- otherwise the reason, as the key the client translates.
+--
+-- The link opens the NEWEST issued version, so only that one can be shared
+-- faithfully; and a quotation being revised, answered, lapsed or closed is not
+-- an offer the customer can act on. One function, read by the screen
+-- (`email_context()`), by the queue and again by the dispatcher just before
+-- the message leaves.
+create or replace function public.email_quote_share_block(
+    p_quote_id   bigint,
+    p_version_id bigint
+) returns text
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_quote   public.quotes;
+    v_version public.quote_versions;
+begin
+    select * into v_quote from public.quotes q where q.id = p_quote_id;
+    if not found then
+        return 'quote_not_found';
+    end if;
+
+    select * into v_version
+      from public.quote_versions v
+     where v.id = p_version_id and v.quote_id = p_quote_id;
+    if not found or v_version.issued_at is null then
+        return 'quote_not_issued';
+    end if;
+
+    if v_version.superseded_at is not null
+       or exists (select 1 from public.quote_versions n
+                   where n.quote_id = p_quote_id
+                     and n.issued_at is not null
+                     and n.version_number > v_version.version_number) then
+        return 'version_superseded';
+    end if;
+
+    if v_version.accepted_at is not null or v_version.rejected_at is not null then
+        return 'version_answered';
+    end if;
+
+    if exists (select 1 from public.quote_statuses s
+                where s.key = v_quote.status_key and s.is_terminal) then
+        return 'quote_closed';
+    end if;
+
+    -- A revision is being written: the customer could read this version and
+    -- not answer it.
+    if exists (select 1 from public.quote_versions d
+                where d.quote_id = p_quote_id and d.issued_at is null) then
+        return 'quote_revision_open';
+    end if;
+
+    if v_version.valid_until is not null and v_version.valid_until < current_date then
+        return 'version_expired';
+    end if;
+
+    return null;
+end;
+$$;
+
+-- The addresses a record lets its reader write to: its own contacts. Anything
+-- else is a free address, which only a manager or an admin may type.
+create or replace function public.email_entity_recipients(
+    p_entity_type public.task_entity,
+    p_entity_id   bigint
+) returns table (email text, name text, contact_id bigint)
+    language sql stable security definer
+    set search_path to ''
+as $$
+    with related as (
+        select c.id
+          from public.contacts c
+         where p_entity_type = 'contact' and c.id = p_entity_id
+        union
+        -- From a company's page, only the contacts the caller may read.
+        select c.id
+          from public.contacts c
+         where p_entity_type = 'company' and c.company_id = p_entity_id
+           and ((select public.can_manage_all())
+                or c.sales_id = (select public.current_sale_id()))
+        union
+        select c.id
+          from public.deals d
+          join public.contacts c on c.id = any (d.contact_ids)
+         where p_entity_type = 'deal' and d.id = p_entity_id
+        union
+        -- A quotation is addressed to a company: its contact, and the other
+        -- people of that company.
+        select c.id
+          from public.quotes q
+          join public.contacts c
+            on c.id = q.contact_id or c.company_id = q.company_id
+         where p_entity_type = 'quote' and q.id = p_entity_id
+    ),
+    addresses as (
+        select lower(e.value ->> 'email') as email,
+               nullif(btrim(concat_ws(' ', c.first_name, c.last_name)), '') as name,
+               c.id as contact_id
+          from related r
+          join public.contacts c on c.id = r.id
+         cross join lateral jsonb_array_elements(
+                   case when jsonb_typeof(c.email_jsonb) = 'array'
+                        then c.email_jsonb else '[]'::jsonb end) e
+        union all
+        select lower(l.email::text),
+               nullif(btrim(concat_ws(' ', l.first_name, l.last_name)), ''),
+               null::bigint
+          from public.leads l
+         where p_entity_type = 'lead' and l.id = p_entity_id
+        union all
+        -- The address printed on the document the customer received.
+        select lower(v.party_snapshot -> 'contact' ->> 'email'),
+               nullif(btrim(concat_ws(' ',
+                   v.party_snapshot -> 'contact' ->> 'first_name',
+                   v.party_snapshot -> 'contact' ->> 'last_name')), ''),
+               null::bigint
+          from public.quote_versions v
+         where p_entity_type = 'quote' and v.quote_id = p_entity_id
+           and v.issued_at is not null
+    )
+    select distinct on (a.email) a.email, a.name, a.contact_id
+      from addresses a
+     where public.is_valid_email(a.email)
+     order by a.email, a.contact_id nulls last;
+$$;
+
+-- A time zone name a client sent, or UTC when it is not one Postgres knows.
+create or replace function public.email_safe_timezone(p_timezone text)
+returns text
+    language sql stable
+    set search_path to ''
+as $$
+    select coalesce(
+        (select z.name from pg_catalog.pg_timezone_names z
+          where z.name = p_timezone limit 1),
+        'UTC');
+$$;
+
+-- What a template can say about a record. For a quotation every figure comes
+-- from the ISSUED version's own row and its `party_snapshot`: nothing is
+-- recomputed, converted or read from today's company.
+--
+-- The issue DATE is the one calendar reading of a timestamp, so it needs a
+-- time zone: the sender's (`p_timezone`), which is the day they see on the
+-- document. In UTC a quotation issued in Bogota after 19:00 would be dated
+-- tomorrow in the customer's inbox.
+create or replace function public.email_entity_variables(
+    p_entity_type public.task_entity,
+    p_entity_id   bigint,
+    p_version_id  bigint default null,
+    p_timezone    text default null
+) returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_vars jsonb;
+    v_more jsonb := '{}'::jsonb;
+begin
+    select jsonb_build_object(
+               'issuer_name', coalesce(
+                   (select nullif(btrim(c.config ->> 'title'), '')
+                      from public.configuration c where c.id = 1), ''),
+               'sender_name', coalesce(
+                   nullif(btrim(concat_ws(' ', s.first_name, s.last_name)), ''), ''),
+               'sender_email', coalesce(s.email::text, ''))
+      into v_vars
+      from (select 1) one
+      left join public.sales s on s.id = public.current_sale_id();
+
+    if p_entity_type = 'contact' then
+        select jsonb_build_object(
+                   'customer_name', coalesce(nullif(btrim(concat_ws(' ', c.first_name, c.last_name)), ''), ''),
+                   'customer_company', coalesce(co.name, ''))
+          into v_more
+          from public.contacts c
+          left join public.companies co on co.id = c.company_id
+         where c.id = p_entity_id;
+    elsif p_entity_type = 'lead' then
+        select jsonb_build_object(
+                   'customer_name', coalesce(nullif(btrim(concat_ws(' ', l.first_name, l.last_name)), ''), ''),
+                   'customer_company', coalesce(l.company_name, ''))
+          into v_more
+          from public.leads l where l.id = p_entity_id;
+    elsif p_entity_type = 'company' then
+        select jsonb_build_object('customer_name', co.name, 'customer_company', co.name)
+          into v_more
+          from public.companies co where co.id = p_entity_id;
+    elsif p_entity_type = 'deal' then
+        select jsonb_build_object(
+                   'deal_name', coalesce(d.name, ''),
+                   'customer_name', coalesce(co.name, ''),
+                   'customer_company', coalesce(co.name, ''))
+          into v_more
+          from public.deals d
+          left join public.companies co on co.id = d.company_id
+         where d.id = p_entity_id;
+    elsif p_entity_type = 'quote' then
+        select jsonb_build_object(
+                   'customer_name', coalesce(
+                       nullif(btrim(concat_ws(' ',
+                           v.party_snapshot -> 'contact' ->> 'first_name',
+                           v.party_snapshot -> 'contact' ->> 'last_name')), ''),
+                       v.party_snapshot -> 'company' ->> 'name', ''),
+                   'customer_company', coalesce(v.party_snapshot -> 'company' ->> 'name', ''),
+                   'quote_number', q.quote_number,
+                   'quote_title', coalesce(q.title, ''),
+                   'quote_version', v.version_number,
+                   'issue_date', to_char(
+                       v.issued_at at time zone public.email_safe_timezone(p_timezone),
+                       'YYYY-MM-DD'),
+                   'valid_until', coalesce(to_char(v.valid_until, 'YYYY-MM-DD'), ''),
+                   'total', v.total,
+                   'currency', v.currency)
+          into v_more
+          from public.quotes q
+          join public.quote_versions v on v.quote_id = q.id
+         where q.id = p_entity_id
+           and v.issued_at is not null
+           and (p_version_id is null or v.id = p_version_id)
+         order by v.version_number desc
+         limit 1;
+    end if;
+
+    return v_vars || coalesce(v_more, '{}'::jsonb);
+end;
+$$;
+
+-- Whether mail can be sent at all, for every signed-in user: the screens need
+-- it to offer the button and to say honestly when a send is only simulated.
+-- No secret and no secret id.
+create or replace function public.email_status() returns jsonb
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select jsonb_build_object(
+        'is_enabled',      s.is_enabled,
+        'provider_key',    s.provider_key,
+        'is_simulated',    s.provider_key = 'mock',
+        'is_ready',        s.is_enabled
+                           and (s.provider_key = 'mock'
+                                or (s.from_email is not null
+                                    and s.credentials_secret_id is not null)),
+        'from_email',      s.from_email,
+        'from_name',       s.from_name,
+        'has_credentials', s.credentials_secret_id is not null,
+        'has_webhook_secret', s.webhook_secret_id is not null,
+        'can_send_any',    (select public.can_manage_all()))
+      from public.email_settings s
+     where s.id = 1
+       and (select public.current_sale_id()) is not null;
+$$;
+
+-- Everything the compose dialog needs about one record, in one call: who it
+-- may be sent to, what a template can say, and -- for a quotation -- which
+-- version would be shared and why it cannot be, if it cannot.
+create or replace function public.email_context(
+    p_entity_type text,
+    p_entity_id   bigint,
+    p_timezone    text default null
+) returns jsonb
+    language plpgsql stable security definer
+    set search_path to ''
+as $$
+declare
+    v_type    public.task_entity;
+    v_version public.quote_versions;
+    v_quote   jsonb := null;
+begin
+    begin
+        v_type := p_entity_type::public.task_entity;
+    exception when others then
+        raise exception 'unknown entity type %', p_entity_type
+            using errcode = 'check_violation', detail = 'email_entity_invalid';
+    end;
+
+    if v_type not in ('contact', 'lead', 'company', 'deal', 'quote')
+       or not (select public.can_see_email_entity(v_type, p_entity_id)) then
+        raise exception 'no permission to email about % %', p_entity_type, p_entity_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    if v_type = 'quote' then
+        select * into v_version
+          from public.quote_versions v
+         where v.quote_id = p_entity_id and v.issued_at is not null
+         order by v.version_number desc
+         limit 1;
+
+        v_quote := jsonb_build_object(
+            'version_id',     v_version.id,
+            'version_number', v_version.version_number,
+            'block',          case when v_version.id is null then 'quote_not_issued'
+                                   else public.email_quote_share_block(p_entity_id, v_version.id)
+                              end);
+    end if;
+
+    return jsonb_build_object(
+        'status',     public.email_status(),
+        'recipients', coalesce(
+            (select jsonb_agg(jsonb_build_object(
+                        'email', r.email, 'name', r.name, 'contact_id', r.contact_id,
+                        'is_suppressed', public.email_is_suppressed(r.email))
+                        order by r.name nulls last, r.email)
+               from public.email_entity_recipients(v_type, p_entity_id) r),
+            '[]'::jsonb),
+        'variables',  public.email_entity_variables(
+                          v_type, p_entity_id, v_version.id, p_timezone),
+        'allowed_variables', to_jsonb(public.email_template_variables(p_entity_type)),
+        'quote',      v_quote);
+end;
+$$;
+
+-- The one writer of `email_messages`. Internal: `queue_email()` and
+-- `queue_quote_email()` decide WHAT may be sent, this decides whether THIS
+-- message may be -- the checks that are the same for every message.
+--
+-- It queues and returns. Nothing here talks to a mail provider, and nothing
+-- here writes to any table but `email_messages`.
+create or replace function public.email_enqueue(
+    p_entity_type       public.task_entity,
+    p_entity_id         bigint,
+    p_quote_version_id  bigint,
+    p_to_email          text,
+    p_to_name           text,
+    p_subject           text,
+    p_body              text,
+    p_template_id       bigint,
+    p_language          text,
+    p_idempotency_key   uuid,
+    p_confirm_duplicate boolean,
+    p_origin            text,
+    p_timezone          text default null
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_actor     bigint := public.current_sale_id();
+    v_settings  public.email_settings;
+    v_existing  public.email_messages;
+    v_row       public.email_messages;
+    v_template  public.email_templates;
+    v_email     text := lower(btrim(coalesce(p_to_email, '')));
+    v_name      text := nullif(btrim(coalesce(p_to_name, '')), '');
+    v_subject   text := btrim(coalesce(p_subject, ''));
+    v_body      text := btrim(coalesce(p_body, ''));
+    v_language  text := coalesce(nullif(btrim(p_language), ''), 'es');
+    v_known     record;
+    v_is_known  boolean := false;
+    v_contact   bigint;
+    v_stray     text;
+    v_category  text := 'transactional';
+begin
+    if v_actor is null then
+        raise exception 'no active user'
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    if p_idempotency_key is null then
+        raise exception 'an idempotency key is required'
+            using errcode = 'check_violation', detail = 'email_idempotency_required';
+    end if;
+
+    -- The same press of "Send", again: the answer it already got. Serialised
+    -- on the key, so two identical requests in flight cannot both insert.
+    perform pg_advisory_xact_lock(hashtextextended('email:key:' || p_idempotency_key::text, 0));
+    select * into v_existing
+      from public.email_messages m where m.idempotency_key = p_idempotency_key;
+    if found then
+        if v_existing.sales_id is distinct from v_actor then
+            raise exception 'idempotency key already used'
+                using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+        end if;
+        return v_existing;
+    end if;
+
+    select * into v_settings from public.email_settings s where s.id = 1;
+    if not found or not v_settings.is_enabled then
+        raise exception 'outbound email is switched off'
+            using errcode = 'check_violation', detail = 'email_disabled';
+    end if;
+    if v_settings.provider_key <> 'mock'
+       and (v_settings.from_email is null or v_settings.credentials_secret_id is null) then
+        raise exception 'the email provider is not configured'
+            using errcode = 'check_violation', detail = 'email_not_configured';
+    end if;
+
+    if not public.is_valid_email(v_email) then
+        raise exception 'invalid recipient address'
+            using errcode = 'check_violation', detail = 'email_recipient_invalid';
+    end if;
+    if v_name is not null and (char_length(v_name) > 120 or v_name ~ '[[:cntrl:]"<>]') then
+        raise exception 'invalid recipient name'
+            using errcode = 'check_violation', detail = 'email_recipient_invalid';
+    end if;
+    -- An address that bounced for good, or whose owner reported us as spam.
+    if public.email_is_suppressed(v_email) then
+        raise exception 'this address is on the suppression list'
+            using errcode = 'check_violation', detail = 'email_recipient_suppressed';
+    end if;
+    -- A line break in a subject is a second header.
+    if char_length(v_subject) not between 1 and 200 or v_subject ~ '[[:cntrl:]]' then
+        raise exception 'invalid subject'
+            using errcode = 'check_violation', detail = 'email_subject_invalid';
+    end if;
+    if char_length(v_body) not between 1 and 20000 then
+        raise exception 'invalid body'
+            using errcode = 'check_violation', detail = 'email_body_invalid';
+    end if;
+    if v_language not in ('es', 'en', 'fr') then
+        v_language := 'es';
+    end if;
+
+    -- A variable nobody filled would reach the customer as `{{braces}}`. The
+    -- one marker that may remain is the quotation link, in the text of a
+    -- quotation's message: the dispatcher resolves it.
+    select v into v_stray
+      from unnest(public.email_text_variables(v_subject)) as v limit 1;
+    if v_stray is null then
+        select v into v_stray
+          from unnest(public.email_text_variables(v_body)) as v
+         where v <> 'quote_link' or p_quote_version_id is null
+         limit 1;
+    end if;
+    if v_stray is not null then
+        raise exception 'the message still contains the variable {{%}}', v_stray
+            using errcode = 'check_violation', detail = 'email_unresolved_variable';
+    end if;
+
+    -- Who it may go to.
+    if p_entity_type is not null then
+        for v_known in
+            select r.email, r.name, r.contact_id
+              from public.email_entity_recipients(p_entity_type, p_entity_id) r
+        loop
+            if v_known.email = v_email then
+                v_is_known := true;
+                v_contact  := v_known.contact_id;
+                v_name     := coalesce(v_name, v_known.name);
+            end if;
+        end loop;
+    end if;
+    if not v_is_known and not (select public.can_manage_all()) then
+        raise exception 'this address is not related to the record'
+            using errcode = 'insufficient_privilege', detail = 'email_recipient_not_allowed';
+    end if;
+
+    if p_template_id is not null then
+        select * into v_template from public.email_templates t where t.id = p_template_id;
+        if not found or not v_template.is_active then
+            raise exception 'unknown or inactive email template'
+                using errcode = 'check_violation', detail = 'email_template_invalid';
+        end if;
+        v_category := v_template.category;
+    end if;
+
+    -- Frequency. Serialised per sender and per recipient so two tabs cannot
+    -- both read "one below the limit".
+    perform pg_advisory_xact_lock(hashtextextended('email:sender:' || v_actor::text, 0));
+    perform pg_advisory_xact_lock(hashtextextended('email:to:' || v_email, 0));
+
+    if (select count(*) from public.email_messages m
+         where m.sales_id = v_actor
+           and m.created_at > now() - interval '1 hour'
+           and m.status <> 'canceled') >= v_settings.max_per_user_hour
+       or (select count(*) from public.email_messages m
+            where m.to_email = v_email
+              and m.created_at > now() - interval '1 day'
+              and m.status not in ('canceled', 'failed')) >= v_settings.max_per_recipient_day then
+        raise exception 'too many emails in a short time'
+            using errcode = 'check_violation', detail = 'email_rate_limited';
+    end if;
+
+    -- The same thing to the same person minutes ago is a double click on
+    -- another tab far more often than an intention.
+    if not coalesce(p_confirm_duplicate, false) and exists (
+        select 1 from public.email_messages m
+         where m.to_email = v_email
+           and m.created_at > now() - interval '10 minutes'
+           and m.status not in ('canceled', 'failed')
+           and m.entity_type is not distinct from p_entity_type
+           and m.entity_id is not distinct from p_entity_id
+           and m.quote_version_id is not distinct from p_quote_version_id
+           and (p_quote_version_id is not null or m.subject = v_subject)) then
+        raise exception 'the same message was sent to this address a moment ago'
+            using errcode = 'check_violation', detail = 'email_duplicate_recent';
+    end if;
+
+    insert into public.email_messages
+        (sales_id, origin, category, language, to_email, to_name, contact_id,
+         subject, body_text, template_id, template_key, variables,
+         entity_type, entity_id, quote_id, quote_version_id, idempotency_key)
+    values
+        (v_actor, p_origin, v_category, v_language, v_email, v_name, v_contact,
+         v_subject, v_body, v_template.id, v_template.key,
+         public.email_entity_variables(
+             p_entity_type, p_entity_id, p_quote_version_id, p_timezone),
+         p_entity_type, p_entity_id,
+         case when p_quote_version_id is null then null else p_entity_id end,
+         p_quote_version_id, p_idempotency_key)
+    returning * into v_row;
+
+    return v_row;
+end;
+$$;
+
+-- A message written from a contact, a lead, a company or a deal. Without a
+-- record it is the administrator's test message, and only theirs.
+create or replace function public.queue_email(
+    p_entity_type       text,
+    p_entity_id         bigint,
+    p_to_email          text,
+    p_subject           text,
+    p_body              text,
+    p_idempotency_key   uuid,
+    p_template_id       bigint default null,
+    p_to_name           text default null,
+    p_language          text default null,
+    p_confirm_duplicate boolean default false
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_type public.task_entity;
+begin
+    if p_entity_type is null and p_entity_id is null then
+        if not (select public.is_admin()) then
+            raise exception 'only an administrator can send a test message'
+                using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+        end if;
+        return public.email_enqueue(null, null, null, p_to_email, p_to_name,
+            p_subject, p_body, p_template_id, p_language, p_idempotency_key,
+            p_confirm_duplicate, 'test');
+    end if;
+
+    begin
+        v_type := p_entity_type::public.task_entity;
+    exception when others then
+        raise exception 'unknown entity type %', p_entity_type
+            using errcode = 'check_violation', detail = 'email_entity_invalid';
+    end;
+
+    -- A quotation is shared through `queue_quote_email()`, which knows which
+    -- version may be: this door must not be a way around it.
+    if v_type not in ('contact', 'lead', 'company', 'deal') or p_entity_id is null then
+        raise exception 'unknown entity type %', p_entity_type
+            using errcode = 'check_violation', detail = 'email_entity_invalid';
+    end if;
+
+    if not (select public.can_see_email_entity(v_type, p_entity_id)) then
+        raise exception 'no permission to email about % %', p_entity_type, p_entity_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    return public.email_enqueue(v_type, p_entity_id, null, p_to_email, p_to_name,
+        p_subject, p_body, p_template_id, p_language, p_idempotency_key,
+        p_confirm_duplicate, 'manual');
+end;
+$$;
+
+-- Send the customer the link to ONE issued version.
+--
+-- It shares; it does not issue, transition, re-price or re-rate. The only
+-- other write it can cause is the quotation's permanent link, when the quote
+-- has none left (a revoked one): the same row "Create link" would insert.
+create or replace function public.queue_quote_email(
+    p_quote_id          bigint,
+    p_version_id        bigint,
+    p_to_email          text,
+    p_subject           text,
+    p_body              text,
+    p_idempotency_key   uuid,
+    p_template_id       bigint default null,
+    p_to_name           text default null,
+    p_language          text default null,
+    p_confirm_duplicate boolean default false,
+    p_timezone          text default null
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_block text;
+begin
+    if p_quote_id is null or not (select public.can_see_quote(p_quote_id)) then
+        raise exception 'no permission to share quote %', p_quote_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    v_block := public.email_quote_share_block(p_quote_id, p_version_id);
+    if v_block is not null then
+        raise exception 'version % of quote % cannot be shared: %',
+                        p_version_id, p_quote_id, v_block
+            using errcode = 'check_violation', detail = 'email_quote_not_shareable',
+                  hint = v_block;
+    end if;
+
+    -- A message promising a link the quotation does not have would be a dead
+    -- button in the customer's inbox.
+    perform public.quote_share_link(p_quote_id, true);
+
+    return public.email_enqueue('quote', p_quote_id, p_version_id, p_to_email,
+        p_to_name, p_subject, p_body, p_template_id, p_language,
+        p_idempotency_key, p_confirm_duplicate, 'manual', p_timezone);
+end;
+$$;
+
+-- Try a failed message again: the SAME row, so the history shows one message
+-- that took two attempts and not two messages.
+create or replace function public.retry_email_message(p_id bigint)
+returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_row   public.email_messages;
+    v_block text;
+begin
+    select * into v_row from public.email_messages m where m.id = p_id for update;
+    if not found
+       or not ((select public.can_manage_all())
+               or v_row.sales_id = (select public.current_sale_id())) then
+        raise exception 'no permission to retry email message %', p_id
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+
+    if v_row.status <> 'failed' then
+        raise exception 'only a failed message can be retried'
+            using errcode = 'check_violation', detail = 'email_not_retryable';
+    end if;
+
+    if v_row.quote_version_id is not null then
+        v_block := public.email_quote_share_block(v_row.quote_id, v_row.quote_version_id);
+        if v_block is not null then
+            raise exception 'the quotation can no longer be shared: %', v_block
+                using errcode = 'check_violation', detail = 'email_quote_not_shareable',
+                      hint = v_block;
+        end if;
+    end if;
+
+    update public.email_messages
+       set status = 'pending', attempt = 0, scheduled_for = now(),
+           claimed_at = null, failed_at = null
+     where id = p_id
+    returning * into v_row;
+    return v_row;
+end;
+$$;
+
+--
+-- The outbox (service_role only)
+--
+
+-- Claim what is due, or one message by id (the sender's own press of "Send",
+-- which should not wait for the next tick).
+--
+-- Each row comes back as everything the dispatcher needs and nothing it does
+-- not: the sender identity is resolved here, from the settings, so the
+-- function holding the provider key never chooses a From address itself.
+create or replace function public.claim_email_messages(
+    p_limit      integer default 20,
+    p_message_id bigint default null
+) returns setof jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_settings public.email_settings;
+    v_row      public.email_messages;
+    v_block    text;
+    v_state    text;
+    v_sender   public.sales;
+    v_issuer   text;
+    v_logo     text;
+begin
+    select * into v_settings from public.email_settings s where s.id = 1;
+    if not found or not v_settings.is_enabled
+       or (v_settings.provider_key <> 'mock'
+           and (v_settings.from_email is null
+                or v_settings.credentials_secret_id is null)) then
+        -- Left pending: switching the provider back on sends them.
+        return;
+    end if;
+
+    select nullif(btrim(c.config ->> 'title'), ''),
+           nullif(case jsonb_typeof(c.config -> 'lightModeLogo')
+                      when 'string' then c.config ->> 'lightModeLogo'
+                      when 'object' then c.config -> 'lightModeLogo' ->> 'src'
+                  end, '')
+      into v_issuer, v_logo
+      from public.configuration c where c.id = 1;
+
+    for v_row in
+        select m.*
+          from public.email_messages m
+         where m.status = 'pending'
+           and m.scheduled_for <= now()
+           and (p_message_id is null or m.id = p_message_id)
+           -- A paused rule's messages wait where they are. Excluded here,
+           -- not skipped in the loop: skipped rows would fill the LIMIT
+           -- and starve everything behind them.
+           and not exists (select 1 from public.email_automations a
+                            where a.key = m.automation_key and a.state = 'paused')
+         order by m.scheduled_for, m.id
+         limit greatest(1, least(coalesce(p_limit, 20), 100))
+           for update skip locked
+    loop
+        -- A rule switched off after it queued a message takes the message
+        -- with it.
+        if v_row.origin = 'automation' then
+            select a.state into v_state
+              from public.email_automations a where a.key = v_row.automation_key;
+            if v_state is distinct from 'enabled' then
+                update public.email_messages
+                   set status = 'canceled', error_code = 'email_automation_disabled',
+                       error = 'the automation was switched off'
+                 where id = v_row.id;
+                continue;
+            end if;
+        end if;
+
+        -- A confirmation is about an acceptance that must still stand.
+        if v_row.automation_key = 'quote_accepted' and not exists (
+            select 1 from public.quote_versions v
+             where v.id = v_row.quote_version_id and v.accepted_at is not null) then
+            update public.email_messages
+               set status = 'canceled', error_code = 'email_quote_not_shareable',
+                   error = 'quote_not_accepted'
+             where id = v_row.id;
+            continue;
+        end if;
+
+        -- Between the press of "Send" and now the quotation may have been
+        -- revised, answered or closed. Then the message does not leave.
+        -- (Not asked of a confirmation: its version IS answered.)
+        if v_row.quote_version_id is not null
+           and v_row.automation_key is distinct from 'quote_accepted' then
+            v_block := public.email_quote_share_block(v_row.quote_id, v_row.quote_version_id);
+            if v_block is not null then
+                update public.email_messages
+                   set status = 'canceled', error_code = 'email_quote_not_shareable',
+                       error = v_block
+                 where id = v_row.id;
+                continue;
+            end if;
+        end if;
+
+        -- The address may have bounced since the message was queued.
+        if public.email_is_suppressed(v_row.to_email::text) then
+            update public.email_messages
+               set status = 'canceled', error_code = 'email_recipient_suppressed',
+                   error = 'the address is on the suppression list'
+             where id = v_row.id;
+            continue;
+        end if;
+
+        update public.email_messages
+           set status = 'processing', attempt = attempt + 1, claimed_at = now(),
+               provider_key = v_settings.provider_key
+         where id = v_row.id
+        returning * into v_row;
+
+        v_sender := null;
+        select * into v_sender from public.sales s where s.id = v_row.sales_id;
+
+        return next jsonb_build_object(
+            'id',               v_row.id,
+            'attempt',          v_row.attempt,
+            'provider_key',     v_row.provider_key,
+            'category',         v_row.category,
+            'language',         v_row.language,
+            'to_email',         v_row.to_email,
+            'to_name',          v_row.to_name,
+            'subject',          v_row.subject,
+            'body_text',        v_row.body_text,
+            'variables',        v_row.variables,
+            'quote_id',         v_row.quote_id,
+            'quote_version_id', v_row.quote_version_id,
+            'from_email',       v_settings.from_email,
+            'from_name',        coalesce(v_settings.from_name, v_issuer),
+            'reply_to',         case when v_settings.reply_to_mode = 'sender'
+                                     then v_sender.email::text end,
+            'message_stream',   case when v_row.category = 'commercial'
+                                     then v_settings.commercial_stream
+                                     else v_settings.transactional_stream end,
+            'issuer_name',      v_issuer,
+            'logo_url',         v_logo);
+    end loop;
+end;
+$$;
+
+-- The customer link of a message being sent. Read at the last moment and
+-- handed to the dispatcher only: it is never written anywhere.
+create or replace function public.email_message_quote_token(p_message_id bigint)
+returns text
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select t.token
+      from public.email_messages m
+      join public.quote_access_tokens t
+        on t.quote_id = m.quote_id
+       and t.token is not null
+       and t.revoked_at is null
+     where m.id = p_message_id
+       and m.status = 'processing';
+$$;
+
+-- Record what the provider answered.
+--
+-- `accepted` means its API took the message, nothing more. A failure the
+-- dispatcher calls retryable goes back to the queue with a backoff until the
+-- attempts run out; any other is final. Settling a row that is no longer
+-- `processing` changes nothing, so a late or repeated answer cannot rewrite an
+-- outcome.
+create or replace function public.complete_email_message(
+    p_id                  bigint,
+    p_status              text,
+    p_provider_message_id text default null,
+    p_error_code          text default null,
+    p_error               text default null,
+    p_retryable           boolean default false,
+    p_max_attempts        integer default 5
+) returns public.email_messages
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_row     public.email_messages;
+    v_backoff interval;
+begin
+    if p_status not in ('accepted', 'simulated', 'failed') then
+        raise exception 'illegal email status %', p_status
+            using errcode = 'check_violation';
+    end if;
+
+    select * into v_row from public.email_messages m where m.id = p_id for update;
+    if not found then
+        raise exception 'email message % not found', p_id
+            using errcode = 'no_data_found';
+    end if;
+    if v_row.status <> 'processing' then
+        return v_row;
+    end if;
+
+    if p_status = 'failed' and coalesce(p_retryable, false)
+       and v_row.attempt < p_max_attempts then
+        v_backoff := make_interval(secs => least(3600, power(2, v_row.attempt)::int * 60));
+        update public.email_messages
+           set status = 'pending', scheduled_for = now() + v_backoff, claimed_at = null,
+               error_code = left(p_error_code, 80), error = left(p_error, 500)
+         where id = p_id
+        returning * into v_row;
+        return v_row;
+    end if;
+
+    update public.email_messages
+       set status              = p_status,
+           provider_message_id = coalesce(left(p_provider_message_id, 200), provider_message_id),
+           accepted_at         = case when p_status = 'accepted' then now() end,
+           failed_at           = case when p_status = 'failed' then now() end,
+           error_code          = case when p_status = 'failed' then left(p_error_code, 80) end,
+           error               = case when p_status = 'failed' then left(p_error, 500) end
+     where id = p_id
+    returning * into v_row;
+    return v_row;
+end;
+$$;
+
+-- A dispatcher that died between "the provider answered" and "we wrote it
+-- down" leaves a row at `processing`. Nobody knows whether that mail left, so
+-- it is NOT sent again by itself: it fails, visibly, and a person who can ask
+-- the customer decides whether to retry. A duplicate quotation in a customer's
+-- inbox is the worse of the two mistakes.
+create or replace function public.fail_stale_email_messages(
+    p_older_than interval default '10 minutes'
+) returns integer
+    language sql security definer
+    set search_path to ''
+as $$
+    with failed as (
+        update public.email_messages
+           set status = 'failed', failed_at = now(),
+               error_code = 'email_dispatch_interrupted',
+               error = 'the dispatcher did not report an outcome'
+         where status = 'processing'
+           and claimed_at < now() - p_older_than
+        returning 1
+    )
+    select count(*)::int from failed;
+$$;
+
+-- The scheduled tick (`email-dispatch`, every minute): posts to the
+-- `email-dispatch` edge function with the URL and key held in Vault. A no-op
+-- until both exist, and when nothing is due.
+create or replace function public.email_dispatch_tick() returns bigint
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_url text;
+    v_key text;
+begin
+    perform public.fail_stale_email_messages();
+
+    if not exists (select 1 from public.email_messages m
+                    where m.status = 'pending' and m.scheduled_for <= now()) then
+        return null;
+    end if;
+
+    select d.decrypted_secret into v_url
+      from vault.decrypted_secrets d where d.name = 'email_dispatch_url';
+    select d.decrypted_secret into v_key
+      from vault.decrypted_secrets d where d.name = 'email_dispatch_service_key';
+    if v_url is null or v_key is null then
+        return null;
+    end if;
+
+    return net.http_post(
+        url                  := v_url,
+        body                 := jsonb_build_object('trigger', 'cron'),
+        headers              := jsonb_build_object(
+                                    'Content-Type', 'application/json',
+                                    'Authorization', 'Bearer ' || v_key),
+        timeout_milliseconds := 60000);
+end;
+$$;
+
+--
+-- Credentials (Supabase Vault). `p_kind` is 'credentials' (the provider's API
+-- token) or 'webhook' (the secret its delivery webhook must present). The
+-- value never reaches a table a client can read.
+--
+create or replace function public.set_email_provider_secret(p_kind text, p_secret text)
+returns void
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_settings public.email_settings;
+    v_secret   text := nullif(btrim(coalesce(p_secret, '')), '');
+    v_id       uuid;
+begin
+    if not (select public.is_admin()) then
+        raise exception 'only an administrator can set email credentials'
+            using errcode = 'insufficient_privilege', detail = 'email_forbidden';
+    end if;
+    if p_kind not in ('credentials', 'webhook') then
+        raise exception 'unknown secret kind %', p_kind
+            using errcode = 'check_violation', detail = 'email_secret_kind_invalid';
+    end if;
+
+    select * into v_settings from public.email_settings s where s.id = 1 for update;
+
+    if p_kind = 'credentials' then
+        v_id := v_settings.credentials_secret_id;
+    else
+        v_id := v_settings.webhook_secret_id;
+    end if;
+
+    if v_secret is null then
+        if v_id is not null then
+            delete from vault.secrets s where s.id = v_id;
+        end if;
+        v_id := null;
+    elsif v_id is null then
+        v_id := vault.create_secret(v_secret, 'email_provider_' || p_kind,
+                                    'Outbound email: ' || p_kind);
+    else
+        perform vault.update_secret(v_id, v_secret);
+    end if;
+
+    perform set_config('app.email_system_write', 'on', true);
+    if p_kind = 'credentials' then
+        update public.email_settings set credentials_secret_id = v_id where id = 1;
+    else
+        update public.email_settings set webhook_secret_id = v_id where id = 1;
+    end if;
+    perform set_config('app.email_system_write', '', true);
+end;
+$$;
+
+create or replace function public.get_email_provider_secret(p_kind text)
+returns text
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select d.decrypted_secret
+      from public.email_settings s
+      join vault.decrypted_secrets d
+        on d.id = case p_kind when 'credentials' then s.credentials_secret_id
+                              when 'webhook' then s.webhook_secret_id end
+     where s.id = 1;
+$$;
+
+--
+-- Delivery (phase 2)
+--
+
+-- Whether the CRM refuses to write to an address.
+create or replace function public.email_is_suppressed(p_email text) returns boolean
+    language sql stable security definer
+    set search_path to ''
+as $$
+    select exists (select 1 from public.email_suppressions s
+                    where s.email = lower(btrim(coalesce(p_email, ''))));
+$$;
+
+-- Record one event the provider's webhook reported, and apply it.
+--
+-- Idempotent on `(provider_key, provider_event_id)`: a replay changes nothing
+-- and says so. A status only ever moves FORWARD -- accepted, then delivered,
+-- then bounced (a mailbox can accept a message and bounce it later, never the
+-- reverse) -- so events arriving out of order cannot walk a message back.
+--
+-- `delivered` is written here and nowhere else: this is the verifiable
+-- confirmation the provider's API acceptance is not.
+create or replace function public.record_email_event(
+    p_provider_key        text,
+    p_provider_event_id   text,
+    p_provider_message_id text,
+    p_event_type          text,
+    p_occurred_at         timestamp with time zone default null,
+    p_recipient           text default null,
+    p_is_permanent        boolean default false,
+    p_detail              text default null
+) returns jsonb
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_message   public.email_messages;
+    v_event_id  bigint;
+    v_when      timestamp with time zone := coalesce(p_occurred_at, now());
+    v_recipient text := nullif(lower(btrim(coalesce(p_recipient, ''))), '');
+    v_detail    text := nullif(left(btrim(coalesce(p_detail, '')), 500), '');
+begin
+    if p_event_type not in ('delivered', 'bounced', 'complained') then
+        raise exception 'unknown email event type %', p_event_type
+            using errcode = 'check_violation', detail = 'email_event_invalid';
+    end if;
+    if coalesce(btrim(p_provider_event_id), '') = '' then
+        raise exception 'an event id is required'
+            using errcode = 'check_violation', detail = 'email_event_invalid';
+    end if;
+
+    if p_provider_message_id is not null then
+        select * into v_message
+          from public.email_messages m
+         where m.provider_key = p_provider_key
+           and m.provider_message_id = p_provider_message_id
+         for update;
+    end if;
+
+    if v_recipient is not null and not public.is_valid_email(v_recipient) then
+        v_recipient := null;
+    end if;
+
+    insert into public.email_message_events
+        (message_id, provider_key, provider_event_id, provider_message_id,
+         event_type, is_permanent, recipient, occurred_at, detail)
+    values
+        (v_message.id, p_provider_key, left(p_provider_event_id, 200),
+         left(p_provider_message_id, 200), p_event_type,
+         coalesce(p_is_permanent, false), v_recipient, v_when, v_detail)
+    on conflict (provider_key, provider_event_id) do nothing
+    returning id into v_event_id;
+
+    if v_event_id is null then
+        return jsonb_build_object('duplicate', true, 'matched', v_message.id is not null,
+                                  'status', v_message.status);
+    end if;
+
+    if v_message.id is not null then
+        if p_event_type = 'delivered' and v_message.status in ('processing', 'accepted') then
+            update public.email_messages
+               set status = 'delivered', delivered_at = v_when,
+                   accepted_at = coalesce(accepted_at, v_when)
+             where id = v_message.id
+            returning * into v_message;
+        elsif p_event_type = 'bounced'
+              and v_message.status in ('processing', 'accepted', 'delivered') then
+            update public.email_messages
+               set status = 'bounced', bounced_at = v_when,
+                   error_code = 'recipient_bounced', error = v_detail
+             where id = v_message.id
+            returning * into v_message;
+        end if;
+    end if;
+
+    -- An address that is dead, or whose owner said "spam", is not written to
+    -- again -- whatever message the event was about.
+    v_recipient := coalesce(v_recipient, v_message.to_email::text);
+    if v_recipient is not null
+       and (p_event_type = 'complained'
+            or (p_event_type = 'bounced' and coalesce(p_is_permanent, false))) then
+        -- Through the hatch: this row states the provider's verdict, which a
+        -- row inserted any other way may not (`email_suppressions_guard`).
+        perform set_config('app.email_system_write', 'on', true);
+        insert into public.email_suppressions (email, reason, detail, source_message_id)
+        values (v_recipient,
+                case when p_event_type = 'complained' then 'complaint' else 'hard_bounce' end,
+                v_detail, v_message.id)
+        on conflict (email) do nothing;
+        perform set_config('app.email_system_write', '', true);
+    end if;
+
+    return jsonb_build_object('duplicate', false, 'matched', v_message.id is not null,
+                              'status', v_message.status);
+end;
+$$;
+
+-- A row inserted by anything but `record_email_event()` is a person's entry:
+-- its `reason` is 'manual' whatever was posted, so a hand-made row can never
+-- pass for a provider's verdict.
+create or replace function public.email_suppressions_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    new.email := lower(btrim(new.email::text));
+    if coalesce(current_setting('app.email_system_write', true), '') <> 'on' then
+        new.reason            := 'manual';
+        new.created_by        := public.current_sale_id();
+        new.source_message_id := null;
+    end if;
+    return new;
+end;
+$$;
+
+--
+-- Automations (phase 3)
+--
+
+create or replace function public.email_automations_guard() returns trigger
+    language plpgsql
+    set search_path to ''
+as $$
+begin
+    if new.key is distinct from old.key then
+        raise exception 'the key of an email automation is fixed'
+            using errcode = 'check_violation', detail = 'email_automation_locked';
+    end if;
+    if not exists (select 1 from public.email_templates t
+                    where t.key = new.template_key and t.scope = 'quote') then
+        raise exception 'unknown quotation template %', new.template_key
+            using errcode = 'check_violation', detail = 'email_template_invalid';
+    end if;
+    new.updated_at := now();
+    new.updated_by := public.current_sale_id();
+    return new;
+end;
+$$;
+
+-- Queue one automatic message about a quotation, once.
+--
+-- Internal, and the ONE writer of automatic mail. Returns what it did as a
+-- word -- 'queued', or the reason nothing was queued -- so the sweep and the
+-- tests can tell "not due" from "refused" from "already sent".
+--
+-- The text is the template's, unfilled: the dispatcher fills it from
+-- `variables`, with the same function the compose dialog uses, so an automatic
+-- message and a hand-written one format a total and a date identically.
+create or replace function public.email_automation_enqueue(
+    p_key        text,
+    p_quote_id   bigint,
+    p_version_id bigint,
+    p_to_email   text,
+    p_to_name    text,
+    p_step       integer,
+    p_language   text default null,
+    p_variables  jsonb default null
+) returns text
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_rule      public.email_automations;
+    v_settings  public.email_settings;
+    v_quote     public.quotes;
+    v_template  public.email_templates;
+    v_owner     public.sales;
+    v_email     text := lower(btrim(coalesce(p_to_email, '')));
+    v_name      text := nullif(btrim(coalesce(p_to_name, '')), '');
+    v_language  text := coalesce(nullif(btrim(p_language), ''), 'es');
+    v_variables jsonb;
+    v_id        bigint;
+begin
+    select * into v_rule from public.email_automations a where a.key = p_key;
+    if not found or v_rule.state <> 'enabled' then
+        return 'rule_not_enabled';
+    end if;
+
+    select * into v_settings from public.email_settings s where s.id = 1;
+    if not found or not v_settings.is_enabled then
+        return 'email_disabled';
+    end if;
+
+    select * into v_quote from public.quotes q where q.id = p_quote_id;
+    if not found then
+        return 'quote_not_found';
+    end if;
+
+    if not public.is_valid_email(v_email) then
+        return 'no_recipient';
+    end if;
+    if public.email_is_suppressed(v_email) then
+        return 'recipient_suppressed';
+    end if;
+    if v_name is not null and (char_length(v_name) > 120 or v_name ~ '[[:cntrl:]"<>]') then
+        v_name := null;
+    end if;
+
+    -- The same ceiling a person is held to: an automation is not a way to
+    -- write to somebody more often than the team may.
+    perform pg_advisory_xact_lock(hashtextextended('email:to:' || v_email, 0));
+    if (select count(*) from public.email_messages m
+         where m.to_email = v_email
+           and m.created_at > now() - interval '1 day'
+           and m.status not in ('canceled', 'failed')) >= v_settings.max_per_recipient_day then
+        return 'rate_limited';
+    end if;
+
+    select * into v_template
+      from public.email_templates t
+     where t.key = v_rule.template_key and t.scope = 'quote' and t.is_active
+     order by (t.language = v_language) desc, t.language
+     limit 1;
+    if not found then
+        return 'no_template';
+    end if;
+
+    -- Signed by the quotation's owner: there is no "current user" in a sweep.
+    select * into v_owner from public.sales s where s.id = v_quote.sales_id;
+    v_variables := coalesce(p_variables,
+                            public.email_entity_variables('quote', p_quote_id, p_version_id))
+        || jsonb_build_object(
+               'sender_name', coalesce(
+                   nullif(btrim(concat_ws(' ', v_owner.first_name, v_owner.last_name)), ''), ''),
+               'sender_email', coalesce(v_owner.email::text, ''));
+
+    insert into public.email_messages
+        (sales_id, origin, automation_key, category, language, to_email, to_name,
+         subject, body_text, template_id, template_key, variables,
+         entity_type, entity_id, quote_id, quote_version_id,
+         idempotency_key, dedupe_key)
+    values
+        (v_quote.sales_id, 'automation', p_key, v_template.category,
+         v_template.language, v_email, v_name,
+         v_template.subject, v_template.body, v_template.id, v_template.key,
+         v_variables, 'quote', p_quote_id, p_quote_id, p_version_id,
+         gen_random_uuid(),
+         -- "This rule, this version, this step, once."
+         format('auto:%s:%s:%s', p_key, p_version_id, p_step))
+    on conflict (dedupe_key) do nothing
+    returning id into v_id;
+
+    return case when v_id is null then 'already_sent' else 'queued' end;
+end;
+$$;
+
+-- The confirmation of an acceptance.
+--
+-- To the address the customer signed with, or the document's contact. When the
+-- quotation was raised against a deal and the pipeline has a rule for
+-- "accepted", the confirmation waits for the deal to BE in that stage: a
+-- customer is not congratulated on a sale the pipeline has not recorded.
+create or replace function public.email_automation_quote_accepted(p_quote_id bigint)
+returns text
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_quote   public.quotes;
+    v_version public.quote_versions;
+    v_stage   text;
+    v_last    public.email_messages;
+begin
+    select * into v_quote from public.quotes q where q.id = p_quote_id;
+    if not found or v_quote.status_key <> 'accepted' then
+        return 'not_accepted';
+    end if;
+
+    select * into v_version
+      from public.quote_versions v
+     where v.quote_id = p_quote_id and v.accepted_at is not null
+     order by v.version_number desc
+     limit 1;
+    if not found then
+        return 'not_accepted';
+    end if;
+
+    if v_quote.deal_id is not null then
+        select r.to_stage into v_stage
+          from public.deal_quote_stage_rules r where r.trigger_key = 'accepted';
+        if v_stage is not null and not exists (
+            select 1 from public.deals d
+             where d.id = v_quote.deal_id and d.stage = v_stage) then
+            return 'deal_not_won';
+        end if;
+    end if;
+
+    -- The language, and the date as the sender read it, of what the customer
+    -- was last sent about this version.
+    select * into v_last
+      from public.email_messages m
+     where m.quote_version_id = v_version.id and m.origin = 'manual'
+     order by m.created_at desc
+     limit 1;
+
+    return public.email_automation_enqueue(
+        'quote_accepted', p_quote_id, v_version.id,
+        coalesce(v_version.accepted_by_email::text,
+                 v_version.party_snapshot -> 'contact' ->> 'email'),
+        coalesce(v_version.accepted_by_name,
+                 nullif(btrim(concat_ws(' ',
+                     v_version.party_snapshot -> 'contact' ->> 'first_name',
+                     v_version.party_snapshot -> 'contact' ->> 'last_name')), '')),
+        1, v_last.language, v_last.variables);
+end;
+$$;
+
+-- An acceptance happens in the CUSTOMER's transaction (`quote_portal_accept`).
+-- Whatever goes wrong with a courtesy email must never undo it: the failure
+-- becomes a warning, the acceptance stands.
+--
+-- On the VERSION, not on the quotation: `quote_portal_accept()` moves the
+-- status first and stamps `accepted_at` after, so a trigger on
+-- `quotes.status_key` would look for an accepted version before one exists.
+-- By the time the stamp lands the deal has already been moved too.
+create or replace function public.quote_versions_email_automation() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    begin
+        perform public.email_automation_quote_accepted(new.quote_id);
+    exception when others then
+        raise warning 'acceptance confirmation for quote % not queued: %',
+            new.quote_id, sqlerrm;
+    end;
+    return null;
+end;
+$$;
+
+-- The follow-up sweep (hourly).
+--
+-- A reminder goes ONLY to an address somebody already sent this version to, and
+-- counts its days from that message -- so nobody is written to who was not
+-- chosen by a person first. Before queueing it checks, again, everything a
+-- person's send checks: the version is still the live offer
+-- (`email_quote_share_block()`), the customer has not answered or started
+-- negotiating, the address is not suppressed, the step was not already sent.
+create or replace function public.email_automation_followups() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_rule      public.email_automations;
+    v_candidate record;
+    v_sent      integer;
+    v_queued    integer := 0;
+begin
+    select * into v_rule from public.email_automations a where a.key = 'quote_followup';
+    if not found or v_rule.state <> 'enabled' then
+        return 0;
+    end if;
+
+    for v_candidate in
+        select distinct on (m.quote_version_id)
+               m.quote_id, m.quote_version_id, m.to_email::text as to_email,
+               m.to_name, m.created_at, m.language, m.variables
+          from public.email_messages m
+          join public.quotes q on q.id = m.quote_id
+         where m.origin = 'manual'
+           and m.quote_version_id is not null
+           and m.status in ('accepted', 'delivered', 'simulated')
+           -- Waiting for an answer: not answered, not being negotiated.
+           and q.status_key in ('sent', 'viewed', 'under_review')
+         order by m.quote_version_id, m.created_at desc
+    loop
+        if public.email_quote_share_block(v_candidate.quote_id, v_candidate.quote_version_id)
+               is not null then
+            continue;
+        end if;
+
+        select count(*) into v_sent
+          from public.email_messages a
+         where a.origin = 'automation'
+           and a.automation_key = 'quote_followup'
+           and a.quote_version_id = v_candidate.quote_version_id;
+
+        if v_sent >= v_rule.max_sends
+           or now() < v_candidate.created_at
+                      + make_interval(days => (v_sent + 1) * v_rule.delay_days) then
+            continue;
+        end if;
+
+        if public.email_automation_enqueue(
+               'quote_followup', v_candidate.quote_id, v_candidate.quote_version_id,
+               v_candidate.to_email, v_candidate.to_name, v_sent + 1,
+               v_candidate.language, v_candidate.variables) = 'queued' then
+            v_queued := v_queued + 1;
+        end if;
+    end loop;
+
+    return v_queued;
+end;
+$$;
+
+-- A message that bounced or failed for good is news for whoever sent it: one
+-- in-app notification, on the record the message was written from. The
+-- database writes the KEY and its parameters, never a sentence
+-- (`notificationText.ts` renders them in the reader's language).
+--
+-- The body is the message's subject -- data, not a sentence. An automation's
+-- subject is still its template (the dispatcher fills it), so for those the
+-- body is the quotation's number instead: nobody is shown `{{braces}}`.
+create or replace function public.email_messages_notify() returns trigger
+    language plpgsql security definer
+    set search_path to ''
+as $$
+begin
+    if new.status not in ('bounced', 'failed')
+       or new.status is not distinct from old.status
+       or new.sales_id is null
+       or new.entity_type is null then
+        return null;
+    end if;
+
+    begin
+        insert into public.task_notifications (
+            task_id, entity_type, entity_id, recipient_id, channel,
+            scheduled_for, title, body, message_key, message_params,
+            dedupe_key, status, sent_at, delivered_at)
+        select null, new.entity_type, new.entity_id, s.id, 'in_app',
+               now(),
+               format('An email to %s %s', new.to_email,
+                      case new.status when 'bounced' then 'bounced' else 'could not be sent' end),
+               case when new.origin = 'automation'
+                    then new.variables ->> 'quote_number'
+                    else new.subject end,
+               'crm.notifications.email.' || new.status,
+               jsonb_build_object('to', new.to_email),
+               format('email:%s:%s', new.id, new.status),
+               'delivered', now(), now()
+          from public.sales s
+         where s.id = new.sales_id and s.disabled is not true
+        on conflict (dedupe_key) do nothing;
+    exception when others then
+        -- A notification is a courtesy; the delivery record is the fact.
+        raise warning 'email % status notification not written: %', new.id, sqlerrm;
+    end;
+    return null;
+end;
+$$;
+
+-- The scheduled tick of the team's own notification emails
+-- (`task-notification-worker`), which nothing called until now: posts to the
+-- worker with the URL and key held in Vault (`task_worker_url`,
+-- `task_worker_service_key`). A no-op until both exist, and when nothing waits.
+create or replace function public.task_notification_worker_tick() returns bigint
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_url text;
+    v_key text;
+begin
+    if not exists (select 1 from public.task_notifications n
+                    where n.status = 'queued'
+                      and n.channel <> 'in_app'
+                      and n.scheduled_for <= now()) then
+        return null;
+    end if;
+
+    select d.decrypted_secret into v_url
+      from vault.decrypted_secrets d where d.name = 'task_worker_url';
+    select d.decrypted_secret into v_key
+      from vault.decrypted_secrets d where d.name = 'task_worker_service_key';
+    if v_url is null or v_key is null then
+        return null;
+    end if;
+
+    return net.http_post(
+        url                  := v_url,
+        body                 := jsonb_build_object('trigger', 'cron'),
+        headers              := jsonb_build_object(
+                                    'Content-Type', 'application/json',
+                                    'Authorization', 'Bearer ' || v_key),
+        timeout_milliseconds := 60000);
+end;
+$$;
+
+-- The retention path of the message history: service_role only, through the
+-- `app.quote_purge` hatch the other append-only tables share. The e2e reset
+-- calls it before `purge_quotes()`, because a message pins its sender.
+create or replace function public.purge_emails() returns integer
+    language plpgsql security definer
+    set search_path to ''
+as $$
+declare
+    v_count integer;
+begin
+    perform set_config('app.quote_purge', 'on', true);
+    delete from public.email_suppressions where email is not null;
+    delete from public.email_message_events where id is not null;
+    delete from public.email_messages where id is not null;
+    get diagnostics v_count = row_count;
+    perform set_config('app.quote_purge', '', true);
+    return v_count;
 end;
 $$;

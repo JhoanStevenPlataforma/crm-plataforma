@@ -15,6 +15,7 @@ import { QuoteActions } from "./QuoteActions";
 import { QuoteAnswerPanel } from "./QuoteAnswerPanel";
 import { QuoteComments } from "./QuoteComments";
 import { QuoteDocument } from "./QuoteDocument";
+import { QuoteEmailsPanel } from "./QuoteEmailsPanel";
 import { QuoteLinksPanel } from "./QuoteLinksPanel";
 import { QuoteVersionsPanel } from "./QuoteVersionsPanel";
 import { quoteEditPath, quotePrintPath } from "./quotePaths";
@@ -125,6 +126,8 @@ const QuoteShowContent = () => {
           {/* First: the one link the customer keeps, whichever version this
               page shows. */}
           <QuoteLinksPanel />
+          {/* The same link, by mail, and every time it was sent. */}
+          <QuoteEmailsPanel />
           {/* Above the versions, because it is about the one on screen — and
               beside the document rather than inside it: what the team keeps is
               not what the customer signed (§6.4). */}

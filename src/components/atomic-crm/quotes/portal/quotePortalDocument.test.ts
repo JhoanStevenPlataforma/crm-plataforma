@@ -38,6 +38,33 @@ describe("fromPortalPayload", () => {
     expect(data.quote.issued_at).toBe(portalPayload.quote.issued_at);
   });
 
+  it("carries the frozen rate to the customer's page, and none for a payload in the base currency", () => {
+    const exchange = {
+      base_currency: "COP",
+      rate: 4000,
+      rate_kind: "official" as const,
+      provider_name: "TRM (Superfinanciera)",
+      effective_date: "2026-10-01",
+      total_base: 2570400,
+    };
+
+    expect(
+      fromPortalPayload({ ...portalPayload, exchange }, BUILD_BRANDING)
+        .exchange,
+    ).toEqual(exchange);
+    expect(
+      fromPortalPayload({ ...portalPayload, exchange: null }, BUILD_BRANDING)
+        .exchange,
+    ).toBeNull();
+    // A payload cached before the key existed.
+    expect(
+      fromPortalPayload(
+        { ...portalPayload, exchange: undefined },
+        BUILD_BRANDING,
+      ).exchange,
+    ).toBeNull();
+  });
+
   // The portal page never loads the installation's configuration (F3), so a
   // missing letterhead must fall back to the build's, and a present one must
   // never be mixed with it.

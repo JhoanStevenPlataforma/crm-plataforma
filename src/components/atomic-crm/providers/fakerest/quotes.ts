@@ -22,6 +22,8 @@ import type { DataProvider, Identifier } from "ra-core";
 import type { ResourceCallbacks } from "ra-core";
 
 import { lineAmounts, quoteAmounts } from "../../quotes/quoteMath";
+import { baseTotals, defaultVersionRate } from "./fx";
+import { convertLine } from "./fxQuoteRates";
 import type {
   Company,
   Deal,
@@ -112,6 +114,10 @@ const summaryOf = (
     accepted_at: version?.accepted_at ?? null,
     rejected_at: version?.rejected_at ?? null,
     rejected_reason_code: version?.rejected_reason_code ?? null,
+    total_base: version?.total_base ?? null,
+    base_currency: version?.base_currency ?? null,
+    exchange_rate: version?.exchange_rate ?? null,
+    rate_kind: version?.rate_kind ?? null,
     party_snapshot: version?.party_snapshot ?? null,
     nb_issued_versions: context.versions.filter(
       (row) => sameId(row.quote_id, quote.id) && row.issued_at != null,
@@ -251,9 +257,10 @@ const refreshVersionTotals = async (
     version_id: versionId,
   });
 
+  const totals = quoteAmounts(lines);
   await dataProvider.update("quote_versions", {
     id: versionId,
-    data: quoteAmounts(lines),
+    data: { ...totals, ...(await baseTotals(dataProvider, version, totals)) },
     previousData: version,
   });
 };
@@ -289,6 +296,9 @@ export const quoteCallbacks = (): ResourceCallbacks<Quote> => ({
         discount_total: 0,
         tax_total: 0,
         total: 0,
+        // `quote_versions_before_insert`: the rate the draft starts from.
+        ...(await defaultVersionRate(dataProvider, result.data.currency)),
+        rate_set_at: new Date().toISOString(),
       },
     });
     return result;
@@ -338,7 +348,9 @@ export const quoteLineCallbacks = (): ResourceCallbacks<QuoteLine> => ({
     }
 
     data.discount_percent = data.discount_percent ?? 0;
-    return { ...params, data: { ...data, ...lineAmounts(data) } };
+    // `quote_lines_fx_convert`: a converted price is the server's.
+    const converted = await convertLine(dataProvider, data);
+    return { ...params, data: { ...converted, ...lineAmounts(converted) } };
   },
   afterCreate: async (result, dataProvider) => {
     await refreshVersionTotals(dataProvider, result.data.version_id);
@@ -348,8 +360,24 @@ export const quoteLineCallbacks = (): ResourceCallbacks<QuoteLine> => ({
     const [line] = await listAll<QuoteLine>(dataProvider, "quote_lines", {
       id: params.id,
     });
-    const merged = { ...line, ...params.data };
-    return { ...params, data: { ...params.data, ...lineAmounts(merged) } };
+    // The stored row is passed so the line keeps its observation while its
+    // source currency stays (`quote_lines_fx_convert`).
+    const merged = await convertLine(
+      dataProvider,
+      { ...line, ...params.data },
+      line,
+    );
+    return {
+      ...params,
+      data: {
+        ...params.data,
+        unit_price: merged.unit_price,
+        source_unit_price: merged.source_unit_price ?? null,
+        source_exchange_rate: merged.source_exchange_rate ?? null,
+        source_exchange_rate_id: merged.source_exchange_rate_id ?? null,
+        ...lineAmounts(merged),
+      },
+    };
   },
   afterUpdate: async (result, dataProvider) => {
     await refreshVersionTotals(dataProvider, result.data.version_id);
